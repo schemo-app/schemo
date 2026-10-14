@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"schemo/internal/infra/sqlite"
 	"schemo/internal/platform"
@@ -18,6 +19,21 @@ func blockedFolder(t *testing.T) platform.DataDir {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), platform.DataDirName)
+	// Windows may briefly retain SQLite file handles after the store closes.
+	t.Cleanup(func() {
+		deadline := time.Now().Add(time.Second)
+		for {
+			err := os.RemoveAll(path)
+			if err == nil {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("removing data directory: %v", err)
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
 	if err := os.WriteFile(path, []byte("in the way"), 0o600); err != nil {
 		t.Fatalf("writing the file in the way: %v", err)
 	}
@@ -31,7 +47,11 @@ func storeOn(t *testing.T, dir platform.DataDir) *sqlite.Store {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	t.Cleanup(func() { _ = store.Close() })
+	t.Cleanup(func() {
+		if err := store.Close(); err != nil {
+			t.Errorf("closing store: %v", err)
+		}
+	})
 	return store
 }
 

@@ -193,19 +193,17 @@ tasks:
     cmds:
       - go mod tidy
   'updater:genkey':
-    desc: >-
-      Generate the release signing key; the private half goes straight to the
-      UPDATER_KEY secret
+    desc: Generate release signing keys and print the private key backup location
     status:
       - test -s internal/transport/updater/updater.key.pub
     cmds:
       - |
         set -e
-        dir=$(mktemp -d)
+        dir=$(mktemp -d -p "${TMPDIR:-${TEMP:-${TMP:-/tmp}}}" schemo-updater.XXXXXXXX)
         {{.WAILS}} updater genkey -out "$dir/updater.key"
-        gh secret set UPDATER_KEY < "$dir/updater.key"
+        echo "Back up $dir/updater.key in a password manager before deleting this directory."
         mv "$dir/updater.key.pub" internal/transport/updater/updater.key.pub
-        echo "Back up $dir/updater.key (a password manager), then: rm -rf $dir"
+        echo "Set the repository Actions secret UPDATER_KEY to the contents of the private key."
   'generate:bindings':
     desc: Generate TypeScript bindings from Go backend
     run: once

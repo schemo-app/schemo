@@ -55,7 +55,11 @@ Generate the initial key with:
 task updater:genkey
 ```
 
-Keep an offline backup of the private key.
+The command works on Windows, macOS and Linux. It writes the public key into the repository and prints the private key's temporary location.
+
+Save the private key in a password manager or offline backup. In GitHub, open **Settings → Secrets and variables → Actions**, then create `UPDATER_KEY` with the complete contents of that file. Delete the temporary private key after backing it up and configuring the secret.
+
+The command does not require GitHub CLI or upload secrets automatically. It skips generation when the public key already exists.
 
 Do not replace the signing key after clients have been released. Installed clients trust the embedded public key.
 
