@@ -17,9 +17,18 @@ Go comes from `go.mod`, Node from `.node-version`. Build tools and GitHub Action
 Releases are created from SemVer tags on commits already merged into `main`.
 
 ```sh
-git tag -a v0.1.0-beta.1 -m "First beta"
+git tag -a v0.1.0-beta.1
 git push origin v0.1.0-beta.1
 ```
+
+The first command opens an editor for the release notes. Use bullet points:
+
+```markdown
+- Improved tab switching
+- Fixed proxy settings
+```
+
+The workflow copies the tag annotation into the GitHub release and signed updater manifests. The application's update window displays lines starting with `- ` or `* `. Editing the GitHub release after publication does not change the notes already included in signed manifests.
 
 Stable releases use tags without a prerelease suffix:
 
@@ -71,7 +80,7 @@ The release workflow:
 2. builds native packages;
 3. runs integration tests;
 4. creates checksums;
-5. signs updater manifests;
+5. signs and verifies updater manifests;
 6. publishes the GitHub release;
 7. advances update channels.
 
@@ -88,6 +97,10 @@ Rerun failed jobs for transient failures.
 Before publication, draft assets may be replaced.
 
 After publication, release artifacts are treated as immutable.
+
+A release published through GitHub while creating a new tag may exist before the workflow finishes. Its published status does not mean that its packages are ready. The workflow uploads packages only after signing and verification succeed.
+
+The workflow always uses the current build artifacts. It may replace draft assets, but refuses to overwrite published files. Once files are published, use a new version for another build.
 
 Never move an existing release tag. Publish fixes under a new version.
 
