@@ -1,0 +1,104 @@
+openapi: 3.1.0
+info:
+  title: Example API
+  description: Products and the cart.
+servers:
+  - url: https://api.example.com/v1
+tags:
+  - name: products
+  - name: cart
+security:
+  - bearerAuth: []
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      parameters:
+        - name: page[size]
+          in: query
+          required: true
+          schema:
+            type: integer
+            default: 25
+        - name: include
+          in: query
+          schema:
+            type: string
+            enum: [offers]
+        - name: X-Tenant
+          in: header
+          required: true
+          schema:
+            type: string
+            default: example
+      responses:
+        "200":
+          description: OK
+    post:
+      summary: Create a product
+      tags: [products]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                price:
+                  type: number
+      responses:
+        "201":
+          description: Created
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [products]
+      summary: One product
+      responses:
+        "200":
+          description: OK
+    delete:
+      tags: [cart]
+      security: []
+      responses:
+        "204":
+          description: Gone
+  /cart/items:
+    post:
+      tags: [cart]
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                sku:
+                  type: string
+      responses:
+        "201":
+          description: Added
+  /status:
+    get:
+      summary: Health
+      security:
+        - legacy: []
+      responses:
+        "200":
+          description: OK
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    legacy:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://example.com/auth

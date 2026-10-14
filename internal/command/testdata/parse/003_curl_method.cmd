@@ -1,0 +1,1 @@
+curl -X POST https://api.example.com/articles

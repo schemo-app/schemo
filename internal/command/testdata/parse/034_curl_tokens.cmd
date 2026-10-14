@@ -1,0 +1,1 @@
+curl -H 'Authorization: Bearer {{token}}' '{{base_url}}/articles'

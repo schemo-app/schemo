@@ -1,0 +1,1 @@
+curl https://api.example.com/articles 2>&1

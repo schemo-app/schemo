@@ -1,0 +1,1 @@
+curl -X POST --data-urlencode 'q=hello world' https://api.example.com/articles

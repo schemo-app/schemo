@@ -1,0 +1,27 @@
+name: "schemo"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.1.2"
+section: "default"
+priority: "extra"
+maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+description: "A cross-platform API client for building, testing, and sharing HTTP requests."
+vendor: "Yuri Gerasimov"
+homepage: "https://github.com/schemo-app/schemo"
+license: "MIT"
+release: "1"
+
+contents:
+  - src: "./bin/schemo"
+    dst: "/usr/local/bin/schemo"
+  - src: "./build/appicon.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/schemo.png"
+  - src: "./build/linux/schemo.desktop"
+    dst: "/usr/share/applications/schemo.desktop"
+
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

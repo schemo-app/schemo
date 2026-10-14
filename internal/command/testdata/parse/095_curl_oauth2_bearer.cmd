@@ -1,0 +1,1 @@
+curl --oauth2-bearer tok-1 https://api.example.com/articles

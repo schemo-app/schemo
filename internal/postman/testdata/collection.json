@@ -1,0 +1,81 @@
+{
+  "info": {
+    "_postman_id": "6f3f4a1e-2b7c-4c8f-9a1d-2f7f0c0b1a44",
+    "name": "Storefront",
+    "description": "Что-то, что написал Postman: этого описания приложение не читает.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Пользователи",
+      "item": [
+        {
+          "name": "Список",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/vnd.api+json" },
+              { "key": "X-Debug", "value": "1", "disabled": true }
+            ],
+            "url": {
+              "raw": "https://api.example.com/users?include=author,comments&page[size]=25",
+              "query": [
+                { "key": "include", "value": "author,comments" },
+                { "key": "page[size]", "value": "25" },
+                { "key": "filter[state]", "value": "active", "disabled": true }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{token}}" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Создать",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/vnd.api+json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": {\n    \"type\": \"users\"\n  }\n}"
+            },
+            "url": "https://api.example.com/users"
+          }
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": { "type": "text/javascript", "exec": ["console.log('скрипт')"] }
+        }
+      ]
+    },
+    {
+      "name": "Отчёт",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "from", "value": "2026-01-01" },
+            { "key": "to", "value": "2026-02-01", "disabled": true }
+          ]
+        },
+        "url": {
+          "raw": "https://api.example.com/reports"
+        },
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "reader" },
+            { "key": "password", "value": "{{secret}}" }
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [{ "key": "base", "value": "https://api.example.com" }]
+}

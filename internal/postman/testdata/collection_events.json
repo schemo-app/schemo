@@ -1,0 +1,69 @@
+{
+  "info": {
+    "_postman_id": "8b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+    "name": "Payments",
+    "description": {
+      "content": "Money moves here.",
+      "type": "text/markdown"
+    },
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": ["console.log('collection')"],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "https://api.example.com" },
+    { "key": "token", "value": "s3cret", "type": "secret" }
+  ],
+  "item": [
+    {
+      "name": "Charges",
+      "description": "A folder as Postman writes it.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": "pm.test('folder', () => {});",
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "description": "One charge.",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"amount\":1}" },
+            "url": { "raw": "https://api.example.com/charges" }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": ["vars.set('id', '1')", "console.log('pre')"],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "disabled": true,
+              "script": {
+                "exec": ["pm.test('created', () => {});"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+fetch('{{base_url}}/articles', {"method":"POST","headers":{"Authorization":"Bearer {{token}}"},"body":"{\"title\":\"it's a 'quoted' one\"}"})

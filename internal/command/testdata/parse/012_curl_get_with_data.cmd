@@ -1,0 +1,1 @@
+curl -G -d 'page[number]=2' https://api.example.com/articles

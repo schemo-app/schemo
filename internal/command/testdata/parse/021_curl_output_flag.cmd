@@ -1,0 +1,1 @@
+curl -o out.json https://api.example.com/articles

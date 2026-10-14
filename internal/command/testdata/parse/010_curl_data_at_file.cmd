@@ -1,0 +1,1 @@
+curl -X POST --data @payload.json https://api.example.com/articles

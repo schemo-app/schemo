@@ -1,0 +1,1 @@
+curl -H $'X-Tab:\tvalue' https://api.example.com/articles

@@ -1,0 +1,1 @@
+curl -F 'file=@photo.png' https://api.example.com/upload

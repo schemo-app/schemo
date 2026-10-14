@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Bare Security", "version": "1.0.0" },
+  "security": [["bearerAuth"]],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    }
+  },
+  "paths": {
+    "/products": {
+      "get": { "summary": "List products" }
+    }
+  }
+}

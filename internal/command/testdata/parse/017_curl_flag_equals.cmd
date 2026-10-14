@@ -1,0 +1,1 @@
+curl --request=POST https://api.example.com/articles

@@ -1,0 +1,1 @@
+http --raw='{"title":"it'\''s a '\''quoted'\'' one"}' POST '{{base_url}}/articles' 'Authorization:Bearer {{token}}'

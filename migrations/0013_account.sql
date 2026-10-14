@@ -1,0 +1,9 @@
+CREATE TABLE account (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    server TEXT NOT NULL DEFAULT '',
+    user_id TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL DEFAULT '',
+    signed_in_at INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;

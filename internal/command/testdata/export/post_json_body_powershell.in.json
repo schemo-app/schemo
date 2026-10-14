@@ -1,0 +1,12 @@
+{
+  "format": "powershell",
+  "method": "POST",
+  "url": "https://api.example.com/articles",
+  "headers": [
+    [
+      "Content-Type",
+      "application/json"
+    ]
+  ],
+  "body": "{\"data\":{\"type\":\"articles\",\"attributes\":{\"title\":\"Hi\"}}}"
+}

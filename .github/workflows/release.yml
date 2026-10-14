@@ -1,0 +1,172 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin
+            os: macos-15
+          - platform: linux
+            os: ubuntu-24.04
+          - platform: windows
+            os: windows-2025
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      BUILD: ${{ github.run_number }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          frontend: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis --version=3.11 --no-progress -y
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+      - name: Stamp and build packages
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          task set:version VERSION="$version"
+          task "$PLATFORM:package" VERSION="$version" BUILD="$BUILD" FRONTEND_PREBUILT=true
+        env:
+          CODE_SIGN_IDENTITY: '-'
+      - name: Test native integration
+        if: runner.os != 'Linux'
+        run: go test . ./internal/transport/desktop ./internal/transport/wails
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.platform }}
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      CHANNELS: ${{ contains(github.ref_name, '-') && 'beta' || 'stable beta' }}
+      PRERELEASE: ${{ contains(github.ref_name, '-') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Prepare release assets
+        id: assets
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          draft="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)"
+          if [[ "$draft" == false ]]; then
+            gh release download "$GITHUB_REF_NAME" --dir published
+            (cd published && sha256sum --check SHA256SUMS)
+            echo 'directory=published' >> "$GITHUB_OUTPUT"
+          else
+            (cd dist && sha256sum -- *) > "$RUNNER_TEMP/SHA256SUMS"
+            cp "$RUNNER_TEMP/SHA256SUMS" dist/SHA256SUMS
+            if [[ "$draft" == missing ]]; then
+              gh release create "$GITHUB_REF_NAME" --draft --verify-tag --notes-from-tag --title "$GITHUB_REF_NAME"
+            fi
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            echo 'directory=dist' >> "$GITHUB_OUTPUT"
+          fi
+          echo "draft=$draft" >> "$GITHUB_OUTPUT"
+          gh release view "$GITHUB_REF_NAME" --json body --jq '.body' > notes.md
+      - name: Sign and verify updates
+        env:
+          UPDATER_KEY: ${{ secrets.UPDATER_KEY }}
+          ARTIFACT_DIR: ${{ steps.assets.outputs.directory }}
+        run: |
+          umask 077
+          : "${UPDATER_KEY:?Configure UPDATER_KEY before releasing}"
+          key="$RUNNER_TEMP/updater.key"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$UPDATER_KEY" > "$key"
+          unset UPDATER_KEY
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+          slug="$(go run ./internal/tools/manifest -print slug)"
+          mkdir updates manifests
+          for asset in "$slug-darwin-arm64.app.zip" "$slug-darwin-amd64.app.zip" \
+                       "$slug-linux-amd64.tar.gz" "$slug-windows-amd64.exe.zip"; do
+            test -s "$ARTIFACT_DIR/$asset"
+            cp "$ARTIFACT_DIR/$asset" updates/
+          done
+          for channel in $CHANNELS; do
+            wails3 updater manifest -version "$VERSION" -channel "$channel" -key "$key" \
+              -notes-file notes.md -output "manifests/$channel.json" \
+              -url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME" updates
+            wails3 updater verify -manifest "manifests/$channel.json" -dir updates \
+              -publickey internal/transport/updater/updater.key.pub
+          done
+      - name: Publish verified release
+        if: steps.assets.outputs.draft != 'false'
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease="$PRERELEASE" --latest=false
+      - name: Advance update channels
+        run: |
+          if ! gh release view updates >/dev/null 2>&1; then
+            gh release create updates --prerelease --latest=false --target "$GITHUB_SHA" \
+              --title 'Update manifests' --notes 'Signed manifests the application updates from.'
+          fi
+          gh release view updates --json assets --jq '.assets[].name' > "$RUNNER_TEMP/update-assets"
+          mkdir previous
+          for channel in $CHANNELS; do
+            if grep -Fxq "$channel.json" "$RUNNER_TEMP/update-assets"; then
+              gh release download updates --pattern "$channel.json" --dir previous
+              current="$(jq -er '.version' "previous/$channel.json")"
+              comparison="$(go run ./internal/tools/manifest -version "$VERSION" -compare "$current")"
+              if [[ "$comparison" != 1 ]]; then
+                if [[ "$comparison" == 0 && "$channel" == stable ]]; then
+                  gh release edit "$GITHUB_REF_NAME" --latest
+                fi
+                continue
+              fi
+            fi
+            gh release upload updates "manifests/$channel.json" --clobber
+            if [[ "$channel" == stable ]]; then
+              gh release edit "$GITHUB_REF_NAME" --latest
+            fi
+          done

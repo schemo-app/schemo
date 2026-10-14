@@ -1,0 +1,1 @@
+curl -H 'Accept: application/vnd.api+json' https://api.example.com/articles

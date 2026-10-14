@@ -1,0 +1,3 @@
+CREATE TABLE nopad (
+  id TEXT PRIMARY KEY
+);

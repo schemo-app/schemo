@@ -1,0 +1,1 @@
+PS C:\Users\dev> curl https://api.example.com/articles

@@ -1,0 +1,16 @@
+# Generated; the generators emit LF, so pinning it keeps a Windows checkout byte-identical to the output.
+frontend/bindings/** text eol=lf
+frontend/src/lib/layout.ts text eol=lf
+
+# Fixtures for the command parser port: inputs carry CRLF, a BOM and PASTE-style quotes, so git must
+# never normalise line endings here — the port is judged byte-for-byte.
+internal/command/testdata/** -text
+
+# Source is LF in the repository whatever the machine that wrote it uses: a CRLF checkout is a line one
+# character longer than it reads, and the length rule counts characters — so a checkout would fail a
+# rule the file obeys.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+.github/** text eol=lf
+*.sh text eol=lf

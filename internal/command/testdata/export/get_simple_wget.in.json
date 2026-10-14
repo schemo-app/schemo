@@ -1,0 +1,7 @@
+{
+  "format": "wget",
+  "method": "GET",
+  "url": "https://api.example.com/articles",
+  "headers": [],
+  "body": ""
+}

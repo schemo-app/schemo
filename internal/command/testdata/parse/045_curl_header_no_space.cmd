@@ -1,0 +1,1 @@
+curl -H 'Accept:application/json' https://api.example.com/articles
