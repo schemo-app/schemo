@@ -80,6 +80,10 @@ func TestRelayCarriesFramesBothWaysUnchanged(t *testing.T) {
 }
 
 func TestLaunchedTellsABrowserStartFromAPersonsStart(t *testing.T) {
+	ids, err := loadBrowserIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
 	manifestPath := "/home/u/.mozilla/native-messaging-hosts/" + HostName + ".json"
 	cases := []struct {
 		args []string
@@ -87,7 +91,7 @@ func TestLaunchedTellsABrowserStartFromAPersonsStart(t *testing.T) {
 	}{
 		{[]string{"chrome-extension://klimdljbmlanhmdjfgbilkkhpahgjmhd/"}, true},
 		{[]string{"chrome-extension://klimdljbmlanhmdjfgbilkkhpahgjmhd/", "--parent-window=0"}, true},
-		{[]string{manifestPath, FirefoxExtensionID}, true},
+		{[]string{manifestPath, ids.Firefox}, true},
 		{nil, false},
 		{[]string{"schemo://open?tab=2"}, false},
 	}

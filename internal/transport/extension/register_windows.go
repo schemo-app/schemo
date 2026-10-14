@@ -24,6 +24,10 @@ var (
 
 // Register writes the manifests to the app folder and points each browser's HKCU key at them.
 func Register(host string) error {
+	ids, err := loadBrowserIDs()
+	if err != nil {
+		return err
+	}
 	config, err := os.UserConfigDir()
 	if err != nil {
 		return err
@@ -34,8 +38,8 @@ func Register(host string) error {
 	firefox := filepath.Join(dir, "firefox")
 	var failures []error
 	failures = append(failures,
-		writeManifest(chromium, chromiumManifest(host)),
-		writeManifest(firefox, firefoxManifest(host)),
+		writeManifest(chromium, chromiumManifest(host, ids)),
+		writeManifest(firefox, firefoxManifest(host, ids)),
 	)
 	for _, key := range chromiumRegistry {
 		manifest := filepath.Join(chromium, HostName+".json")

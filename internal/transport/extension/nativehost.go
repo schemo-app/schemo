@@ -9,17 +9,11 @@ import (
 // HostName is the native messaging host identifier used by browser extensions.
 const HostName = "app.schemo.bridge"
 
-// FirefoxExtensionID is the extension Gecko ID specified in browser_specific_settings.
-const FirefoxExtensionID = "bridge@schemo.app"
-
-// ChromiumExtensionIDs lists allowed Chromium extension IDs authorized to launch the host.
-var ChromiumExtensionIDs = []string{
-	"klimdljbmlanhmdjfgbilkkhpahgjmhd",
-}
-
 // Launched reports whether the current process was started by a browser as a native messaging host.
 func Launched(args []string) bool {
-	return slices.ContainsFunc(args, func(arg string) bool {
-		return strings.HasPrefix(arg, "chrome-extension://") || arg == FirefoxExtensionID
-	})
+	if slices.ContainsFunc(args, func(arg string) bool { return strings.HasPrefix(arg, "chrome-extension://") }) {
+		return true
+	}
+	ids, err := loadBrowserIDs()
+	return err == nil && slices.Contains(args, ids.Firefox)
 }

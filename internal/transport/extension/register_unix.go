@@ -5,25 +5,28 @@ package extension
 import (
 	"errors"
 	"os"
-	"path/filepath"
 )
 
 // Register points every installed browser at the host binary.
 func Register(host string) error {
+	ids, err := loadBrowserIDs()
+	if err != nil {
+		return err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
 
 	var failures []error
-	chromium := chromiumManifest(host)
+	chromium := chromiumManifest(host, ids)
 	for _, base := range chromiumProfiles(home) {
 		if exists(base) {
-			failures = append(failures, writeManifest(filepath.Join(base, "NativeMessagingHosts"), chromium))
+			failures = append(failures, writeManifest(chromiumHosts(base), chromium))
 		}
 	}
 	if base, hosts := firefoxProfile(home); exists(base) {
-		failures = append(failures, writeManifest(hosts, firefoxManifest(host)))
+		failures = append(failures, writeManifest(hosts, firefoxManifest(host, ids)))
 	}
 	return errors.Join(failures...)
 }

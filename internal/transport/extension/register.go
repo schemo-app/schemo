@@ -2,6 +2,7 @@ package extension
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,32 +17,36 @@ type manifest struct {
 	AllowedExtensions []string `json:"allowed_extensions,omitempty"`
 }
 
-func chromiumManifest(host string) manifest {
-	origins := make([]string, 0, len(ChromiumExtensionIDs))
-	for _, id := range ChromiumExtensionIDs {
-		origins = append(origins, "chrome-extension://"+id+"/")
-	}
+func chromiumManifest(host string, ids browserIDs) manifest {
 	return manifest{
 		Name:           HostName,
 		Description:    "Schemo: connects the browser extension to the app",
 		Path:           host,
 		Type:           "stdio",
-		AllowedOrigins: origins,
+		AllowedOrigins: ids.origins(),
 	}
 }
 
-func firefoxManifest(host string) manifest {
+func firefoxManifest(host string, ids browserIDs) manifest {
 	return manifest{
 		Name:              HostName,
 		Description:       "Schemo: connects the browser extension to the app",
 		Path:              host,
 		Type:              "stdio",
-		AllowedExtensions: []string{FirefoxExtensionID},
+		AllowedExtensions: []string{ids.Firefox},
 	}
 }
 
 // writeManifest rewrites the manifest on every start: the app may have moved.
 func writeManifest(dir string, m manifest) error {
+	path := filepath.Join(dir, HostName+".json")
+	if len(m.AllowedOrigins)+len(m.AllowedExtensions) == 0 {
+		err := os.Remove(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -49,7 +54,6 @@ func writeManifest(dir string, m manifest) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, HostName+".json")
 	if err := os.WriteFile(path, append(payload, '\n'), 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}

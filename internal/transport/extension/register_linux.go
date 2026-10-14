@@ -2,6 +2,8 @@ package extension
 
 import "path/filepath"
 
+func chromiumHosts(base string) string { return filepath.Join(base, "native-messaging-hosts") }
+
 func chromiumProfiles(home string) []string {
 	config := filepath.Join(home, ".config")
 	return []string{
