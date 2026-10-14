@@ -52,9 +52,16 @@ jobs:
           path: frontend/dist
       - name: Install NSIS
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          choco install nsis --version=3.11 --no-progress -y
-          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+          $archive = Join-Path $env:RUNNER_TEMP 'nsis-3.11.zip'
+          curl.exe --fail --location --silent --show-error --retry 3 --retry-all-errors --output $archive 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.11/nsis-3.11.zip'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne 'C7D27F780DDB6CFFB4730138CD1591E841F4B7EDB155856901CDF5F214394FA1') {
+            throw 'NSIS archive checksum mismatch'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:RUNNER_TEMP
+          Join-Path $env:RUNNER_TEMP 'nsis-3.11' >> $env:GITHUB_PATH
       - name: Stamp and build packages
         run: |
           version="${GITHUB_REF_NAME#v}"
