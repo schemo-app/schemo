@@ -115,7 +115,7 @@ jobs:
           trap 'rm -f "$key"' EXIT
           printf '%s\n' "$UPDATER_KEY" > "$key"
           unset UPDATER_KEY
-          go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+          CGO_ENABLED=0 go install "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
           slug="$(go run ./internal/tools/manifest -print slug)"
           mkdir updates manifests
           for asset in "$slug-darwin-arm64.app.zip" "$slug-darwin-amd64.app.zip" \
