@@ -20,7 +20,7 @@
       const json = JSON.stringify(value);
       if (typeof json === 'string') return json;
     } catch (error) {
-      // Куда ссылается круговая ссылка, JSON не пишет: печатаем как есть.
+      // Cyclic values cannot be serialized; fall back to their string representation.
     }
     return String(value);
   };
@@ -31,11 +31,6 @@
     if (value === null) return 'null';
     if (Array.isArray(value)) return 'array';
     return typeof value;
-  };
-
-  const TYPE_RU = {
-    string: 'строка', number: 'число', boolean: 'логическое значение', object: 'объект',
-    array: 'массив', null: 'null', undefined: 'undefined', function: 'функция',
   };
 
   // Comparison by value and not by reference: a test on a parsed response compares what it holds, and
@@ -120,7 +115,7 @@
     }
 
     // The two wordings of one failure: what should have been and what was, and the same the other way
-    // round, because `не ожидалось 200, получено 200` is a sentence nobody should have to parse.
+    // round, because `not expected 200, got 200` is a sentence nobody should have to parse.
     __fail(positive, negative) {
       throw new Error(this.__negated ? negative : positive);
     }
@@ -131,35 +126,33 @@
 
     equal(expected) {
       if (!this.__ok(this.__value === expected)) {
-        this.__fail('ожидалось ' + print(expected) + ', получено ' + print(this.__value),
-          'значение равно ' + print(expected) + ', а не должно');
+        this.__fail('expected ' + print(expected) + ', got ' + print(this.__value),
+          'value equals ' + print(expected) + ', but should not');
       }
       return this;
     }
 
     eql(expected) {
       if (!this.__ok(equal(this.__value, expected))) {
-        this.__fail('ожидалось ' + print(expected) + ', получено ' + print(this.__value),
-          'значение равно ' + print(expected) + ', а не должно');
+        this.__fail('expected ' + print(expected) + ', got ' + print(this.__value),
+          'value equals ' + print(expected) + ', but should not');
       }
       return this;
     }
 
     a(expected) {
-      // Имя вида принимается английское — так пишут в Postman, — а в сообщении оно русское: это текст
-      // для того, кто читает отчёт, а не для того, кто пишет скрипт.
-      const wanted = TYPE_RU[text(expected)] || text(expected);
-      const got = TYPE_RU[typeOf(this.__value)] || typeOf(this.__value);
+      const wanted = text(expected);
+      const got = typeOf(this.__value);
       if (!this.__ok(typeOf(this.__value) === text(expected))) {
-        this.__fail('ожидалось ' + wanted + ', а значение — ' + got, 'значение — ' + got + ', а не должно быть');
+        this.__fail('expected ' + wanted + ', got ' + got, 'value is ' + got + ', but should not be');
       }
       return this;
     }
 
     include(expected) {
       if (!this.__ok(contains(this.__value, expected))) {
-        this.__fail('в ' + print(this.__value) + ' нет ' + print(expected),
-          'в ' + print(this.__value) + ' есть ' + print(expected) + ', а не должно');
+        this.__fail(print(this.__value) + ' does not include ' + print(expected),
+          print(this.__value) + ' includes ' + print(expected) + ', but should not');
       }
       return this;
     }
@@ -168,12 +161,12 @@
       const holds = this.__value !== null && typeof this.__value === 'object' &&
         Object.prototype.hasOwnProperty.call(this.__value, name);
       if (!this.__ok(holds)) {
-        this.__fail('у значения нет свойства ' + print(name),
-          'у значения есть свойство ' + print(name) + ', а не должно');
+        this.__fail('value has no property ' + print(name),
+          'value has property ' + print(name) + ', but should not');
       }
       if (expected.length > 0 && !this.__ok(holds && equal(this.__value[name], expected[0]))) {
-        this.__fail('свойство ' + print(name) + ' равно ' + print(this.__value[name]) + ', ожидалось ' + print(expected[0]),
-          'свойство ' + print(name) + ' равно ' + print(expected[0]) + ', а не должно');
+        this.__fail('property ' + print(name) + ' equals ' + print(this.__value[name]) + ', expected ' + print(expected[0]),
+          'property ' + print(name) + ' equals ' + print(expected[0]) + ', but should not');
       }
       return this;
     }
@@ -181,8 +174,8 @@
     length(expected) {
       const size = this.__value === null || this.__value === undefined ? -1 : this.__value.length;
       if (!this.__ok(size === expected)) {
-        this.__fail('длина ' + print(size) + ', ожидалась ' + print(expected),
-          'длина ' + print(size) + ', а не должна быть ' + print(expected));
+        this.__fail('length ' + print(size) + ', expected ' + print(expected),
+          'length ' + print(size) + ', but should not be ' + print(expected));
       }
       return this;
     }
@@ -190,40 +183,40 @@
     match(expected) {
       const pattern = expected instanceof RegExp ? expected : new RegExp(text(expected));
       if (!this.__ok(pattern.test(text(this.__value)))) {
-        this.__fail(print(this.__value) + ' не соответствует ' + pattern,
-          print(this.__value) + ' соответствует ' + pattern + ', а не должно');
+        this.__fail(print(this.__value) + ' does not match ' + pattern,
+          print(this.__value) + ' matches ' + pattern + ', but should not');
       }
       return this;
     }
 
     above(expected) {
       if (!this.__ok(this.__value > expected)) {
-        this.__fail(print(this.__value) + ' не больше ' + print(expected),
-          print(this.__value) + ' больше ' + print(expected) + ', а не должно');
+        this.__fail(print(this.__value) + ' not above ' + print(expected),
+          print(this.__value) + ' above ' + print(expected) + ', but should not');
       }
       return this;
     }
 
     below(expected) {
       if (!this.__ok(this.__value < expected)) {
-        this.__fail(print(this.__value) + ' не меньше ' + print(expected),
-          print(this.__value) + ' меньше ' + print(expected) + ', а не должно');
+        this.__fail(print(this.__value) + ' not below ' + print(expected),
+          print(this.__value) + ' below ' + print(expected) + ', but should not');
       }
       return this;
     }
 
     least(expected) {
       if (!this.__ok(this.__value >= expected)) {
-        this.__fail(print(this.__value) + ' меньше ' + print(expected),
-          print(this.__value) + ' не меньше ' + print(expected) + ', а не должно');
+        this.__fail(print(this.__value) + ' below ' + print(expected),
+          print(this.__value) + ' not below ' + print(expected) + ', but should not');
       }
       return this;
     }
 
     most(expected) {
       if (!this.__ok(this.__value <= expected)) {
-        this.__fail(print(this.__value) + ' больше ' + print(expected),
-          print(this.__value) + ' не больше ' + print(expected) + ', а не должно');
+        this.__fail(print(this.__value) + ' above ' + print(expected),
+          print(this.__value) + ' not above ' + print(expected) + ', but should not');
       }
       return this;
     }
@@ -233,8 +226,8 @@
       let found = false;
       for (let i = 0; i < list.length; i++) if (equal(list[i], this.__value)) found = true;
       if (!this.__ok(found)) {
-        this.__fail(print(this.__value) + ' не одно из ' + print(list),
-          print(this.__value) + ' одно из ' + print(list) + ', а не должно');
+        this.__fail(print(this.__value) + ' not one of ' + print(list),
+          print(this.__value) + ' one of ' + print(list) + ', but should not');
       }
       return this;
     }
@@ -254,8 +247,8 @@
     Object.defineProperty(Assertion.prototype, name, {
       get() {
         if (!this.__ok(check(this.__value))) {
-          this.__fail('ожидалось ' + name + ', получено ' + print(this.__value),
-            'значение ' + name + ', а не должно');
+          this.__fail('expected ' + name + ', got ' + print(this.__value),
+            'value ' + name + ', but should not');
         }
         return this;
       },
@@ -314,7 +307,7 @@
         try {
           return JSON.parse(answer.body);
         } catch (error) {
-          throw new Error('тело ответа не разбирается как JSON: ' + error.message);
+          throw new Error('response body is not valid JSON: ' + error.message);
         }
       },
     };

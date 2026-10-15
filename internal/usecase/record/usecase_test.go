@@ -634,7 +634,7 @@ func TestSendRecordsTheMaskedRequest(t *testing.T) {
 func TestTheScriptsRunAroundTheAttempt(t *testing.T) {
 	screen := &fakeScreen{change: func(pass *domain.ScriptPass) {
 		pass.Request.Headers = append(pass.Request.Headers,
-			domain.HeaderPair{Name: "X-Sign", Value: "подпись"})
+			domain.HeaderPair{Name: "X-Sign", Value: "signature"})
 	}}
 	mask := &fakeMask{masked: Masked{
 		URL:     "https://api.example.com/articles?token=••••&sign=••••",
@@ -802,7 +802,7 @@ func TestASkippedRequestNeverGoesOut(t *testing.T) {
 // A script that cannot run at all is this side failing, and the attempt says so rather than sending
 // a request whose scripts never happened.
 func TestAScriptThatCannotRunFailsTheAttempt(t *testing.T) {
-	screen := &fakeScreen{fail: errors.New("база недоступна")}
+	screen := &fakeScreen{fail: errors.New("database unavailable")}
 	uc, _, executor, notifier, _ := newScriptedUseCase(screen, &fakeMask{})
 
 	in := input()
@@ -813,7 +813,7 @@ func TestAScriptThatCannotRunFailsTheAttempt(t *testing.T) {
 	}
 	failed, ok := notifier.waitFor(t, TopicRequestFailed).(RequestFailed)
 
-	if !ok || failed.ID != id || !strings.Contains(failed.Error, "база недоступна") {
+	if !ok || failed.ID != id || !strings.Contains(failed.Error, "database unavailable") {
 		t.Errorf("failure = %+v, want the reason the scripts could not run", failed)
 	}
 	if len(executor.got) != 0 {

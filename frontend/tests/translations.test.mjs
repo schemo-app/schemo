@@ -10,8 +10,8 @@ test('all registered translation files match the English reference', () => {
 })
 
 test('translation checks preserve parameters across plural forms and language order', () => {
-  assert.deepEqual(checkTranslations({ en: 'English', ru: 'Русский' }, {
-    ru: { request: '{n} запрос | {n} запроса | {n} запросов' },
+  assert.deepEqual(checkTranslations({ en: 'English', ru: 'Russian' }, {
+    ru: { request: '{n} one | {n} few | {n} many' },
     en: { request: '{n} request | {n} requests' },
   }), [])
 })
@@ -77,7 +77,7 @@ test('JSON catalogues are loaded lazily by locale code', async () => {
   delete i18n.global.messages.value.ru
   assert.equal(i18n.global.availableLocales.includes('ru'), false)
   await loadCatalogue('ru')
-  assert.equal(i18n.global.getLocaleMessage('ru').common.save, 'Сохранить')
+  assert.equal(i18n.global.getLocaleMessage('ru').common.save, catalogues.ru.common.save)
 })
 
 test('English and Russian plural messages use Intl rules', async () => {
@@ -85,15 +85,16 @@ test('English and Russian plural messages use Intl rules', async () => {
   assert.equal(t('counts.requests', { n: 1 }), '1 request')
   await loadCatalogue('ru')
   i18n.global.locale.value = 'ru'
-  for (const [count, word] of [[0, 'запросов'], [1, 'запрос'], [2, 'запроса'], [5, 'запросов'], [21, 'запрос'], [22, 'запроса']]) {
-    assert.equal(t('counts.requests', { n: count }), `${count} ${word}`)
+  const forms = catalogues.ru.counts.requests.split('|').map(form => form.trim())
+  for (const [count, index] of [[0, 2], [1, 0], [2, 1], [5, 2], [21, 0], [22, 1]]) {
+    assert.equal(t('counts.requests', { n: count }), forms[index].replace('{n}', String(count)))
   }
 })
 
 test('missing translations and error keys fall back to English', () => {
-  i18n.global.setLocaleMessage('ru', { common: { save: 'Сохранить' } })
+  i18n.global.setLocaleMessage('ru', { common: { save: 'Localized save' } })
   i18n.global.locale.value = 'ru'
-  assert.equal(t('common.save'), 'Сохранить')
+  assert.equal(t('common.save'), 'Localized save')
   assert.equal(t('common.copy'), 'Copy')
   assert.equal(te('common.copy'), true)
 })

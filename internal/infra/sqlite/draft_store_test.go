@@ -55,7 +55,7 @@ func TestDraftRoundTripKeepsTheBodyFormat(t *testing.T) {
 	saved.BodyKind = domain.BodyForm
 	saved.Body = ""
 	saved.Form = []domain.FormRow{
-		{ID: "f1", Name: "title", Value: "Кофемолка", Enabled: true},
+		{ID: "f1", Name: "title", Value: "Coffee grinder", Enabled: true},
 		{ID: "f2", Name: "photo", Src: `C:\pics\logo.png`, File: true, Enabled: false},
 	}
 	if err := store.SaveDraft(ctx, ws, saved); err != nil {
@@ -72,7 +72,7 @@ func TestDraftRoundTripKeepsTheBodyFormat(t *testing.T) {
 	if len(got.Form) != 2 {
 		t.Fatalf("form = %+v, want both rows", got.Form)
 	}
-	if got.Form[0].Value != "Кофемолка" {
+	if got.Form[0].Value != "Coffee grinder" {
 		t.Errorf("form[0] = %+v, want the text that was typed", got.Form[0])
 	}
 	// The path is kept apart from the text so that switching a row back to a text field finds what

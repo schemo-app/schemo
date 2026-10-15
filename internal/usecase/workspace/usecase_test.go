@@ -205,7 +205,7 @@ func TestCreateAppendsToList(t *testing.T) {
 	u, store, _ := newUseCase()
 	ctx := context.Background()
 
-	state, err := u.Create(ctx, CreateInput{Name: "Каталог внутренних API", Color: "purple"})
+	state, err := u.Create(ctx, CreateInput{Name: "Internal catalog of API", Color: "purple"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestCreateAppendsToList(t *testing.T) {
 	}
 
 	added := made(t, state.WorkspaceState)
-	if added.Name != "Каталог внутренних API" || added.Color != "purple" {
+	if added.Name != "Internal catalog of API" || added.Color != "purple" {
 		t.Errorf("the new workspace = %+v, want the name and the colour it was given", added)
 	}
 	// The form has no kind: a space made here is a personal one, and the row says so.
@@ -247,7 +247,7 @@ func TestTheWorkspaceTheAppIsBornWithIsPermanent(t *testing.T) {
 	u, store, _ := newUseCase()
 	ctx := context.Background()
 
-	other, err := u.Create(ctx, CreateInput{Name: "Рабочее"})
+	other, err := u.Create(ctx, CreateInput{Name: "Work"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestTheWorkspaceTheAppIsBornWithIsPermanent(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	name, team := "Моё", string(domain.WorkspaceTeam)
+	name, team := "Mine", string(domain.WorkspaceTeam)
 	for _, one := range []struct {
 		what string
 		do   func() error
@@ -312,7 +312,7 @@ func TestDeleteFallsBackToTheOldestLeft(t *testing.T) {
 	u, store, notifier := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Команда"})
+	created, err := u.Create(ctx, CreateInput{Name: "Team"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestStartPointsAtTheOldestWhenReopeningIsOff(t *testing.T) {
 	u, store, _ := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Команда"})
+	created, err := u.Create(ctx, CreateInput{Name: "Team"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestSwitchStoresAndPublishes(t *testing.T) {
 	u, store, notifier := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Команда"})
+	created, err := u.Create(ctx, CreateInput{Name: "Team"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestSwitchStoresAndPublishes(t *testing.T) {
 	}
 
 	// Switching to a row that is not there changes nothing and says so.
-	if _, err := u.Switch(ctx, "нет-такого"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := u.Switch(ctx, "not-found"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("switching to a space that is not there = %v, want ErrNotFound", err)
 	}
 	if store.active != target {
@@ -442,7 +442,7 @@ func TestASpaceIsMadeWithTheKindItWasChosenWith(t *testing.T) {
 	u, _, _ := newUseCase()
 	ctx := context.Background()
 
-	state, err := u.Create(ctx, CreateInput{Name: "Команда разработки", Kind: "team"})
+	state, err := u.Create(ctx, CreateInput{Name: "Development team", Kind: "team"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -450,7 +450,7 @@ func TestASpaceIsMadeWithTheKindItWasChosenWith(t *testing.T) {
 		t.Errorf("kind = %q, want the one that was chosen", got)
 	}
 
-	state, err = u.Create(ctx, CreateInput{Name: "Моё"})
+	state, err = u.Create(ctx, CreateInput{Name: "Mine"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -464,7 +464,7 @@ func TestASpaceIsMadeWithTheKindItWasChosenWith(t *testing.T) {
 func TestASpaceIsNotMadeWithAWordThisBuildDoesNotHave(t *testing.T) {
 	u, store, _ := newUseCase()
 
-	_, err := u.Create(context.Background(), CreateInput{Name: "Тесты", Kind: "shared"})
+	_, err := u.Create(context.Background(), CreateInput{Name: "Tests", Kind: "shared"})
 	if domain.CodeOf(err) != domain.CodeUnknownField {
 		t.Errorf("refusal = %q, want the kind named as what is wrong", domain.CodeOf(err))
 	}
@@ -480,7 +480,7 @@ func TestTheKindOfASpaceCanBeChanged(t *testing.T) {
 	u, _, _ := newUseCase()
 	ctx := context.Background()
 
-	made, err := u.Create(ctx, CreateInput{Name: "Рабочее"})
+	made, err := u.Create(ctx, CreateInput{Name: "Work"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestUpdateRenamesAndRecolors(t *testing.T) {
 	u, _, notifier := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Рабочее"})
+	created, err := u.Create(ctx, CreateInput{Name: "Work"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestUpdateRenamesAndRecolors(t *testing.T) {
 	}
 	notifier.topics = nil
 
-	name := "Платежи"
+	name := "Payments"
 	state, err := u.Update(ctx, target, Patch{Name: &name})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
@@ -562,7 +562,7 @@ func TestUpdateRenamesAndRecolors(t *testing.T) {
 			notifier.topics, TopicChanged)
 	}
 
-	if _, err := u.Update(ctx, "нет-такого", Patch{Name: &name}); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := u.Update(ctx, "not-found", Patch{Name: &name}); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("updating a space that is not there = %v, want ErrNotFound", err)
 	}
 }
@@ -590,16 +590,16 @@ func TestNameValidation(t *testing.T) {
 		t.Errorf("the store holds %d workspace(s), want the default alone", len(store.workspaces))
 	}
 
-	// The limit counts characters and not bytes: forty Cyrillic letters are inside it.
-	if _, err := u.Create(ctx, CreateInput{Name: strings.Repeat("я", maxNameLength)}); err != nil {
+	// The limit counts characters rather than bytes, including non-ASCII letters.
+	if _, err := u.Create(ctx, CreateInput{Name: strings.Repeat("é", maxNameLength)}); err != nil {
 		t.Errorf("a name of exactly %d characters = %v, want it accepted", maxNameLength, err)
 	}
 	// A name is trimmed rather than refused for the space around it.
-	state, err := u.Create(ctx, CreateInput{Name: "  Команда  "})
+	state, err := u.Create(ctx, CreateInput{Name: "  Team  "})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if got := made(t, state.WorkspaceState).Name; got != "Команда" {
+	if got := made(t, state.WorkspaceState).Name; got != "Team" {
 		t.Errorf("name = %q, want it trimmed", got)
 	}
 
@@ -618,7 +618,7 @@ func TestDeleteTakesASpaceSomebodyMade(t *testing.T) {
 	u, store, _ := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Рабочее"})
+	created, err := u.Create(ctx, CreateInput{Name: "Work"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -642,7 +642,7 @@ func TestASpaceTheAccountHasIsEndedThereToo(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -668,7 +668,7 @@ func TestLeaveStepsOutOfASpaceSomebodyElseHas(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -699,7 +699,7 @@ func TestASpaceTheAccountWillNotLetThisPersonOutOfStaysHere(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -721,7 +721,7 @@ func TestASpaceTheAccountNoLongerHasIsLeftAllTheSame(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -756,7 +756,7 @@ func TestASpaceThatIsOnlyHereIsNotLeft(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Платежи"})
+	created, err := u.Create(ctx, CreateInput{Name: "Payments"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -777,7 +777,7 @@ func TestASpaceTheAccountRefusesToEndStaysHere(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -799,7 +799,7 @@ func TestASpaceTheAccountNoLongerHasIsStillEndedHere(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -821,7 +821,7 @@ func TestASpaceThatIsOnlyHereIsNotSaidAnywhere(t *testing.T) {
 	u, _, remote := withRemote()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Платежи"})
+	created, err := u.Create(ctx, CreateInput{Name: "Payments"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -839,7 +839,7 @@ func TestDeleteFallsBackToTheOldestRemaining(t *testing.T) {
 	u, store, notifier := newUseCase()
 	ctx := context.Background()
 
-	created, err := u.Create(ctx, CreateInput{Name: "Рабочее"})
+	created, err := u.Create(ctx, CreateInput{Name: "Work"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -894,7 +894,7 @@ func TestChangingWhatASpaceIsForIsAskedOfTheAccount(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1
@@ -923,7 +923,7 @@ func TestASpaceTheAccountRefusesToChangeStaysAsItWas(t *testing.T) {
 	u, store, remote := withRemote()
 	ctx := context.Background()
 
-	if _, err := u.Create(ctx, CreateInput{Name: "Платежи", Kind: "team"}); err != nil {
+	if _, err := u.Create(ctx, CreateInput{Name: "Payments", Kind: "team"}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	at := len(store.workspaces) - 1

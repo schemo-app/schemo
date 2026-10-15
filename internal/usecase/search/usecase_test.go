@@ -92,9 +92,9 @@ func group(t *testing.T, result domain.SearchResult, kind domain.SearchKind) dom
 // window would have to know to skip.
 func TestQueryLeavesOutTheAreasThatFoundNothing(t *testing.T) {
 	result := search(t, &fakeIndex{
-		collections: []domain.SearchHit{{Kind: domain.SearchCollection, ID: "c1", Title: "Пользователи"}},
-		requests:    []domain.SearchHit{{Kind: domain.SearchRequest, ID: "r1", Title: "/users"}},
-	}, Query{Text: "польз"})
+		collections: []domain.SearchHit{{Kind: domain.SearchCollection, ID: "c1", Title: "Users"}},
+		requests:    []domain.SearchHit{{Kind: domain.SearchRequest, ID: "r1", Title: "/orders"}},
+	}, Query{Text: "user"})
 
 	if len(result.Groups) != 1 {
 		t.Fatalf("groups = %+v, want the collection alone", result.Groups)
@@ -108,12 +108,12 @@ func TestQueryLeavesOutTheAreasThatFoundNothing(t *testing.T) {
 // design's own wording, and a group cut to five must still say eight.
 func TestQueryCountsEverythingItFound(t *testing.T) {
 	hits := []domain.SearchHit{}
-	for _, name := range []string{"польз 1", "польз 2", "польз 3", "польз 4", "польз 5", "польз 6",
-		"польз 7"} {
+	for _, name := range []string{"user 1", "user 2", "user 3", "user 4", "user 5", "user 6",
+		"user 7"} {
 		hits = append(hits, domain.SearchHit{Kind: domain.SearchCollection, ID: name, Title: name})
 	}
 
-	found := group(t, search(t, &fakeIndex{collections: hits}, Query{Text: "польз"}),
+	found := group(t, search(t, &fakeIndex{collections: hits}, Query{Text: "user"}),
 		domain.SearchCollection)
 	if found.Total != 7 {
 		t.Fatalf("total = %d, want 7", found.Total)
@@ -130,11 +130,11 @@ func TestQueryWidensTheAreaThatWasChosen(t *testing.T) {
 	for i := range perGroupOne + 3 {
 		hits = append(hits,
 			domain.SearchHit{Kind: domain.SearchCollection, ID: string(rune('a' + i)),
-				Title: "пользователи"})
+				Title: "Users"})
 	}
 	index := &fakeIndex{collections: hits}
 
-	narrow := group(t, search(t, index, Query{Text: "польз", Kind: narrowed(domain.SearchCollection)}),
+	narrow := group(t, search(t, index, Query{Text: "user", Kind: narrowed(domain.SearchCollection)}),
 		domain.SearchCollection)
 	if len(narrow.Hits) != perGroupOne {
 		t.Fatalf("drawn = %d, want %d", len(narrow.Hits), perGroupOne)
@@ -150,7 +150,7 @@ func TestQueryWidensTheAreaThatWasChosen(t *testing.T) {
 // only the history has an answer to that — every other area would answer with its whole contents.
 func TestQueryAnswersAnEmptyFieldWithHistoryAlone(t *testing.T) {
 	index := &fakeIndex{
-		collections: []domain.SearchHit{{Kind: domain.SearchCollection, ID: "c1", Title: "Пользователи"}},
+		collections: []domain.SearchHit{{Kind: domain.SearchCollection, ID: "c1", Title: "Users"}},
 		requests:    []domain.SearchHit{{Kind: domain.SearchRequest, ID: "r1", Title: "/users"}},
 		history: []domain.SearchHit{
 			{Kind: domain.SearchHistory, ID: "h2", Title: "/articles", At: 200},
@@ -172,8 +172,8 @@ func TestQueryAnswersAnEmptyFieldWithHistoryAlone(t *testing.T) {
 func TestQueryAnswersAnEmptyFieldInTheAreaThatWasChosen(t *testing.T) {
 	index := &fakeIndex{
 		collections: []domain.SearchHit{
-			{Kind: domain.SearchCollection, ID: "c1", Title: "Пользователи"},
-			{Kind: domain.SearchCollection, ID: "c2", Title: "Заказы"},
+			{Kind: domain.SearchCollection, ID: "c1", Title: "Users"},
+			{Kind: domain.SearchCollection, ID: "c2", Title: "Orders"},
 		},
 	}
 	result := search(t, index, Query{Kind: narrowed(domain.SearchCollection)})
@@ -205,7 +205,7 @@ func TestQuerySearchesTheWorkspaceTheWindowIsIn(t *testing.T) {
 // answering is worse than the window saying so.
 func TestQueryFailsWhenAnAreaDoes(t *testing.T) {
 	_, err := NewUseCase(&fakeIndex{fail: domain.SearchHistory}, fakeScope{}).
-		Find(context.Background(), Query{Text: "пользователи"})
+		Find(context.Background(), Query{Text: "Users"})
 	if err == nil {
 		t.Fatal("want a failure")
 	}

@@ -21,7 +21,7 @@ func TestCollectionsReadsTheTreeNested(t *testing.T) {
 		t.Fatalf("tree = %d collections, want 1", len(tree))
 	}
 	collection := tree[0]
-	if collection.Name != "Пользователи" || collection.Description != "тестовые" {
+	if collection.Name != "Users" || collection.Description != "test" {
 		t.Errorf("collection = %+v, want the saved one", collection)
 	}
 	if collection.Auth == nil || collection.Auth.Answer("token") != "{{token}}" {
@@ -86,7 +86,7 @@ func TestContentRowsWalkTheWholeCollectionInTreeOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ContentRows(nested): %v", err)
 	}
-	if len(nested) != 1 || nested[0].ID != "r-1" || nested[0].Name != "Список" {
+	if len(nested) != 1 || nested[0].ID != "r-1" || nested[0].Name != "List" {
 		t.Errorf("rows = %+v, want the nested collection's own request", nested)
 	}
 }
@@ -96,8 +96,8 @@ func TestCollectionsKeepsTheirOwnOrder(t *testing.T) {
 	ctx := context.Background()
 
 	for _, c := range []domain.Collection{
-		{ID: "col-b", Name: "Вторая", Position: 1},
-		{ID: "col-a", Name: "Первая", Position: 0},
+		{ID: "col-b", Name: "Second", Position: 1},
+		{ID: "col-a", Name: "First", Position: 0},
 	} {
 		if err := store.SaveCollection(ctx, ws, c); err != nil {
 			t.Fatalf("SaveCollection: %v", err)
@@ -119,11 +119,11 @@ func TestCollectionsDoNotMixNodes(t *testing.T) {
 	seedTree(t, store)
 
 	if err := store.SaveCollection(ctx, ws,
-		domain.Collection{ID: "col-2", Name: "Заказы", Position: 1}); err != nil {
+		domain.Collection{ID: "col-2", Name: "Orders", Position: 1}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 	if err := store.SaveNode(ctx,
-		sampleNode("r-3", "col-2", 0, "Заказы", "GET", "https://api.example.com/orders")); err != nil {
+		sampleNode("r-3", "col-2", 0, "Orders", "GET", "https://api.example.com/orders")); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}
 
@@ -148,7 +148,7 @@ func TestNodeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node: %v", err)
 	}
-	if node.Name != "Список" || node.Method != "GET" || node.URL != "https://api.example.com/users" {
+	if node.Name != "List" || node.Method != "GET" || node.URL != "https://api.example.com/users" {
 		t.Errorf("node = %+v, want the saved request", node)
 	}
 	if node.CollectionID != "f-1" || node.Position != 0 {
@@ -179,7 +179,7 @@ func TestNodeRoundTripKeepsTheSavedExamples(t *testing.T) {
 	ctx := context.Background()
 	seedTree(t, store)
 
-	node := sampleNode("r-6", "col-1", 2, "Список", "GET", "https://api.example.com/products")
+	node := sampleNode("r-6", "col-1", 2, "List", "GET", "https://api.example.com/products")
 	node.Responses = []domain.ResponseExample{
 		{Name: "The list", Status: 200, Body: `{"data":[]}`,
 			Headers: []domain.HeaderPair{{Name: "Content-Type", Value: "application/json"}}},
@@ -207,11 +207,11 @@ func TestNodeRoundTripKeepsTheBodyFormat(t *testing.T) {
 	ctx := context.Background()
 	seedTree(t, store)
 
-	node := sampleNode("r-5", "col-1", 2, "Загрузка", "POST", "https://api.example.com/upload")
+	node := sampleNode("r-5", "col-1", 2, "Upload", "POST", "https://api.example.com/upload")
 	node.Body = ""
 	node.BodyKind = domain.BodyForm
 	node.Form = []domain.FormRow{
-		{ID: "f-1", Name: "title", Value: "Кофемолка", Enabled: true},
+		{ID: "f-1", Name: "title", Value: "Coffee grinder", Enabled: true},
 		{ID: "f-2", Name: "photo", Src: "/tmp/logo.png", File: true, Enabled: true},
 	}
 	if err := store.SaveNode(ctx, node); err != nil {
@@ -252,7 +252,7 @@ func TestNodeAuthRemembersExplicitNothing(t *testing.T) {
 	// An empty auth is an answer, not an absence: without it a collection could not say "no auth for
 	// anything in here", which is the whole point of the NULL column.
 	none := &domain.Auth{Type: domain.AuthNone}
-	node := sampleNode("r-4", "col-1", 2, "Без авторизации", "GET", "https://api.example.com/open")
+	node := sampleNode("r-4", "col-1", 2, "No authorization", "GET", "https://api.example.com/open")
 	node.Auth = none
 	if err := store.SaveNode(ctx, node); err != nil {
 		t.Fatalf("SaveNode: %v", err)
@@ -270,7 +270,7 @@ func TestNodeAuthRemembersExplicitNothing(t *testing.T) {
 func TestNodeInAMissingRow(t *testing.T) {
 	store := newMigratedStore(t)
 
-	if _, err := store.Node(context.Background(), "нет-такого"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := store.Node(context.Background(), "not-found"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("missing node = %v, want ErrNotFound", err)
 	}
 }
@@ -284,7 +284,7 @@ func TestSaveNodeUpdatesInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node: %v", err)
 	}
-	before.Name = "Один пользователь"
+	before.Name = "One user"
 	before.Headers = []domain.Row{{ID: "h", Name: "If-None-Match", Value: `"v1"`, Enabled: true}}
 	if err := store.SaveNode(ctx, before); err != nil {
 		t.Fatalf("SaveNode: %v", err)
@@ -294,7 +294,7 @@ func TestSaveNodeUpdatesInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node: %v", err)
 	}
-	if after.Name != "Один пользователь" || len(after.Headers) != 1 ||
+	if after.Name != "One user" || len(after.Headers) != 1 ||
 		after.Headers[0].Name != "If-None-Match" {
 		t.Errorf("node = %+v, want the edit", after)
 	}
@@ -306,7 +306,7 @@ func TestSaveNodeUpdatesInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Collections: %v", err)
 	}
-	if tree[0].Items[0].Name != "Один пользователь" {
+	if tree[0].Items[0].Name != "One user" {
 		t.Errorf("tree = %+v, want the new name in the row", tree[0].Items[0])
 	}
 }
@@ -389,7 +389,7 @@ func TestNextPositionIsNotAMixOfTheTwoTables(t *testing.T) {
 	ctx := context.Background()
 	seedTree(t, store)
 
-	if err := store.SaveCollection(ctx, ws, nested("f-2", "col-1", 5, "Второй")); err != nil {
+	if err := store.SaveCollection(ctx, ws, nested("f-2", "col-1", 5, "Second")); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 
@@ -420,7 +420,7 @@ func TestDeleteTakesTheNestedTreeWithIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node: %v, want the sibling of the deleted collection", err)
 	}
-	if node.Name != "Один" {
+	if node.Name != "One" {
 		t.Errorf("node = %+v, want the request at the top untouched", node)
 	}
 
@@ -480,8 +480,8 @@ func TestMoveNodePutsARowBetweenItsNeighbours(t *testing.T) {
 	seedTree(t, store)
 
 	for _, node := range []domain.CollectionNode{
-		sampleNode("r-3", "col-1", 2, "Два", "GET", "https://api.example.com/2"),
-		sampleNode("r-4", "col-1", 3, "Три", "GET", "https://api.example.com/3"),
+		sampleNode("r-3", "col-1", 2, "Two", "GET", "https://api.example.com/2"),
+		sampleNode("r-4", "col-1", 3, "Three", "GET", "https://api.example.com/3"),
 	} {
 		if err := store.SaveNode(ctx, node); err != nil {
 			t.Fatalf("SaveNode %s: %v", node.ID, err)
@@ -519,7 +519,7 @@ func TestMoveCollectionNestsAndComesBack(t *testing.T) {
 	seedTree(t, store)
 
 	if err := store.SaveCollection(ctx, ws,
-		domain.Collection{ID: "col-2", Name: "Заказы", Position: 1}); err != nil {
+		domain.Collection{ID: "col-2", Name: "Orders", Position: 1}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 
@@ -538,7 +538,7 @@ func TestMoveCollectionNestsAndComesBack(t *testing.T) {
 	if len(nested.Children) != 1 || nested.Children[0].ID != "col-2" {
 		t.Fatalf("nested = %+v, want the collection that was moved in", nested.Children)
 	}
-	if inner := nested.Children[0]; len(inner.Items) != 0 || inner.Name != "Заказы" {
+	if inner := nested.Children[0]; len(inner.Items) != 0 || inner.Name != "Orders" {
 		t.Errorf("moved = %+v, want its own name and its own (empty) level", inner)
 	}
 
@@ -578,7 +578,7 @@ func TestRunRoundTrip(t *testing.T) {
 	for _, result := range []domain.CollectionRunResult{
 		{NodeID: "r-1", Position: 0, Status: &created, OK: true, DurationUs: 12_345, RecordID: "rec-1",
 			AssertionsPassed: 1, AssertionsTotal: 2},
-		{NodeID: "r-2", Position: 1, OK: false, Error: "сервер не ответил"},
+		{NodeID: "r-2", Position: 1, OK: false, Error: "server did not respond"},
 	} {
 		if err := store.AppendRunResult(ctx, run.ID, result); err != nil {
 			t.Fatalf("AppendRunResult: %v", err)
@@ -616,7 +616,7 @@ func TestRunRoundTrip(t *testing.T) {
 		t.Errorf("first result = %+v, want the one of two assertions it carried", first)
 	}
 	if second := last.Results[1]; second.Status != nil || second.OK ||
-		second.Error != "сервер не ответил" {
+		second.Error != "server did not respond" {
 		t.Errorf("second result = %+v, want no status and the reason", second)
 	}
 	if second := last.Results[1]; second.AssertionsTotal != 0 {
@@ -686,7 +686,7 @@ func TestNodesSurviveACollectionRename(t *testing.T) {
 		t.Fatalf("Collections: %v", err)
 	}
 	collection := tree[0]
-	collection.Name = "Пользователи API"
+	collection.Name = "Users API"
 	if err := store.SaveCollection(ctx, ws, collection); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
@@ -695,7 +695,7 @@ func TestNodesSurviveACollectionRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Collections: %v", err)
 	}
-	if tree[0].Name != "Пользователи API" {
+	if tree[0].Name != "Users API" {
 		t.Errorf("collection = %+v, want the new name", tree[0])
 	}
 	if tree[0].Auth == nil {
@@ -733,7 +733,7 @@ func TestARunRowKeepsTheRefusalItCarried(t *testing.T) {
 	}
 	for _, result := range []domain.CollectionRunResult{
 		{NodeID: "r-1", Position: 0, OK: false, Error: refusal.Error(), Failure: refusal},
-		{NodeID: "r-2", Position: 1, OK: false, Error: "сервер не ответил"},
+		{NodeID: "r-2", Position: 1, OK: false, Error: "server did not respond"},
 	} {
 		if err := store.AppendRunResult(ctx, run.ID, result); err != nil {
 			t.Fatalf("AppendRunResult: %v", err)
@@ -767,12 +767,12 @@ func TestNodeReadsARowWithNullColumns(t *testing.T) {
 	store := newMigratedStore(t)
 	ctx := context.Background()
 
-	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Коллекция")); err != nil {
+	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Collection")); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 	if _, err := store.DB().ExecContext(ctx, `INSERT INTO collection_nodes
 		(id, collection_id, name, position, created_at, updated_at)
-		VALUES ('r-1', 'col-1', 'Список', 0, 1, 1)`); err != nil {
+		VALUES ('r-1', 'col-1', 'List', 0, 1, 1)`); err != nil {
 		t.Fatalf("inserting the row: %v", err)
 	}
 
@@ -780,7 +780,7 @@ func TestNodeReadsARowWithNullColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Node: %v", err)
 	}
-	if node.Name != "Список" || node.CollectionID != "col-1" {
+	if node.Name != "List" || node.CollectionID != "col-1" {
 		t.Errorf("node = %+v, want the row that was written", node)
 	}
 	if len(node.Params) != 0 || len(node.Headers) != 0 {

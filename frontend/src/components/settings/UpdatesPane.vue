@@ -19,7 +19,7 @@ import logoUrl from '../../assets/logo.svg'
 // own. The card at the top is the app itself, with the two things a person does about that.
 const { t } = useMessages()
 const { loadSettings, setUpdateCheck, setUpdateChannel } = useSettings()
-const { phase, latest, notes, checkedAt, error, check, openWindow, checkIfRequested } = useUpdateCheck()
+const { phase, latest, available, notes, checkedAt, error, check, openWindow, checkIfRequested } = useUpdateCheck()
 
 const version = ref('')
 const build = ref('')
@@ -86,6 +86,7 @@ const tone = computed(() => {
 
 const busy = computed(() => phase.value === 'checking' || phase.value === 'installing')
 const openable = computed(() => phase.value === 'available' || phase.value === 'installing')
+const newsVersion = computed(() => available.value ? latest.value : version.value)
 
 // The notes of the version on offer; with nothing on offer, the current release's own.
 const newsLine = computed(() =>
@@ -93,7 +94,7 @@ const newsLine = computed(() =>
     channel: channel.value === UpdateChannel.ChannelBeta
       ? t('settings.channelBeta')
       : t('settings.channelStable'),
-    version: formatVersion(latest.value || version.value),
+    version: formatVersion(newsVersion.value),
   })
 )
 
@@ -166,9 +167,9 @@ onMounted(async () => {
     <WhatsNewSheet
       v-if="newsOpen"
       :app="appName || 'Schemo'"
-      :version="formatVersion(latest || version)"
+      :version="formatVersion(newsVersion)"
       :line="newsLine"
-      :current="phase !== 'available'"
+      :current="!available"
       :notes="notes"
       @close="newsOpen = false"
     />

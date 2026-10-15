@@ -240,7 +240,7 @@ func (fakeSession) Me(context.Context) (domain.Account, error) {
 // newUseCase is one space of a team's, in an account, with two people in it.
 func newUseCase() (*UseCase, *fakeServer) {
 	store := &fakeStore{space: domain.Workspace{
-		ID: spaceID, Name: "Платежи", Kind: domain.WorkspaceTeam, RemoteID: account,
+		ID: spaceID, Name: "Payments", Kind: domain.WorkspaceTeam, RemoteID: account,
 	}}
 	server := &fakeServer{kind: domain.WorkspaceTeam}
 	return NewUseCase(store, server, fakeSession{}), server

@@ -9,7 +9,7 @@ import { useRecordsStore } from '../../stores/records'
 import { useSetting } from '../../composables/useSettings'
 import { useToast } from '../../composables/useToast'
 import { groupHue, groupLabel, tabGroups } from '../../lib/recordTabs'
-import { EXTENSION_PAGE } from '../../lib/features'
+import { EXTENSION_STORES } from '../../lib/extensions'
 import { formatDate, useMessages } from '../../i18n'
 import CaptureFiltersSheet from './CaptureFiltersSheet.vue'
 import Icon from '../ui/Icon.vue'
@@ -95,8 +95,8 @@ const filtersOpen = ref(false)
 // What stands on the page while nothing is connected: the three steps the extension is brought in
 // by, and the way to the page that carries it.
 
-function openInstall() {
-  void Browser.OpenURL(EXTENSION_PAGE)
+function openInstall(url: string) {
+  void Browser.OpenURL(url)
 }
 
 const introSteps = computed(() => [
@@ -155,9 +155,9 @@ const introSteps = computed(() => [
       </div>
 
       <div class="intro-install">
-        <button class="intro-btn" @click="openInstall()">
+        <button v-for="store in EXTENSION_STORES" :key="store.name" class="intro-btn" @click="openInstall(store.url)">
           <Icon name="Download" :size="12" :stroke-width="2.2" />
-          <span class="cap-line">{{ t('capture.install') }}</span>
+          <span class="cap-line">{{ store.name }}</span>
         </button>
         <span class="intro-also">{{ t('capture.installAlso') }}</span>
         <span class="cap-spacer"></span>

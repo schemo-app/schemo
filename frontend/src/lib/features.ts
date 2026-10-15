@@ -13,9 +13,6 @@ export const FEATURES = {
 /** The plan a device works on when nobody has bought anything: the vocabulary is the server's. */
 export const TIER_FREE = 'free'
 
-/** Where a person is sent to install the browser extension: the page of its own repository. */
-export const EXTENSION_PAGE = 'https://github.com/schemo-app/extension#readme'
-
 function keyOf(feature: string): string {
   return feature ? `errors.features.${feature}` : ''
 }

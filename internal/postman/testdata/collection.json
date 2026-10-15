@@ -2,15 +2,15 @@
   "info": {
     "_postman_id": "6f3f4a1e-2b7c-4c8f-9a1d-2f7f0c0b1a44",
     "name": "Storefront",
-    "description": "Что-то, что написал Postman: этого описания приложение не читает.",
+    "description": "Postman metadata that the application does not import.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Пользователи",
+      "name": "Users",
       "item": [
         {
-          "name": "Список",
+          "name": "List",
           "request": {
             "method": "GET",
             "header": [
@@ -33,7 +33,7 @@
           "response": []
         },
         {
-          "name": "Создать",
+          "name": "Create",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/vnd.api+json" }],
@@ -48,12 +48,12 @@
       "event": [
         {
           "listen": "prerequest",
-          "script": { "type": "text/javascript", "exec": ["console.log('скрипт')"] }
+          "script": { "type": "text/javascript", "exec": ["console.log('script')"] }
         }
       ]
     },
     {
-      "name": "Отчёт",
+      "name": "Report",
       "request": {
         "method": "POST",
         "header": [],

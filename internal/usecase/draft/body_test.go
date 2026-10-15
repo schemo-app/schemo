@@ -146,8 +146,8 @@ func withHeader(t *testing.T, uc *UseCase, name, value string) {
 func TestAFormBodyGoesOutAsMultipart(t *testing.T) {
 	uc, files := loadedWithFiles(t)
 	formOf(t, uc, []domain.FormRow{
-		{Name: "title", Value: "Кофемолка", Enabled: true},
-		{Name: "off", Value: "нет", Enabled: false},
+		{Name: "title", Value: "Coffee grinder", Enabled: true},
+		{Name: "off", Value: "no", Enabled: false},
 		{Name: "photo", Src: "/tmp/logo.png", File: true, Enabled: true},
 	})
 
@@ -170,7 +170,7 @@ func TestAFormBodyGoesOutAsMultipart(t *testing.T) {
 		}
 		seen[part.FormName()] = string(body)
 	}
-	if seen["title"] != "Кофемолка" {
+	if seen["title"] != "Coffee grinder" {
 		t.Errorf("parts = %+v, want the text row", seen)
 	}
 	if _, present := seen["off"]; present {

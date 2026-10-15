@@ -30,7 +30,7 @@ func TestTwoWorkspacesDoNotSeeEachOther(t *testing.T) {
 		t.Fatalf("SaveVariable: %v", err)
 	}
 	if err := store.SaveCollection(ctx, ws,
-		domain.Collection{ID: "col-1", Name: "Пользователи", Position: 1}); err != nil {
+		domain.Collection{ID: "col-1", Name: "Users", Position: 1}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 	draft := domain.NewDraft()
@@ -203,7 +203,7 @@ func TestDeleteWorkspaceTakesItsData(t *testing.T) {
 		t.Fatalf("SaveVariable(%s): %v", team, err)
 	}
 	if err := store.SaveCollection(ctx, team,
-		domain.Collection{ID: "col-team", Name: "Заказы", Position: 1}); err != nil {
+		domain.Collection{ID: "col-team", Name: "Orders", Position: 1}); err != nil {
 		t.Fatalf("SaveCollection(%s): %v", team, err)
 	}
 	if err := store.SaveScriptRun(ctx, team, domain.ScriptRun{
@@ -232,7 +232,7 @@ func TestDeleteWorkspaceTakesItsData(t *testing.T) {
 		t.Fatalf("SaveVariable: %v", err)
 	}
 	if err := store.SaveCollection(ctx, ws,
-		domain.Collection{ID: "col-mine", Name: "Пользователи", Position: 1}); err != nil {
+		domain.Collection{ID: "col-mine", Name: "Users", Position: 1}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 	if err := store.SaveScriptRun(ctx, ws, domain.ScriptRun{
@@ -437,7 +437,7 @@ func TestWorkspaceCountsCountWhatEachSpaceHolds(t *testing.T) {
 		t.Fatalf("SaveRun: %v", err)
 	}
 	if err := store.SaveCollection(ctx, team, domain.Collection{
-		ID: "col-2", Name: "Чужая", Position: 0,
+		ID: "col-2", Name: "Foreign", Position: 0,
 	}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}

@@ -23,24 +23,24 @@ func setupVarsTree(t *testing.T) varsTree {
 	uc, _ := newTestUseCase()
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
-	nestedID := nestCollection(t, uc, "Вложенная", collectionID)
+	nestedID := nestCollection(t, uc, "Nested", collectionID)
 
-	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: nestedID, Name: "Внутри"})
+	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: nestedID, Name: "Inside"})
 	if err != nil {
 		t.Fatalf("CreateNode inside: %v", err)
 	}
-	insideID := findInTree(t, tree, "Внутри").ID
+	insideID := findInTree(t, tree, "Inside").ID
 
-	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: collectionID, Name: "Рядом"})
+	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: collectionID, Name: "Sibling"})
 	if err != nil {
 		t.Fatalf("CreateNode beside: %v", err)
 	}
-	besideID := findInTree(t, tree, "Рядом").ID
+	besideID := findInTree(t, tree, "Sibling").ID
 
 	return varsTree{uc: uc, collectionID: collectionID, nestedID: nestedID, insideID: insideID,
 		besideID: besideID}
@@ -119,7 +119,7 @@ func TestVariablesOfALevelWithNothingAboveAreNone(t *testing.T) {
 	v := setupVarsTree(t)
 	saveVariables(t, v.uc, v.collectionID, variable("baseUrl", "https://outer"))
 
-	for _, id := range []domain.DraftID{domain.DraftCommandLine, "не-существует"} {
+	for _, id := range []domain.DraftID{domain.DraftCommandLine, "not-found"} {
 		above, err := v.uc.Above(ctx, id)
 		if err != nil {
 			t.Fatalf("Above(%s): %v", id, err)
@@ -191,7 +191,7 @@ func TestContentsCarryTheAddressAndWalkTheFolders(t *testing.T) {
 	v := setupVarsTree(t)
 
 	if err := v.uc.store.SaveNode(ctx, domain.CollectionNode{
-		ID: "n-url", CollectionID: v.collectionID, Name: "Список", Method: "GET", Position: 5,
+		ID: "n-url", CollectionID: v.collectionID, Name: "List", Method: "GET", Position: 5,
 		URL: "{{baseUrl}}/articles",
 	}); err != nil {
 		t.Fatalf("SaveNode: %v", err)

@@ -101,7 +101,7 @@ func TestTheTreeIsQueuedRowByRow(t *testing.T) {
 		entry{entityRequest, "r-2", actionCreate},
 	)
 
-	rename := nested("f-1", "col-1", 0, "Администраторы")
+	rename := nested("f-1", "col-1", 0, "Administrators")
 	if err := store.SaveCollection(ctx, ws, rename); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestADeletedTreeIsQueuedWhole(t *testing.T) {
 	)
 
 	markSent(t, store, ws)
-	third := sampleNode("r-3", "col-1", 0, "Третий", "GET", "https://e.test/")
+	third := sampleNode("r-3", "col-1", 0, "Third", "GET", "https://e.test/")
 	if err := store.SaveNode(ctx, third); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}
@@ -356,12 +356,12 @@ func TestASpaceQueuesItsOwnRow(t *testing.T) {
 	wantQueued(t, store, team, entry{entityWorkspace, team, actionCreate})
 
 	markSent(t, store, team)
-	made := domain.NewWorkspace(team, "Команда", domain.WorkspaceTeam, "purple", 1)
-	made.Name = "Команда API"
+	made := domain.NewWorkspace(team, "Team", domain.WorkspaceTeam, "purple", 1)
+	made.Name = "Team API"
 	if err := store.SaveWorkspace(context.Background(), made); err != nil {
 		t.Fatalf("SaveWorkspace: %v", err)
 	}
-	made.Name = "Команда API v2"
+	made.Name = "Team API v2"
 	if err := store.SaveWorkspace(context.Background(), made); err != nil {
 		t.Fatalf("SaveWorkspace: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestALandedWriteWakesTheEngine(t *testing.T) {
 	var woken []string
 	store.SetWake(func(space string) { woken = append(woken, space) })
 
-	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Пользователи")); err != nil {
+	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Users")); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 	if len(woken) != 1 || woken[0] != ws {
@@ -411,7 +411,7 @@ func TestALandedWriteWakesTheEngine(t *testing.T) {
 	}
 
 	if err := store.SaveNode(ctx, domain.CollectionNode{
-		ID: "r-1", CollectionID: "nowhere", Name: "Список", Method: "GET", URL: "https://x.example",
+		ID: "r-1", CollectionID: "nowhere", Name: "List", Method: "GET", URL: "https://x.example",
 	}); err == nil {
 		t.Fatal("a node in a collection that is not there was saved")
 	}
@@ -470,7 +470,7 @@ func TestAnEditAfterQueueingTravelsInItsNewShape(t *testing.T) {
 	space := linked(t, store)
 
 	if err := store.SaveCollection(ctx, ws, domain.Collection{
-		ID: "col-1", Name: "Пользователи API", Position: 0,
+		ID: "col-1", Name: "Users API", Position: 0,
 	}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestAnEditAfterQueueingTravelsInItsNewShape(t *testing.T) {
 	if err := proto.Unmarshal(payload, &collection); err != nil {
 		t.Fatalf("reading the payload: %v", err)
 	}
-	if collection.GetName() != "Пользователи API" {
+	if collection.GetName() != "Users API" {
 		t.Errorf("what travels is called %q, want the row as it stands now",
 			collection.GetName())
 	}
@@ -501,7 +501,7 @@ func TestAStoreWithoutAWakeIsStillAStore(t *testing.T) {
 	store := newMigratedStore(t)
 	ctx := context.Background()
 
-	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Пользователи")); err != nil {
+	if err := store.SaveCollection(ctx, ws, nested("col-1", "", 0, "Users")); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
 }

@@ -203,7 +203,7 @@ func (f *fakeFiles) Read(path string) ([]byte, error) {
 	}
 	data, ok := f.files[path]
 	if !ok {
-		return nil, fmt.Errorf("файл %s: %w", path, domain.ErrNotFound)
+		return nil, fmt.Errorf("file %s: %w", path, domain.ErrNotFound)
 	}
 	return []byte(data), nil
 }
@@ -618,7 +618,7 @@ func TestASaveThatFailsIsRolledBack(t *testing.T) {
 	ctx := context.Background()
 
 	before, _ := uc.Snapshot(ctx, domain.DraftCommandLine)
-	store.failSave = errors.New("диск полон")
+	store.failSave = errors.New("disk full")
 
 	if _, err := uc.SetMethod(ctx, domain.DraftCommandLine, "POST"); err == nil {
 		t.Fatal("SetMethod succeeded although the draft could not be saved")
@@ -1056,11 +1056,11 @@ func TestASaveThatFailsLeavesTheDraftAsItWas(t *testing.T) {
 	row := flushed.Draft.Params[0].ID
 
 	// The store refuses the next write, and the edit that follows has to leave nothing behind.
-	store.failSave = errors.New("диск полон")
+	store.failSave = errors.New("disk full")
 	if _, err := uc.PatchRow(ctx, domain.DraftCommandLine, domain.RowParams, row,
 		RowPatch{Value: strPtr("42")}); err == nil {
 		t.Fatal("PatchRow = nil error, want the store's failure")
-	} else if !strings.Contains(err.Error(), "диск полон") {
+	} else if !strings.Contains(err.Error(), "disk full") {
 		t.Fatalf("PatchRow = %v, want the store's own error", err)
 	}
 

@@ -14,10 +14,10 @@ func TestParamsFromURL(t *testing.T) {
 	}{
 		{
 			name: "a token and an encoded letter",
-			url:  "https://api.example.com/a?x={{b}}&c=%D0%B0",
+			url:  "https://api.example.com/a?x={{b}}&c=%C3%A9",
 			want: []domain.Row{
 				{Name: "x", Value: "{{b}}", Enabled: true},
-				{Name: "c", Value: "а", Enabled: true},
+				{Name: "c", Value: "é", Enabled: true},
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestParamsFromURL(t *testing.T) {
 // the braces of a token or encoding the comma of `include=author,comments` would all show up here.
 func TestJoinURLTextRoundTrip(t *testing.T) {
 	for _, raw := range []string{
-		"/a?x={{b}}&c=%D0%B0",
+		"/a?x={{b}}&c=%C3%A9",
 		"/a?b=2&a=1",
 		"/a?q=one+two",
 		"https://api.example.com/articles?include=author,comments&page[number]=2",
@@ -94,7 +94,7 @@ func TestEncodeQueryKeepsWhatTheUrlIsMadeOf(t *testing.T) {
 		"filter[id][in]":  "filter[id][in]",
 		"{{token}}":       "{{token}}",
 		"one two":         "one+two",
-		"а":               "%D0%B0",
+		"é":               "%C3%A9",
 		"a&b=c":           "a%26b%3Dc",
 		"100%":            "100%25",
 		"a/b?c":           "a%2Fb%3Fc",

@@ -28,7 +28,7 @@ func setupRunnable(t *testing.T) *runFixture {
 	uc, store, sender, notifier, asserted := newTestRun()
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
@@ -48,7 +48,7 @@ func setupRunnable(t *testing.T) *runFixture {
 			ID: node.ID, Name: name, Method: "GET", URL: url,
 			Headers: []domain.Row{
 				{ID: node.ID + "-on", Name: "Accept", Value: "application/vnd.api+json", Enabled: true},
-				{ID: node.ID + "-off", Name: "X-Off", Value: "нет", Enabled: false},
+				{ID: node.ID + "-off", Name: "X-Off", Value: "no", Enabled: false},
 			},
 		}); err != nil {
 			t.Fatalf("SaveNode %s: %v", name, err)
@@ -58,13 +58,13 @@ func setupRunnable(t *testing.T) *runFixture {
 		return node.ID
 	}
 
-	add(collectionID, "Первый", "https://api.example.com/first")
+	add(collectionID, "First", "https://api.example.com/first")
 	// Dropped in second, so that the level is a request, a collection and then a request: the shape
 	// that says whether the walk goes in the drawn order rather than by kind.
-	nestedID := nestCollectionAt(t, uc, "Вложенная", collectionID, 1)
-	add(nestedID, "Второй", "https://api.example.com/second")
-	add(nestedID, "Третий", "https://api.example.com/third")
-	add(collectionID, "Четвёртый", "https://api.example.com/fourth")
+	nestedID := nestCollectionAt(t, uc, "Nested", collectionID, 1)
+	add(nestedID, "Second", "https://api.example.com/second")
+	add(nestedID, "Third", "https://api.example.com/third")
+	add(collectionID, "Fourth", "https://api.example.com/fourth")
 
 	return &runFixture{
 		uc: uc, store: store, sender: sender, notifier: notifier, assertions: asserted,
@@ -157,7 +157,7 @@ func TestRunSendsWhatTheRequestIsMadeOf(t *testing.T) {
 	if len(sent) != 2 {
 		t.Fatalf("sent %d requests, want the nested collection's two", len(sent))
 	}
-	if sent[0].Method != "GET" || sent[0].URL != r.requests["Второй"] {
+	if sent[0].Method != "GET" || sent[0].URL != r.requests["Second"] {
 		t.Errorf("request = %+v, want the saved method and address", sent[0])
 	}
 	// A row a person switched off travels nowhere, and the row that is on stays a pair.
@@ -184,7 +184,7 @@ func TestRunOfANestedCollectionTouchesOnlyItsSubtree(t *testing.T) {
 
 func TestRunOfASingleRequest(t *testing.T) {
 	r := setupRunnable(t)
-	node := findInTree(t, mustTree(t, r), "Третий")
+	node := findInTree(t, mustTree(t, r), "Third")
 
 	if _, err := r.uc.Run(context.Background(), r.collectionID, node.ID); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -203,10 +203,10 @@ func TestRunSendsTheInheritedAuth(t *testing.T) {
 	r := setupRunnable(t)
 	ctx := context.Background()
 
-	if _, err := r.uc.SaveAuth(ctx, r.collectionID, bearer("коллекция")); err != nil {
+	if _, err := r.uc.SaveAuth(ctx, r.collectionID, bearer("Collection")); err != nil {
 		t.Fatalf("SaveAuth collection: %v", err)
 	}
-	if _, err := r.uc.SaveAuth(ctx, r.nestedID, bearer("вложенная")); err != nil {
+	if _, err := r.uc.SaveAuth(ctx, r.nestedID, bearer("Nested")); err != nil {
 		t.Fatalf("SaveAuth nested: %v", err)
 	}
 
@@ -219,7 +219,7 @@ func TestRunSendsTheInheritedAuth(t *testing.T) {
 	if len(sent) != 4 {
 		t.Fatalf("sent %d requests, want the whole collection", len(sent))
 	}
-	want := []string{"коллекция", "вложенная", "вложенная", "коллекция"}
+	want := []string{"Collection", "Nested", "Nested", "Collection"}
 	for i, token := range want {
 		auth := sent[i].Auth
 		if auth == nil || auth.Answer("token") != token {
@@ -236,25 +236,25 @@ func TestRunFromAFolderTwoLevelsDownCarriesEveryLevelAbove(t *testing.T) {
 	r := setupRunnable(t)
 	ctx := context.Background()
 
-	deepID := nestCollectionAt(t, r.uc, "Глубокая", r.nestedID, 1)
+	deepID := nestCollectionAt(t, r.uc, "Deep", r.nestedID, 1)
 	const url = "https://api.example.com/deep"
 	if _, _, err := r.uc.CreateNode(ctx, NodeDraft{
-		CollectionID: deepID, Name: "Глубокий", Method: "GET",
+		CollectionID: deepID, Name: "Deep", Method: "GET",
 	}); err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
-	deep := findInTree(t, mustTree(t, r), "Глубокий")
+	deep := findInTree(t, mustTree(t, r), "Deep")
 	if _, err := r.uc.SaveNode(ctx, domain.CollectionNode{
-		ID: deep.ID, Name: "Глубокий", Method: "GET", URL: url,
+		ID: deep.ID, Name: "Deep", Method: "GET", URL: url,
 	}); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}
 	r.sender.reply(url, 200, 1000)
 
-	if _, err := r.uc.SaveAuth(ctx, r.collectionID, bearer("корень")); err != nil {
+	if _, err := r.uc.SaveAuth(ctx, r.collectionID, bearer("root")); err != nil {
 		t.Fatalf("SaveAuth root: %v", err)
 	}
-	if _, err := r.uc.SaveAuth(ctx, r.nestedID, bearer("середина")); err != nil {
+	if _, err := r.uc.SaveAuth(ctx, r.nestedID, bearer("middle")); err != nil {
 		t.Fatalf("SaveAuth middle: %v", err)
 	}
 	saveVariables(t, r.uc, r.nestedID, variable("page", "2"))
@@ -268,7 +268,7 @@ func TestRunFromAFolderTwoLevelsDownCarriesEveryLevelAbove(t *testing.T) {
 	if len(sent) != 1 || sent[0].URL != url {
 		t.Fatalf("sent %v, want the deep folder's one request", r.sender.urls())
 	}
-	if auth := sent[0].Auth; auth == nil || auth.Answer("token") != "середина" {
+	if auth := sent[0].Auth; auth == nil || auth.Answer("token") != "middle" {
 		t.Errorf("went out with %+v, want the middle level's authorization", sent[0].Auth)
 	}
 	if len(sent[0].Variables) != 1 || sent[0].Variables[0].Name != "page" {
@@ -278,7 +278,7 @@ func TestRunFromAFolderTwoLevelsDownCarriesEveryLevelAbove(t *testing.T) {
 
 func TestRunGoesOnAfterAFailure(t *testing.T) {
 	r := setupRunnable(t)
-	r.sender.fail(r.requests["Второй"])
+	r.sender.fail(r.requests["Second"])
 
 	if _, err := r.uc.Run(context.Background(), r.collectionID, ""); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -293,7 +293,7 @@ func TestRunGoesOnAfterAFailure(t *testing.T) {
 		t.Errorf("run = %d passed, %d failed, want 3 and 1", run.Passed, run.Failed)
 	}
 	failed := run.Results[1]
-	if failed.OK || failed.Status != nil || failed.Error != "сервер не ответил" {
+	if failed.OK || failed.Status != nil || failed.Error != "server did not respond" {
 		t.Errorf("failed result = %+v, want it without a status and with the reason", failed)
 	}
 	if run.Results[2].OK != true {
@@ -306,7 +306,7 @@ func TestRunGoesOnAfterAFailure(t *testing.T) {
 // half of them.
 func TestRunCountsASkippedRequestAsNeither(t *testing.T) {
 	r := setupRunnable(t)
-	r.sender.skip(r.requests["Второй"])
+	r.sender.skip(r.requests["Second"])
 
 	if _, err := r.uc.Run(context.Background(), r.collectionID, ""); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -369,7 +369,7 @@ func TestARunRowNamesTheRecordItProduced(t *testing.T) {
 // nothing was written for is 0 of 0 — nothing was asserted, which is not the same as a failure.
 func TestRunCarriesTheAssertionsOfEachRow(t *testing.T) {
 	r := setupRunnable(t)
-	r.assertions.asserts("rec-"+r.requests["Второй"], 3, 4)
+	r.assertions.asserts("rec-"+r.requests["Second"], 3, 4)
 
 	if _, err := r.uc.Run(context.Background(), r.collectionID, ""); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -380,11 +380,11 @@ func TestRunCarriesTheAssertionsOfEachRow(t *testing.T) {
 	for _, result := range run.Results {
 		byRecord[result.RecordID] = result
 	}
-	written := byRecord["rec-"+r.requests["Второй"]]
+	written := byRecord["rec-"+r.requests["Second"]]
 	if written.AssertionsPassed != 3 || written.AssertionsTotal != 4 {
 		t.Errorf("row = %+v, want the three of the four its report holds", written)
 	}
-	quiet := byRecord["rec-"+r.requests["Первый"]]
+	quiet := byRecord["rec-"+r.requests["First"]]
 	if quiet.AssertionsPassed != 0 || quiet.AssertionsTotal != 0 {
 		t.Errorf("row = %+v, want nothing asserted about it", quiet)
 	}
@@ -472,7 +472,7 @@ func TestRunRefusesAnEmptySubtree(t *testing.T) {
 	uc, store, _, _, _ := newTestRun()
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Пустая", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Empty", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
@@ -485,13 +485,13 @@ func TestRunRefusesAnEmptySubtree(t *testing.T) {
 	if len(store.runs) != 0 {
 		t.Errorf("stored %d runs, want none", len(store.runs))
 	}
-	if _, err := uc.Run(ctx, "нет-такой", ""); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := uc.Run(ctx, "not-found", ""); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("run of a missing collection = %v, want ErrNotFound", err)
 	}
 
 	// A request of another collection is a stale selection, not an empty run: the two are told apart
 	// because the window shows them differently.
-	_, other, err := uc.CreateCollection(ctx, "Другая", "", "")
+	_, other, err := uc.CreateCollection(ctx, "Other", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
@@ -500,11 +500,11 @@ func TestRunRefusesAnEmptySubtree(t *testing.T) {
 		t.Fatal("the second collection is not in the tree")
 	}
 	otherID := otherCollection.ID
-	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: otherID, Name: "Чужой"})
+	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: otherID, Name: "Foreign"})
 	if err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
-	stranger := findInTree(t, tree, "Чужой").ID
+	stranger := findInTree(t, tree, "Foreign").ID
 	if _, err := uc.Run(ctx, collectionID, stranger); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("run of a node that is not in this collection = %v, want ErrNotFound", err)
 	}
@@ -534,7 +534,7 @@ func TestLastRunReadsWhatTheRunWrote(t *testing.T) {
 	if last == nil || len(last.Results) != 2 || last.Passed != 2 {
 		t.Fatalf("LastRun = %+v, want the nested collection's run with its rows", last)
 	}
-	if last.Results[0].NodeID != findInTree(t, mustTree(t, r), "Второй").ID {
+	if last.Results[0].NodeID != findInTree(t, mustTree(t, r), "Second").ID {
 		t.Errorf("first result = %+v, want the nested collection's first request", last.Results[0])
 	}
 
@@ -620,12 +620,12 @@ func TestEveryRequestOfARunCarriesTheSpaceTheRunStartedIn(t *testing.T) {
 		platform.NewIDGen())
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
-	for _, name := range []string{"Первый", "Второй"} {
+	for _, name := range []string{"First", "Second"} {
 		if _, tree, err = uc.CreateNode(ctx, NodeDraft{
 			CollectionID: collectionID, Name: name, Method: "GET",
 		}); err != nil {
@@ -671,22 +671,22 @@ func TestARunsRequestCarriesWhatItsBodyWasMadeOf(t *testing.T) {
 		notifier, platform.NewIDGen())
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
 	if _, tree, err = uc.CreateNode(ctx, NodeDraft{
-		CollectionID: collectionID, Name: "Загрузка", Method: "POST",
+		CollectionID: collectionID, Name: "Upload", Method: "POST",
 	}); err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
 	const url = "https://api.example.com/upload"
-	node := findInTree(t, tree, "Загрузка")
-	form := []domain.FormRow{{ID: "row-1", Name: "field", Value: "значение", Enabled: true}}
+	node := findInTree(t, tree, "Upload")
+	form := []domain.FormRow{{ID: "row-1", Name: "field", Value: "value", Enabled: true}}
 	if _, err := uc.SaveNode(ctx, domain.CollectionNode{
-		ID: node.ID, Name: "Загрузка", Method: "POST", URL: url,
-		Body: "field=значение", BodyKind: domain.BodyForm, Form: form, BodyFile: "/tmp/report.pdf",
+		ID: node.ID, Name: "Upload", Method: "POST", URL: url,
+		Body: "field=value", BodyKind: domain.BodyForm, Form: form, BodyFile: "/tmp/report.pdf",
 	}); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}
@@ -706,7 +706,7 @@ func TestARunsRequestCarriesWhatItsBodyWasMadeOf(t *testing.T) {
 		t.Errorf("body kind = %q, want %q — a form body sent as text goes out as the wrong thing",
 			got.BodyKind, domain.BodyForm)
 	}
-	if len(got.Form) != 1 || got.Form[0].Name != "field" || got.Form[0].Value != "значение" {
+	if len(got.Form) != 1 || got.Form[0].Name != "field" || got.Form[0].Value != "value" {
 		t.Errorf("form rows = %+v, want the one the node holds", got.Form)
 	}
 	if got.BodyFile != "/tmp/report.pdf" {
@@ -726,20 +726,20 @@ func TestARunsRequestCarriesTheEnvironmentItWasPinnedTo(t *testing.T) {
 		notifier, platform.NewIDGen())
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
 	if _, tree, err = uc.CreateNode(ctx, NodeDraft{
-		CollectionID: collectionID, Name: "Прод", Method: "GET",
+		CollectionID: collectionID, Name: "Production", Method: "GET",
 	}); err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
 	const url = "https://api.example.com/articles"
-	node := findInTree(t, tree, "Прод")
+	node := findInTree(t, tree, "Production")
 	if _, err := uc.SaveNode(ctx, domain.CollectionNode{
-		ID: node.ID, Name: "Прод", Method: "GET", URL: url, EnvironmentID: "env-prod",
+		ID: node.ID, Name: "Production", Method: "GET", URL: url, EnvironmentID: "env-prod",
 	}); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}
@@ -772,20 +772,20 @@ func TestARunKeepsTheEnvironmentItRanUnder(t *testing.T) {
 		platform.NewIDGen())
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
 	url := "https://api.example.com/articles"
 	if _, tree, err = uc.CreateNode(ctx, NodeDraft{
-		CollectionID: collectionID, Name: "Статьи", Method: "GET",
+		CollectionID: collectionID, Name: "Articles", Method: "GET",
 	}); err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
-	node := findInTree(t, tree, "Статьи")
+	node := findInTree(t, tree, "Articles")
 	if _, err := uc.SaveNode(ctx, domain.CollectionNode{
-		ID: node.ID, Name: "Статьи", Method: "GET", URL: url,
+		ID: node.ID, Name: "Articles", Method: "GET", URL: url,
 	}); err != nil {
 		t.Fatalf("SaveNode: %v", err)
 	}

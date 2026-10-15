@@ -409,14 +409,14 @@ func TestWhatASpaceIsForDoesNotTravelWithItsRow(t *testing.T) {
 		Seq: 62,
 		Entity: domain.SyncEntity{
 			Kind: domain.EntityWorkspace, ID: space.RemoteID, Version: 4,
-			Payload: mustMarshal(t, sync.WorkspaceData_builder{Name: "Тесты"}.Build()),
+			Payload: mustMarshal(t, sync.WorkspaceData_builder{Name: "Tests"}.Build()),
 		},
 	}}, 62); err != nil {
 		t.Fatalf("ApplyPage: %v", err)
 	}
 
 	if err := store.SaveWorkspace(ctx, domain.Workspace{
-		ID: ws, Name: "Тесты", Kind: domain.WorkspaceTeam, UpdatedAt: now(),
+		ID: ws, Name: "Tests", Kind: domain.WorkspaceTeam, UpdatedAt: now(),
 	}); err != nil {
 		t.Fatalf("SaveWorkspace: %v", err)
 	}
@@ -435,7 +435,7 @@ func TestWhatASpaceIsForDoesNotTravelWithItsRow(t *testing.T) {
 	if err := proto.Unmarshal(payload, data); err != nil {
 		t.Fatalf("reading the payload: %v", err)
 	}
-	if data.GetName() != "Тесты" {
+	if data.GetName() != "Tests" {
 		t.Errorf("name = %q, want the name the space was given here", data.GetName())
 	}
 }
@@ -724,7 +724,7 @@ func TestACollectionTravelsAsTheContractSpellsIt(t *testing.T) {
 	if err := proto.Unmarshal(payload, &collection); err != nil {
 		t.Fatalf("reading the payload: %v", err)
 	}
-	if collection.GetName() != "Админ" || collection.GetParentId() != "col-1" {
+	if collection.GetName() != "Admin" || collection.GetParentId() != "col-1" {
 		t.Errorf("payload = %+v, want the row it was read from", &collection)
 	}
 }
@@ -2325,7 +2325,7 @@ func TestARequestTravelsWithItsSavedAnswers(t *testing.T) {
 	seedTree(t, store)
 	space := linked(t, store)
 
-	node := sampleNode("r-6", "col-1", 2, "Список", "GET", "https://api.example.com/products")
+	node := sampleNode("r-6", "col-1", 2, "List", "GET", "https://api.example.com/products")
 	node.Responses = []domain.ResponseExample{{
 		Name: "The list", Status: 200, Body: `{"data":[]}`,
 		Headers: []domain.HeaderPair{{Name: "Content-Type", Value: "application/json"}},

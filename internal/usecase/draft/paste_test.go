@@ -10,7 +10,7 @@ import (
 
 func TestPastingSomethingElseLeavesTheDraftAlone(t *testing.T) {
 	uc, _ := newUseCase()
-	for _, text := range []string{"https://api.example.com/articles", "просто текст", ""} {
+	for _, text := range []string{"https://api.example.com/articles", "plain text", ""} {
 		pasted, err := uc.PasteCommand(context.Background(), domain.DraftCommandLine, text)
 		if err != nil {
 			t.Fatalf("PasteCommand(%q): %v", text, err)

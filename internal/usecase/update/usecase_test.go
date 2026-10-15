@@ -171,6 +171,39 @@ func TestStatusBeforeTheFirstCheckIsEmptyAndNotAnError(t *testing.T) {
 	}
 }
 
+func TestNotesFollowTheDisplayedRelease(t *testing.T) {
+	h := newHarness("1.0.0")
+	h.uc = NewUseCase(h.releases, h.state, h.settings, platform.BuildInfo{
+		Version: "1.0.0", ReleaseNotes: "- Installed release changes",
+	})
+	ctx := context.Background()
+	assertNotes := func(want string) {
+		t.Helper()
+		got, err := h.uc.Status(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Notes) != 1 || got.Notes[0] != want {
+			t.Errorf("Status.Notes = %q, want [%q]", got.Notes, want)
+		}
+	}
+	assertNotes("Installed release changes")
+	h.releases.release = domain.Release{Version: "1.0.0"}
+	if _, err := h.uc.Check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertNotes("Installed release changes")
+	h.releases.release = domain.Release{Version: "1.2.0", Notes: []string{"New release changes"}}
+	if _, err := h.uc.Check(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertNotes("New release changes")
+	if _, err := h.uc.Skip(ctx); err != nil {
+		t.Fatal(err)
+	}
+	assertNotes("Installed release changes")
+}
+
 func TestStartupCheckSkipsWhenTheLastCheckIsYoung(t *testing.T) {
 	h := newHarness("1.0.0")
 	h.state.state.LastCheckAt = time.Now().Add(-time.Hour).UnixMilli()
@@ -195,6 +228,31 @@ func TestStartupCheckAsksAfterTheInterval(t *testing.T) {
 	}
 	if !got.Available {
 		t.Error("Available = false, want true")
+	}
+}
+
+func TestStartupOffersRememberedReleaseWithoutCheckingAgain(t *testing.T) {
+	for _, skipped := range []string{"", "1.2.0"} {
+		t.Run("skipped="+skipped, func(t *testing.T) {
+			h := newHarness("1.0.0")
+			h.state.state = domain.UpdateState{
+				LastCheckAt: time.Now().Add(-time.Hour).UnixMilli(),
+				Latest:      "1.2.0",
+				Skipped:     skipped,
+				Notes:       []string{"Release notes"},
+			}
+			got := h.uc.StartupCheck(context.Background())
+			if skipped != "" {
+				if got != nil {
+					t.Errorf("StartupCheck = %+v, want nil for skipped release", got)
+				}
+			} else if got == nil || !got.Available || got.Latest != "1.2.0" || len(got.Notes) != 1 {
+				t.Errorf("StartupCheck = %+v, want remembered release with notes", got)
+			}
+			if len(h.releases.asked) != 0 {
+				t.Error("StartupCheck reached the network inside the check interval")
+			}
+		})
 	}
 }
 

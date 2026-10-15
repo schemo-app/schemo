@@ -16,6 +16,7 @@ import (
 
 	"schemo/internal/domain"
 	"schemo/internal/platform"
+	"schemo/internal/usecase/update"
 )
 
 // Engine checks for new releases and handles the update installation.
@@ -75,7 +76,7 @@ func (e *Engine) Latest(ctx context.Context, channel domain.UpdateChannel) (doma
 	if rel == nil {
 		return domain.Release{Version: e.updater.CurrentVersion()}, nil
 	}
-	return domain.Release{Version: rel.Version, Notes: releaseNotes(rel.Notes)}, nil
+	return domain.Release{Version: rel.Version, Notes: update.ParseNotes(rel.Notes)}, nil
 }
 
 // Install downloads, verifies, and installs the target release, restarting the app on success.

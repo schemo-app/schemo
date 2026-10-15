@@ -250,7 +250,7 @@ func TestInheritedAuthIsWhatTheCallerResolved(t *testing.T) {
 		t.Fatalf("Prepared: %v", err)
 	}
 	if auth.last().Type != domain.AuthNone {
-		t.Errorf("auth = %q, want «нет» when there is nothing above to inherit", auth.last().Type)
+		t.Errorf("auth = %q, want «no» when there is nothing above to inherit", auth.last().Type)
 	}
 	if _, ok := headerOf(prepared.Headers, "Authorization"); ok {
 		t.Errorf("headers = %+v, want no authorization when there is nothing above to inherit",

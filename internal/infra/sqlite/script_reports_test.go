@@ -19,7 +19,7 @@ func TestScriptReportArraysPreserveOrderAndReplaceWhole(t *testing.T) {
 	}
 	run := domain.ScriptRun{
 		ID: "report", RecordID: "record", Scope: domain.ScriptPost, OK: false, CreatedAt: 100,
-		Logs:  []domain.ScriptLog{{Level: "log", Message: "first\n\"quoted\""}, {Level: "warn", Message: "второй"}},
+		Logs:  []domain.ScriptLog{{Level: "log", Message: "first\n\"quoted\""}, {Level: "warn", Message: "Second"}},
 		Tests: []domain.TestResult{{Name: "first", Passed: true, DurationUs: 3}, {Name: "second", Passed: false, Error: "failure"}},
 	}
 	if err := store.SaveScriptRun(ctx, ws, run); err != nil {

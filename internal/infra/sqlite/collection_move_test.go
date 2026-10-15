@@ -87,7 +87,7 @@ func TestMoveNodeLandsWhereTheIndexPoints(t *testing.T) {
 	seedTree(t, store)
 
 	for _, node := range []domain.CollectionNode{
-		sampleNode("r-3", "col-1", 2, "Три", "GET", "https://api.example.com/3"),
+		sampleNode("r-3", "col-1", 2, "Three", "GET", "https://api.example.com/3"),
 	} {
 		if err := store.SaveNode(ctx, node); err != nil {
 			t.Fatalf("SaveNode: %v", err)

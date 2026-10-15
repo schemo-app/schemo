@@ -30,6 +30,8 @@ The first command opens an editor for the release notes. Use bullet points:
 
 The workflow copies the tag annotation into the GitHub release and signed updater manifests. The application's update window displays lines starting with `- ` or `* `. Editing the GitHub release after publication does not change the notes already included in signed manifests.
 
+The same tag annotation is embedded in the application for the installed version's “What's new” page, which works offline.
+
 Stable releases use tags without a prerelease suffix:
 
 ```text

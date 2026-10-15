@@ -39,6 +39,7 @@ Use `task --list` for other commands.
 - Comments explain non-obvious behavior and constraints.
 - Keep business rules in Go and presentation logic in Vue.
 - Test observable behavior.
+- Use English in test names, comments, diagnostics and fixtures. Read localized expectations from the application catalogues; preserve Unicode coverage with non-ASCII fixtures.
 - Use temporary SQLite databases for persistence, migration and transaction tests.
 - Keep frontend regressions in `frontend/tests`.
 

@@ -89,11 +89,11 @@ func run(
 
 func TestAScriptThatRunsSaysWhatItDid(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPost, `
-		console.log('смотрим', {code: pm.response.code});
-		pm.test('статус 200', function () {
+		console.log('inspecting', {code: pm.response.code});
+		pm.test('status 200', function () {
 			pm.expect(pm.response.code).to.equal(200);
 		});
-		pm.test('это JSON:API', function () {
+		pm.test('this is JSON:API', function () {
 			pm.expect(pm.response.headers.get('Content-Type')).to.include('vnd.api+json');
 		});
 	`)
@@ -104,13 +104,13 @@ func TestAScriptThatRunsSaysWhatItDid(t *testing.T) {
 	if report.Scope != domain.ScriptPost {
 		t.Errorf("scope = %q, want the post-response one", report.Scope)
 	}
-	if len(report.Logs) != 1 || report.Logs[0].Message != `смотрим {"code":200}` {
+	if len(report.Logs) != 1 || report.Logs[0].Message != `inspecting {"code":200}` {
 		t.Errorf("logs = %+v, want the object printed as JSON", report.Logs)
 	}
 	if len(report.Tests) != 2 || !report.Tests[0].Passed || !report.Tests[1].Passed {
 		t.Fatalf("tests = %+v, want both checks passed", report.Tests)
 	}
-	if report.Tests[0].Name != "статус 200" {
+	if report.Tests[0].Name != "status 200" {
 		t.Errorf("test = %+v, want the name the script gave it", report.Tests[0])
 	}
 	if report.DurationUs <= 0 {
@@ -122,8 +122,8 @@ func TestAScriptThatRunsSaysWhatItDid(t *testing.T) {
 // is what makes a script with five checks report all five.
 func TestAFailedCheckDoesNotStopTheScript(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPost, `
-		pm.test('первая', function () { pm.expect(pm.response.code).to.equal(404); });
-		pm.test('вторая', function () { pm.expect(pm.response.code).to.equal(200); });
+		pm.test('First', function () { pm.expect(pm.response.code).to.equal(404); });
+		pm.test('Second', function () { pm.expect(pm.response.code).to.equal(200); });
 	`)
 
 	if !report.OK {
@@ -135,7 +135,7 @@ func TestAFailedCheckDoesNotStopTheScript(t *testing.T) {
 	if report.Tests[0].Passed {
 		t.Error("the first check passed, and it asserted 404 against a 200")
 	}
-	if report.Tests[0].Error != "ожидалось 404, получено 200" {
+	if report.Tests[0].Error != "expected 404, got 200" {
 		t.Errorf("failure = %q, want what was wanted and what came", report.Tests[0].Error)
 	}
 	if !report.Tests[1].Passed {
@@ -158,7 +158,7 @@ func TestAssertions(t *testing.T) {
 			what:    "equal",
 			passes:  `pm.expect(200).to.equal(200)`,
 			fails:   `pm.expect(200).to.equal(404)`,
-			message: "ожидалось 404, получено 200",
+			message: "expected 404, got 200",
 		},
 		{
 			// Two objects with the same keys in another order are the same object to whoever wrote
@@ -166,107 +166,107 @@ func TestAssertions(t *testing.T) {
 			what:    "eql",
 			passes:  `pm.expect({a: 1, b: [2]}).to.eql({b: [2], a: 1})`,
 			fails:   `pm.expect({a: 1}).to.eql({a: 2})`,
-			message: `ожидалось {"a":2}, получено {"a":1}`,
+			message: `expected {"a":2}, got {"a":1}`,
 		},
 		{
 			what:    "a",
-			passes:  `pm.expect('текст').to.be.a('string')`,
-			fails:   `pm.expect('текст').to.be.a('number')`,
-			message: "ожидалось число, а значение — строка",
+			passes:  `pm.expect('text').to.be.a('string')`,
+			fails:   `pm.expect('text').to.be.a('number')`,
+			message: "expected number, got string",
 		},
 		{
 			what:    "include",
 			passes:  `pm.expect('jsonapi').to.include('json')`,
 			fails:   `pm.expect('jsonapi').to.include('xml')`,
-			message: "в jsonapi нет xml",
+			message: "jsonapi does not include xml",
 		},
 		{
 			what:    "property",
 			passes:  `pm.expect({id: '1'}).to.have.property('id')`,
 			fails:   `pm.expect({id: '1'}).to.have.property('name')`,
-			message: "у значения нет свойства name",
+			message: "value has no property name",
 		},
 		{
 			// A property that exists but holds another value is a different
 			// failure, and the message says so.
-			what:    "property со значением",
+			what:    "property with a value",
 			passes:  `pm.expect({id: '1'}).to.have.property('id', '1')`,
 			fails:   `pm.expect({id: '1'}).to.have.property('id', '2')`,
-			message: "свойство id равно 1, ожидалось 2",
+			message: "property id equals 1, expected 2",
 		},
 		{
 			what:    "length",
 			passes:  `pm.expect([1, 2]).to.have.length(2)`,
 			fails:   `pm.expect([1, 2]).to.have.length(3)`,
-			message: "длина 2, ожидалась 3",
+			message: "length 2, expected 3",
 		},
 		{
 			what:    "match",
 			passes:  `pm.expect('2024-01').to.match(/^\d{4}-\d{2}$/)`,
-			fails:   `pm.expect('вчера').to.match(/^\d{4}$/)`,
-			message: `вчера не соответствует /^\d{4}$/`,
+			fails:   `pm.expect('yesterday').to.match(/^\d{4}$/)`,
+			message: `yesterday does not match /^\d{4}$/`,
 		},
 		{what: "above", passes: `pm.expect(5).to.be.above(4)`, fails: `pm.expect(5).to.be.above(6)`,
-			message: "5 не больше 6"},
+			message: "5 not above 6"},
 		{what: "below", passes: `pm.expect(5).to.be.below(6)`, fails: `pm.expect(5).to.be.below(4)`,
-			message: "5 не меньше 4"},
+			message: "5 not below 4"},
 		{what: "least", passes: `pm.expect(5).to.be.least(5)`, fails: `pm.expect(5).to.be.least(6)`,
-			message: "5 меньше 6"},
+			message: "5 below 6"},
 		{what: "most", passes: `pm.expect(5).to.be.most(5)`, fails: `pm.expect(5).to.be.most(4)`,
-			message: "5 больше 4"},
+			message: "5 above 4"},
 		{
 			what:    "oneOf",
 			passes:  `pm.expect(2).to.be.oneOf([1, 2])`,
 			fails:   `pm.expect(3).to.be.oneOf([1, 2])`,
-			message: "3 не одно из [1,2]",
+			message: "3 not one of [1,2]",
 		},
 		{
 			what:    "true",
 			passes:  `pm.expect(true).to.be.true`,
 			fails:   `pm.expect(false).to.be.true`,
-			message: "ожидалось true, получено false",
+			message: "expected true, got false",
 		},
 		{
 			what:    "false",
 			passes:  `pm.expect(false).to.be.false`,
 			fails:   `pm.expect(true).to.be.false`,
-			message: "ожидалось false, получено true",
+			message: "expected false, got true",
 		},
 		{
 			what:    "null",
 			passes:  `pm.expect(null).to.be.null`,
 			fails:   `pm.expect(5).to.be.null`,
-			message: "ожидалось null, получено 5",
+			message: "expected null, got 5",
 		},
 		{
 			what:    "undefined",
 			passes:  `pm.expect(undefined).to.be.undefined`,
 			fails:   `pm.expect(5).to.be.undefined`,
-			message: "ожидалось undefined, получено 5",
+			message: "expected undefined, got 5",
 		},
-		{what: "ok", passes: `pm.expect('текст').to.be.ok`, fails: `pm.expect(0).to.be.ok`,
-			message: "ожидалось ok, получено 0"},
+		{what: "ok", passes: `pm.expect('text').to.be.ok`, fails: `pm.expect(0).to.be.ok`,
+			message: "expected ok, got 0"},
 		{
 			what:    "empty",
 			passes:  `pm.expect([]).to.be.empty`,
 			fails:   `pm.expect([1, 2]).to.be.empty`,
-			message: "ожидалось empty, получено [1,2]",
+			message: "expected empty, got [1,2]",
 		},
 		{
 			what:    "exist",
 			passes:  `pm.expect(0).to.exist`,
 			fails:   `pm.expect(null).to.exist`,
-			message: "ожидалось exist, получено null",
+			message: "expected exist, got null",
 		},
 		{
 			what:    "not",
 			passes:  `pm.expect(200).to.not.equal(404)`,
 			fails:   `pm.expect(200).to.not.equal(200)`,
-			message: "значение равно 200, а не должно",
+			message: "value equals 200, but should not",
 		},
 	} {
 		t.Run(one.what, func(t *testing.T) {
-			report, _, _ := run(t, domain.ScriptPre, "pm.test('идёт', function () { "+one.passes+"; });")
+			report, _, _ := run(t, domain.ScriptPre, "pm.test('passes', function () { "+one.passes+"; });")
 			if !report.OK || len(report.Tests) != 1 {
 				t.Fatalf("report = %+v, want one check", report)
 			}
@@ -274,7 +274,7 @@ func TestAssertions(t *testing.T) {
 				t.Fatalf("%s failed: %s", one.passes, report.Tests[0].Error)
 			}
 
-			report, _, _ = run(t, domain.ScriptPre, "pm.test('не идёт', function () { "+one.fails+"; });")
+			report, _, _ = run(t, domain.ScriptPre, "pm.test('fails', function () { "+one.fails+"; });")
 			if len(report.Tests) != 1 {
 				t.Fatalf("report = %+v, want one check", report)
 			}
@@ -290,14 +290,14 @@ func TestAssertions(t *testing.T) {
 
 func TestAScriptThatThrowsIsAReport(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPre, `
-		console.warn('дошли');
-		throw new Error('дальше нет смысла');
+		console.warn('reached');
+		throw new Error('cannot continue');
 	`)
 
 	if report.OK || report.Error == "" {
 		t.Fatalf("report = %+v, want the script's failure", report)
 	}
-	if !strings.Contains(report.Error, "дальше нет смысла") {
+	if !strings.Contains(report.Error, "cannot continue") {
 		t.Errorf("error = %q, want the message the script threw", report.Error)
 	}
 	if len(report.Logs) != 1 {
@@ -306,7 +306,7 @@ func TestAScriptThatThrowsIsAReport(t *testing.T) {
 }
 
 func TestAScriptThatDoesNotParseIsAReport(t *testing.T) {
-	report, _, _ := run(t, domain.ScriptPost, `pm.test('скобка не закрыта', function () {`)
+	report, _, _ := run(t, domain.ScriptPost, `pm.test('unclosed brace', function () {`)
 
 	if report.OK || !strings.Contains(report.Error, "SyntaxError") {
 		t.Errorf("report = %+v, want a syntax error told to the reader", report)
@@ -320,7 +320,7 @@ func TestThereIsNoWayOutOfTheSandbox(t *testing.T) {
 		const names = ['require', 'process', 'fetch', 'XMLHttpRequest', 'setTimeout', 'setInterval',
 		               'WebSocket', 'importScripts', '__bridge'];
 		const found = names.filter(function (name) { return typeof globalThis[name] !== 'undefined'; });
-		pm.test('выхода нет', function () { pm.expect(found).to.eql([]); });
+		pm.test('no way out', function () { pm.expect(found).to.eql([]); });
 	`)
 
 	if !report.OK {
@@ -359,7 +359,7 @@ func TestAScriptCannotCatchItsOwnDeadline(t *testing.T) {
 
 	report := engine.Run(domain.ScriptInput{
 		Scope:     domain.ScriptPre,
-		Source:    `try { while (true) { } } catch (error) { console.log('поймал'); }`,
+		Source:    `try { while (true) { } } catch (error) { console.log('caught'); }`,
 		Request:   request(),
 		Variables: newFakeVars(),
 	})
@@ -368,7 +368,7 @@ func TestAScriptCannotCatchItsOwnDeadline(t *testing.T) {
 		t.Fatalf("report = %+v, want the sandbox to have stopped it", report)
 	}
 	for _, line := range report.Logs {
-		if line.Message == "поймал" {
+		if line.Message == "caught" {
 			t.Error("the script caught its own deadline")
 		}
 	}
@@ -379,7 +379,7 @@ func TestAScriptCannotCatchItsOwnDeadline(t *testing.T) {
 // reads.
 func TestACheckThatWaitsForAPromiseIsNotPassed(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPost, `
-		pm.test('ждёт обещания', function () { return {then: function () {}}; });
+		pm.test('waits for promise', function () { return {then: function () {}}; });
 	`)
 
 	if !report.OK || len(report.Tests) != 1 {
@@ -436,13 +436,13 @@ func TestTheRequestKeepsWhatTheScriptDidNotTouch(t *testing.T) {
 func TestAPostResponseScriptSeesTheAnswer(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPost, `
 		const body = pm.response.json();
-		pm.test('ответ виден целиком', function () {
+		pm.test('full response is visible', function () {
 			pm.expect(body.data.type).to.equal('users');
 			pm.expect(pm.response.status).to.equal('OK');
 			pm.expect(pm.response.responseTime).to.be.above(1);
 			pm.expect(pm.response.text()).to.include('users');
 			pm.expect(pm.response.headers.has('content-type')).to.be.true;
-			pm.expect(pm.response.headers.get('X-Нет')).to.be.null;
+			pm.expect(pm.response.headers.get('X-no')).to.be.null;
 		});
 	`)
 
@@ -458,7 +458,7 @@ func TestAPostResponseScriptSeesTheAnswer(t *testing.T) {
 // also leaves there — a script that reaches for it finds out at once.
 func TestAPreRequestScriptHasNoResponse(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPre, `
-		pm.test('ответа ещё нет', function () { pm.expect(typeof pm.response).to.equal('undefined'); });
+		pm.test('no response yet', function () { pm.expect(typeof pm.response).to.equal('undefined'); });
 	`)
 
 	if !report.OK || !report.Tests[0].Passed {
@@ -473,7 +473,7 @@ func TestAPreRequestScriptCanSkipTheRequest(t *testing.T) {
 		t.Errorf("report = %+v, want the request skipped", report)
 	}
 
-	report, _, _ = run(t, domain.ScriptPre, `console.log('идём');`)
+	report, _, _ = run(t, domain.ScriptPre, `console.log('running');`)
 	if report.SkipRequest {
 		t.Error("a script that said nothing skipped the request anyway")
 	}
@@ -487,9 +487,8 @@ func TestVariablesAreScopedAndWrittenBack(t *testing.T) {
 	report := NewEngine().Run(domain.ScriptInput{
 		Scope: domain.ScriptPost,
 		Source: `
-			// Читаем до записи: то, что скрипт пишет, он же потом и видит, и проверка иначе ничего
-			// не говорит о порядке областей.
-			pm.test('видно все три', function () {
+			// Read before writing so the assertion verifies scope precedence.
+			pm.test('all three are visible', function () {
 				pm.expect(pm.variables.get('base')).to.equal('https://api.example.com');
 				pm.expect(pm.variables.get('token')).to.equal('from-globals');
 				pm.expect(pm.environment.has('token')).to.be.false;
@@ -500,7 +499,7 @@ func TestVariablesAreScopedAndWrittenBack(t *testing.T) {
 			pm.variables.set('page', '2');
 			pm.globals.set('auth', 'from-globals-too');
 
-			pm.test('окружение перекрывает глобалы', function () {
+			pm.test('environment overrides globals', function () {
 				pm.expect(pm.variables.get('token')).to.equal('from-environment');
 				pm.expect(pm.variables.get('page')).to.equal('2');
 				pm.expect(pm.environment.has('page')).to.be.false;
@@ -532,7 +531,7 @@ func TestVariablesAreScopedAndWrittenBack(t *testing.T) {
 // script's business to see, so it arrives as a thrown error rather than as a silent nothing.
 func TestAVariableThatCannotBeWrittenIsThrown(t *testing.T) {
 	vars := newFakeVars()
-	vars.refuse[domain.ScopeEnvironment] = "окружение только для чтения"
+	vars.refuse[domain.ScopeEnvironment] = "read-only environment"
 
 	report := NewEngine().Run(domain.ScriptInput{
 		Scope: domain.ScriptPre,
@@ -545,14 +544,14 @@ func TestAVariableThatCannotBeWrittenIsThrown(t *testing.T) {
 	if !report.OK {
 		t.Fatalf("report = %+v, want the script to have caught it", report)
 	}
-	if len(report.Logs) != 1 || report.Logs[0].Message != "окружение только для чтения" {
+	if len(report.Logs) != 1 || report.Logs[0].Message != "read-only environment" {
 		t.Errorf("logs = %+v, want the reason it could not be written", report.Logs)
 	}
 }
 
 func TestTheLogIsCapped(t *testing.T) {
 	report, _, _ := run(t, domain.ScriptPre, `
-		for (let i = 0; i < 250; i++) console.log('строка ' + i);
+		for (let i = 0; i < 250; i++) console.log('string ' + i);
 	`)
 
 	if len(report.Logs) != maxLogLines+1 {
@@ -565,7 +564,7 @@ func TestTheLogIsCapped(t *testing.T) {
 }
 
 func TestALongLogLineIsShortened(t *testing.T) {
-	report, _, _ := run(t, domain.ScriptPre, `console.log('я'.repeat(9000));`)
+	report, _, _ := run(t, domain.ScriptPre, `console.log('é'.repeat(9000));`)
 
 	runes := []rune(report.Logs[0].Message)
 	if len(runes) != maxLogLineRunes+1 || runes[len(runes)-1] != '…' {

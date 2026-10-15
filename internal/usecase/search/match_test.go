@@ -20,22 +20,22 @@ func TestMatchPicksTheTier(t *testing.T) {
 	}{
 		{
 			name:  "the whole name",
-			query: "Пользователи",
-			hit:   domain.SearchHit{Title: "Пользователи", Path: []string{"Пользователи"}},
+			query: "Users",
+			hit:   domain.SearchHit{Title: "Users", Path: []string{"Users"}},
 			want:  domain.MatchExact,
 			ok:    true,
 		},
 		{
 			name:  "part of a name",
-			query: "льзова",
-			hit:   domain.SearchHit{Title: "Пользователи"},
+			query: "ser",
+			hit:   domain.SearchHit{Title: "Users"},
 			want:  domain.MatchName,
 			ok:    true,
 		},
 		{
 			name:  "somewhere in the trail",
-			query: "каталог",
-			hit:   domain.SearchHit{Title: "/users/{id}", Path: []string{"Каталог API", "Пользователи"}},
+			query: "Catalog",
+			hit:   domain.SearchHit{Title: "/users/{id}", Path: []string{"Catalog API", "Users"}},
 			want:  domain.MatchPath,
 			ok:    true,
 		},
@@ -48,8 +48,8 @@ func TestMatchPicksTheTier(t *testing.T) {
 		},
 		{
 			name:  "nowhere",
-			query: "ничего",
-			hit: domain.SearchHit{Title: "Пользователи", Path: []string{"Каталог API"},
+			query: "nothing",
+			hit: domain.SearchHit{Title: "Users", Path: []string{"Catalog API"},
 				MatchText: "admin"},
 			want: 0,
 			ok:   false,
@@ -69,11 +69,10 @@ func TestMatchPicksTheTier(t *testing.T) {
 	}
 }
 
-// The reason matching is not a LIKE: SQLite folds case for ASCII alone, and every name in this app
-// is Russian. A query typed in the wrong case has to find the row anyway.
-func TestMatchIgnoresCaseInRussian(t *testing.T) {
-	hit := domain.SearchHit{Title: "Пользователи", Path: []string{"Каталог API"}}
-	for _, query := range []string{"ПОЛЬЗОВАТЕЛИ", "пользователи", "ПоЛьЗоВаТеЛи", "КАТАЛОГ"} {
+// SQLite LIKE folds ASCII only; matching must also fold non-ASCII names.
+func TestMatchIgnoresUnicodeCase(t *testing.T) {
+	hit := domain.SearchHit{Title: "Équipe", Path: []string{"Résumé API"}}
+	for _, query := range []string{"ÉQUIPE", "équipe", "ÉqUiPe", "RÉSUMÉ"} {
 		if _, ok := matchFolded(strings.ToLower(query), hit); !ok {
 			t.Fatalf("%q did not find %q", query, hit.Title)
 		}

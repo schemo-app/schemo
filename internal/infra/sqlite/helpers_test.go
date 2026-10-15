@@ -76,16 +76,16 @@ func seedTree(t *testing.T, store *Store) {
 
 	bearer := bearerAuth("{{token}}")
 	if err := store.SaveCollection(ctx, ws, domain.Collection{
-		ID: "col-1", Name: "Пользователи", Description: "тестовые", Position: 0, Auth: &bearer,
+		ID: "col-1", Name: "Users", Description: "test", Position: 0, Auth: &bearer,
 	}); err != nil {
 		t.Fatalf("SaveCollection: %v", err)
 	}
-	if err := store.SaveCollection(ctx, ws, nested("f-1", "col-1", 0, "Админ")); err != nil {
+	if err := store.SaveCollection(ctx, ws, nested("f-1", "col-1", 0, "Admin")); err != nil {
 		t.Fatalf("SaveCollection nested: %v", err)
 	}
 	for _, node := range []domain.CollectionNode{
-		sampleNode("r-1", "f-1", 0, "Список", "GET", "https://api.example.com/users"),
-		sampleNode("r-2", "col-1", 1, "Один", "PATCH", "https://api.example.com/users/1"),
+		sampleNode("r-1", "f-1", 0, "List", "GET", "https://api.example.com/users"),
+		sampleNode("r-2", "col-1", 1, "One", "PATCH", "https://api.example.com/users/1"),
 	} {
 		if err := store.SaveNode(ctx, node); err != nil {
 			t.Fatalf("SaveNode %s: %v", node.ID, err)
@@ -217,7 +217,7 @@ func seedTeam(t *testing.T, store *Store) {
 	t.Helper()
 	// A second space beside the one the schema writes: the name, the kind and the colour are all this
 	// has to get right.
-	made := domain.NewWorkspace(team, "Команда", domain.WorkspaceTeam, "purple", 1)
+	made := domain.NewWorkspace(team, "Team", domain.WorkspaceTeam, "purple", 1)
 	if err := store.SaveWorkspace(context.Background(), made); err != nil {
 		t.Fatalf("SaveWorkspace(%s): %v", team, err)
 	}

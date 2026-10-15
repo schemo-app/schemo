@@ -38,7 +38,7 @@ onMounted(async () => {
 
 async function onSkip() {
   await skip()
-  Window.Close()
+  if (phase.value === 'uptodate') Window.Close()
 }
 </script>
 

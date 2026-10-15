@@ -818,7 +818,7 @@ func TestCreateRefusesABaseThatIsNotThere(t *testing.T) {
 	ctx := context.Background()
 	seed(t, u, "Local")
 
-	if _, err := u.Create(ctx, Draft{Name: "Stage", StartFrom: "нет-такого"}); !errors.Is(
+	if _, err := u.Create(ctx, Draft{Name: "Stage", StartFrom: "not-found"}); !errors.Is(
 		err, domain.ErrNotFound) {
 		t.Errorf("Create with an unknown base = %v, want domain.ErrNotFound", err)
 	}

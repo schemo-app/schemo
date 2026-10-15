@@ -59,6 +59,9 @@ func (h *Host) PublishUpdate(u *update.Status) {
 	}
 	h.mu.Unlock()
 	h.Emit(EventUpdateChanged, u)
+	if u.Available {
+		h.ShowUpdate()
+	}
 }
 
 // RequestUpdateCheck opens the settings' updates page and asks it for a check. Both halves are

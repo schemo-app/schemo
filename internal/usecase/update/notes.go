@@ -1,10 +1,10 @@
-package updater
+package update
 
 import "strings"
 
-// releaseNotes extracts bullet points (starting with '-' or '*') from a release body text.
+// ParseNotes extracts bullet points (starting with '-' or '*') from a release body text.
 // Non-bullet lines, headers, and empty items are ignored.
-func releaseNotes(body string) []string {
+func ParseNotes(body string) []string {
 	var notes []string
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)

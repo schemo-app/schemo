@@ -58,7 +58,7 @@ func TestImportReadsNestedCollectionsAndRequests(t *testing.T) {
 			len(collection.Children), len(collection.Items))
 	}
 	nested := collection.Children[0]
-	if nested.Name != "Пользователи" || len(nested.Items) != 2 {
+	if nested.Name != "Users" || len(nested.Items) != 2 {
 		t.Fatalf("nested = %+v, want the folder with its two requests", nested)
 	}
 	// The two share one number line, numbered by where each row stood in the file, so the level merges
@@ -130,9 +130,9 @@ func TestImportReadsAFormBody(t *testing.T) {
 // A folder's authorization is what everything inside it inherits, and the format has a place for
 // it: a group that lost its auth on the way in would be a group that behaved differently here.
 func TestImportReadsTheAuthOfANestedCollection(t *testing.T) {
-	file := []byte(`{"info":{"name":"Магазин","schema":"` + Schema + `"},"item":[
-		{"name":"Админ","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{admin}}"}]},
-		 "item":[{"name":"Список",
+	file := []byte(`{"info":{"name":"Shop","schema":"` + Schema + `"},"item":[
+		{"name":"Admin","auth":{"type":"bearer","bearer":[{"key":"token","value":"{{admin}}"}]},
+		 "item":[{"name":"List",
 		          "request":{"method":"GET","url":{"raw":"https://api.example.com/admins"}}}]}]}`)
 
 	collection, err := imported(t, file)
@@ -167,9 +167,9 @@ func TestImportReadsTheAuthOfANestedCollection(t *testing.T) {
 // A request the file says sends nothing must not come back as one that inherits: the collection's
 // credentials would go out where the file said none.
 func TestNoauthStaysNoauthOnTheWayBack(t *testing.T) {
-	file := []byte(`{"info":{"name":"Магазин","schema":"` + Schema + `"},
+	file := []byte(`{"info":{"name":"Shop","schema":"` + Schema + `"},
 		"auth":{"type":"bearer","bearer":[{"key":"token","value":"{{token}}"}]},
-		"item":[{"name":"Статус","request":{"method":"GET",
+		"item":[{"name":"status","request":{"method":"GET",
 			"url":{"raw":"https://api.example.com/status"},
 			"auth":{"type":"noauth"}}}]}`)
 
@@ -201,8 +201,8 @@ func TestNoauthStaysNoauthOnTheWayBack(t *testing.T) {
 // two answers — and goes back out under Postman's names for them. The grant the file never names is
 // the flow Postman's dialog runs.
 func TestOAuth2StaysOAuth2OnTheWayBack(t *testing.T) {
-	file := []byte(`{"info":{"name":"Магазин","schema":"` + Schema + `"},"item":[
-		{"name":"Токен","request":{"method":"GET","url":{"raw":"https://api.example.com/token"},
+	file := []byte(`{"info":{"name":"Shop","schema":"` + Schema + `"},"item":[
+		{"name":"Token","request":{"method":"GET","url":{"raw":"https://api.example.com/token"},
 			"auth":{"type":"oauth2","oauth2":[
 				{"key":"authUrl","value":"https://example.com/auth"},
 				{"key":"accessTokenUrl","value":"https://example.com/token"},
@@ -252,9 +252,9 @@ func TestOAuth2StaysOAuth2OnTheWayBack(t *testing.T) {
 // A saved answer travels both ways — the name, the code, the headers and the body — and the NUL
 // bytes Postman pads bodies with are left behind: a NUL is not text this app can carry.
 func TestResponseExamplesTravelBothWays(t *testing.T) {
-	file := []byte(`{"info":{"name":"Магазин","schema":"` + Schema + `"},"item":[
-		{"name":"Товары","request":{"method":"GET","url":{"raw":"https://api.example.com/products"}},
-		 "response":[{"name":"Список","code":200,
+	file := []byte(`{"info":{"name":"Shop","schema":"` + Schema + `"},"item":[
+		{"name":"Products","request":{"method":"GET","url":{"raw":"https://api.example.com/products"}},
+		 "response":[{"name":"List","code":200,
 			"header":[{"key":"Content-Type","value":"application/json"}],
 			"body":"{\"data\":[]}\u0000"}]}]}`)
 
@@ -263,7 +263,7 @@ func TestResponseExamplesTravelBothWays(t *testing.T) {
 		t.Fatalf("Import: %v", err)
 	}
 	example := collection.Items[0].Responses[0]
-	if example.Name != "Список" || example.Status != 200 || example.Body != `{"data":[]}` {
+	if example.Name != "List" || example.Status != 200 || example.Body != `{"data":[]}` {
 		t.Fatalf("example = %+v, want the saved answer without its NUL bytes", example)
 	}
 	if len(example.Headers) != 1 || example.Headers[0].Name != "Content-Type" {
@@ -283,7 +283,7 @@ func TestResponseExamplesTravelBothWays(t *testing.T) {
 		t.Fatalf("item = %+v, want the example written", doc.Item)
 	}
 	saved := doc.Item[0].Response[0]
-	if saved.Name != "Список" || saved.Code != 200 || saved.Body != `{"data":[]}` ||
+	if saved.Name != "List" || saved.Code != 200 || saved.Body != `{"data":[]}` ||
 		len(saved.Header) != 1 {
 		t.Errorf("saved = %+v, want what came in", saved)
 	}
@@ -291,9 +291,9 @@ func TestResponseExamplesTravelBothWays(t *testing.T) {
 
 func TestImportRefusesAFileThatIsNotACollection(t *testing.T) {
 	for name, data := range map[string]string{
-		"чужой JSON":    `{"openapi": "3.0.0"}`,
-		"просто массив": `[1, 2, 3]`,
-		"не JSON":       `curl -X GET https://example.com`,
+		"Foreign JSON": `{"openapi": "3.0.0"}`,
+		"plain array":  `[1, 2, 3]`,
+		"not JSON":     `curl -X GET https://example.com`,
 	} {
 		if _, err := imported(t, []byte(data)); !errors.Is(err, domain.ErrNotAllowed) {
 			t.Errorf("%s: Import = %v, want ErrNotAllowed", name, err)
@@ -457,13 +457,13 @@ func compareCollection(t *testing.T, want domain.Collection, got domain.Collecti
 // else has to mean the same thing on the other side, which is why a level owns its own.
 func TestCollectionVariablesTravelBothWays(t *testing.T) {
 	original := domain.Collection{
-		Name: "Магазин",
+		Name: "Shop",
 		Variables: []domain.Variable{
 			{Name: "baseUrl", Value: "https://api.example.com", Kind: domain.VariableText, Enabled: true},
 			{Name: "page", Value: "2", Kind: domain.VariableText, Enabled: false},
 		},
 		Children: []domain.Collection{{
-			Name: "Пользователи",
+			Name: "Users",
 			Variables: []domain.Variable{
 				{Name: "version", Value: "v2", Kind: domain.VariableText, Enabled: true},
 			},
@@ -570,7 +570,7 @@ func TestExportWritesASingleRequest(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("the export does not read back: %v", err)
 	}
-	if doc.Info.Name != "Отчёт" || doc.Info.Schema != Schema {
+	if doc.Info.Name != "Report" || doc.Info.Schema != Schema {
 		t.Errorf("info = %+v", doc.Info)
 	}
 	if len(doc.Item) != 1 || doc.Item[0].Request == nil {
@@ -583,12 +583,12 @@ func TestExportWritesASingleRequest(t *testing.T) {
 
 // A form body survives the trip: Postman has a shape for rows, and the app has one too.
 func TestAFormBodyTravelsBothWays(t *testing.T) {
-	file := []byte(`{"info":{"name":"Загрузка","schema":"` + Schema + `"},"item":[
-		{"name":"Создать товар",
+	file := []byte(`{"info":{"name":"Upload","schema":"` + Schema + `"},"item":[
+		{"name":"Create product",
 		 "request":{"method":"POST","url":{"raw":"https://api.example.com/products"},
 		 "body":{"mode":"formdata","formdata":[
-			{"key":"title","value":"Кофемолка Orion"},
-			{"key":"off","value":"нет","disabled":true},
+			{"key":"title","value":"Coffee grinder Orion"},
+			{"key":"off","value":"no","disabled":true},
 			{"key":"photo","src":"/Users/me/logo.png","type":"file"}]}}}]}`)
 
 	collection, err := imported(t, file)
@@ -606,7 +606,7 @@ func TestAFormBodyTravelsBothWays(t *testing.T) {
 	if len(node.Form) != 3 {
 		t.Fatalf("form = %+v, want all three rows", node.Form)
 	}
-	if node.Form[0].Name != "title" || node.Form[0].Value != "Кофемолка Orion" ||
+	if node.Form[0].Name != "title" || node.Form[0].Value != "Coffee grinder Orion" ||
 		!node.Form[0].Enabled {
 		t.Errorf("form[0] = %+v", node.Form[0])
 	}
@@ -643,8 +643,8 @@ func TestAFormBodyTravelsBothWays(t *testing.T) {
 
 // A binary body is a path, and it is the only one the app can name: the bytes never enter the file.
 func TestABinaryBodyTravelsBothWays(t *testing.T) {
-	file := []byte(`{"info":{"name":"Файлы","schema":"` + Schema + `"},"item":[
-		{"name":"Загрузить","request":{"method":"POST","url":{"raw":"https://api.example.com/files"},
+	file := []byte(`{"info":{"name":"Files","schema":"` + Schema + `"},"item":[
+		{"name":"Upload","request":{"method":"POST","url":{"raw":"https://api.example.com/files"},
 		 "body":{"mode":"file","file":{"src":"/tmp/report.pdf"}}}}]}`)
 
 	collection, err := imported(t, file)
@@ -674,7 +674,7 @@ func TestABinaryBodyTravelsBothWays(t *testing.T) {
 // was. Writing a language this reader does not honour would be a promise the next import breaks.
 func TestAJsonBodyLeavesAsRaw(t *testing.T) {
 	node := domain.CollectionNode{
-		Name: "Создать", Method: "POST",
+		Name: "Create", Method: "POST",
 		URL: "https://api.example.com/products", Body: `{"a": 1}`, BodyKind: domain.BodyJSON,
 	}
 	body := exportedBody(node)

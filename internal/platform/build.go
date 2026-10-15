@@ -1,22 +1,29 @@
 package platform
 
+import _ "embed"
+
+//go:embed release-notes.md
+var releaseNotes string
+
 type BuildInfo struct {
-	Version     string
-	Build       string
-	Name        string
-	Slug        string
-	Identifier  string
-	Description string
+	Version      string
+	Build        string
+	Name         string
+	Slug         string
+	Identifier   string
+	Description  string
+	ReleaseNotes string
 }
 
 func NewBuildInfo() BuildInfo {
 	return BuildInfo{
-		Version:     version,
-		Build:       build,
-		Name:        Name,
-		Slug:        Slug,
-		Identifier:  Identifier,
-		Description: Description,
+		Version:      version,
+		Build:        build,
+		Name:         Name,
+		Slug:         Slug,
+		Identifier:   Identifier,
+		Description:  Description,
+		ReleaseNotes: releaseNotes,
 	}
 }
 

@@ -143,7 +143,7 @@ func TestRecordReadsOneByID(t *testing.T) {
 		t.Errorf("response body = %+v, want a reference to it", rec.ResponseBody)
 	}
 
-	if _, err := store.Record(ctx, "нет-такой"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := store.Record(ctx, "not-found"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("a record that does not exist = %v, want ErrNotFound", err)
 	}
 }

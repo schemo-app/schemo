@@ -135,7 +135,7 @@ type fakeStore struct {
 
 func (f *fakeStore) Scripts(_ context.Context, _ string, id string) (*domain.Scripts, error) {
 	if f.fail {
-		return nil, errors.New("база недоступна")
+		return nil, errors.New("database unavailable")
 	}
 	if !f.known[id] {
 		return nil, domain.ErrNotFound
@@ -150,7 +150,7 @@ func (f *fakeStore) SaveScripts(
 	scripts *domain.Scripts,
 ) error {
 	if f.fail {
-		return errors.New("база недоступна")
+		return errors.New("database unavailable")
 	}
 	f.known[id] = true
 	f.scripts[id] = scripts
@@ -159,7 +159,7 @@ func (f *fakeStore) SaveScripts(
 
 func (f *fakeStore) SaveScriptRun(_ context.Context, _ string, run domain.ScriptRun) error {
 	if f.fail {
-		return errors.New("база недоступна")
+		return errors.New("database unavailable")
 	}
 	f.runs = append(f.runs, run)
 	return nil
@@ -252,23 +252,23 @@ func seedTree() *fakeTree {
 	return &fakeTree{
 		collections: []domain.Collection{
 			{
-				ID: "col-1", Name: "Пользователи",
+				ID: "col-1", Name: "Users",
 				Items: []domain.CollectionNode{
-					{ID: "r-2", CollectionID: "col-1", Name: "Один", Position: 1},
+					{ID: "r-2", CollectionID: "col-1", Name: "One", Position: 1},
 				},
 				Children: []domain.Collection{
 					{
-						ID: "f-1", ParentID: "col-1", Name: "Админ", Position: 0,
-						Items: []domain.CollectionNode{{ID: "r-1", CollectionID: "f-1", Name: "Список"}},
+						ID: "f-1", ParentID: "col-1", Name: "Admin", Position: 0,
+						Items: []domain.CollectionNode{{ID: "r-1", CollectionID: "f-1", Name: "List"}},
 					},
 				},
 			},
-			{ID: "col-2", Name: "Заказы", Items: []domain.CollectionNode{}, Children: []domain.Collection{}},
+			{ID: "col-2", Name: "Orders", Items: []domain.CollectionNode{}, Children: []domain.Collection{}},
 		},
 		scripts: map[string]*domain.Scripts{
-			"col-1": {Pre: "console.log('коллекция');", Post: "console.log('после коллекции');"},
-			"f-1":   {Pre: "console.log('вложенная');"},
-			"r-1":   {Pre: "console.log('запрос');"},
+			"col-1": {Pre: "console.log('Collection');", Post: "console.log('after collection');"},
+			"f-1":   {Pre: "console.log('Nested');"},
+			"r-1":   {Pre: "console.log('Request');"},
 		},
 	}
 }
@@ -310,7 +310,7 @@ func TestTheChainIsEverythingAboveTheRequest(t *testing.T) {
 		t.Fatalf("chain = %+v, want the collection, the one inside it and the request", chain)
 	}
 	if chain[0].NodeID != "col-1" || chain[0].Kind != KindCollection ||
-		chain[0].Name != "Пользователи" {
+		chain[0].Name != "Users" {
 		t.Errorf("chain[0] = %+v, want the collection first", chain[0])
 	}
 	if chain[1].NodeID != "f-1" || chain[1].Kind != KindCollection {
@@ -335,7 +335,7 @@ func TestAChainGoesThroughTheCollectionsInsideOne(t *testing.T) {
 	if len(chain) != 2 || chain[0].NodeID != "col-1" || chain[1].NodeID != "f-1" {
 		t.Errorf("chain of a nested collection = %+v, want the collection around it and itself", chain)
 	}
-	if chain[1].Kind != KindCollection || chain[1].Name != "Админ" {
+	if chain[1].Kind != KindCollection || chain[1].Name != "Admin" {
 		t.Errorf("chain[1] = %+v, want the nested collection as a level of its own", chain[1])
 	}
 
@@ -378,7 +378,7 @@ func TestAChainIsEmptyWhenNothingRuns(t *testing.T) {
 	}
 	// An id no level has is not an error either: a card open on a node deleted beside it has nothing
 	// around it, and a send should not fail over code that is no longer there.
-	if chain, err := uc.Chain(ctx, "нет-такого"); err != nil || len(chain) != 0 {
+	if chain, err := uc.Chain(ctx, "not-found"); err != nil || len(chain) != 0 {
 		t.Errorf("chain of an id nothing knows = %+v, %v, want nothing", chain, err)
 	}
 }
@@ -395,8 +395,8 @@ func TestBeforeRunsEveryPreScriptInOrder(t *testing.T) {
 		t.Error("the run was called off by a script that said nothing of the kind")
 	}
 
-	want := []string{"console.log('коллекция');", "console.log('вложенная');",
-		"console.log('запрос');"}
+	want := []string{"console.log('Collection');", "console.log('Nested');",
+		"console.log('Request');"}
 	if got := engine.sources(); !equal(got, want) {
 		t.Errorf("scripts that ran = %q, want %q", got, want)
 	}
@@ -421,7 +421,7 @@ func TestBeforeRunsEveryPreScriptInOrder(t *testing.T) {
 func TestWhatAScriptChangesTheNextOneSees(t *testing.T) {
 	uc, engine, _, _, _ := newTest()
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		in.Request.Headers = append(in.Request.Headers, domain.HeaderPair{Name: "X-Из", Value: in.Source})
+		in.Request.Headers = append(in.Request.Headers, domain.HeaderPair{Name: "X-From", Value: in.Source})
 		return domain.ScriptRun{Scope: in.Scope, OK: true}
 	}
 
@@ -433,7 +433,7 @@ func TestWhatAScriptChangesTheNextOneSees(t *testing.T) {
 	if len(asked.Request.Headers) != 3 {
 		t.Fatalf("headers = %+v, want one per level", asked.Request.Headers)
 	}
-	if asked.Request.Headers[2].Value != "console.log('запрос');" {
+	if asked.Request.Headers[2].Value != "console.log('Request');" {
 		t.Errorf("headers = %+v, want what the request's own script added last", asked.Request.Headers)
 	}
 }
@@ -442,7 +442,7 @@ func TestAPreRequestScriptCanCallTheRequestOff(t *testing.T) {
 	uc, engine, _, _, _ := newTest()
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
 		return domain.ScriptRun{Scope: in.Scope, OK: true,
-			SkipRequest: in.Source == "console.log('вложенная');"}
+			SkipRequest: in.Source == "console.log('Nested');"}
 	}
 
 	asked := pass("r-1")
@@ -491,7 +491,7 @@ func TestAfterRunsThePostScriptsAndKeepsTheReports(t *testing.T) {
 	uc.After(context.Background(), ws, after)
 
 	// The collection and the one inside it have post scripts; the request's own has none.
-	if len(engine.ran) != 1 || engine.ran[0].Source != "console.log('после коллекции');" {
+	if len(engine.ran) != 1 || engine.ran[0].Source != "console.log('after collection');" {
 		t.Fatalf("scripts that ran = %q, want the collection's", engine.sources())
 	}
 
@@ -547,7 +547,7 @@ func TestALevelAnswersForItsOwnCode(t *testing.T) {
 
 	// Writing is what gives a level code; taking it off puts the level back to "not set here", which
 	// is how it inherits again.
-	if err := uc.SaveScripts(ctx, "col-2", &domain.Scripts{Post: "console.log('своё');"}); err != nil {
+	if err := uc.SaveScripts(ctx, "col-2", &domain.Scripts{Post: "console.log('Own');"}); err != nil {
 		t.Fatalf("SaveScripts: %v", err)
 	}
 	if scripts, err := uc.Scripts(ctx, "col-2"); err != nil || scripts == nil || scripts.Post == "" {
@@ -560,7 +560,7 @@ func TestALevelAnswersForItsOwnCode(t *testing.T) {
 		t.Errorf("cleared scripts = %+v, %v, want nothing", scripts, err)
 	}
 
-	if _, err := uc.Scripts(ctx, "нет-такого"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := uc.Scripts(ctx, "not-found"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("scripts of a level that does not exist = %v, want ErrNotFound", err)
 	}
 }
@@ -576,8 +576,8 @@ func TestTheCommandLineIsAChainOfItsOwn(t *testing.T) {
 	}
 
 	tree.seeded(commandLine, &domain.Scripts{
-		Pre:  "console.log('перед');",
-		Post: "console.log('после');",
+		Pre:  "console.log('before');",
+		Post: "console.log('after');",
 	})
 	chain, err := uc.Chain(ctx, commandLine)
 	if err != nil {
@@ -595,7 +595,7 @@ func TestTheCommandLineIsAChainOfItsOwn(t *testing.T) {
 	uc.After(ctx, ws, asked)
 
 	if got := engine.sources(); !equal(got,
-		[]string{"console.log('перед');", "console.log('после');"}) {
+		[]string{"console.log('before');", "console.log('after');"}) {
 		t.Errorf("scripts that ran = %q, want the draft's own two", got)
 	}
 	if len(store.runs) != 2 {
@@ -614,10 +614,10 @@ func TestTheRunScopeBelongsToTheRun(t *testing.T) {
 
 	seen := ""
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		if in.Source == "console.log('коллекция');" {
+		if in.Source == "console.log('Collection');" {
 			_ = in.Variables.Set(domain.ScopeRun, "page", "2")
 		}
-		if in.Source == "console.log('запрос');" {
+		if in.Source == "console.log('Request');" {
 			if value, ok, _ := in.Variables.Lookup(domain.ScopeRun, "page"); ok {
 				seen = value
 			}
@@ -660,7 +660,7 @@ func TestReadingAVariableLooksThroughTheScopes(t *testing.T) {
 
 	asked := map[string]string{}
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		for _, name := range []string{"base", "token", "нет"} {
+		for _, name := range []string{"base", "token", "no"} {
 			value, ok, err := in.Variables.Lookup(domain.ScopeRun, name)
 			if err != nil {
 				t.Errorf("Get(%s): %v", name, err)
@@ -673,7 +673,7 @@ func TestReadingAVariableLooksThroughTheScopes(t *testing.T) {
 	}
 
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		for _, name := range []string{"base", "token", "нет"} {
+		for _, name := range []string{"base", "token", "no"} {
 			value, ok, err := in.Variables.Lookup(domain.ScopeRun, name)
 			if err != nil {
 				t.Errorf("Get(%s): %v", name, err)
@@ -695,7 +695,7 @@ func TestReadingAVariableLooksThroughTheScopes(t *testing.T) {
 	if asked["token"] != "from-globals" {
 		t.Errorf("token = %q, want it found in the globals", asked["token"])
 	}
-	if _, found := asked["нет"]; found {
+	if _, found := asked["no"]; found {
 		t.Error("a name nobody set was answered with something")
 	}
 }
@@ -705,13 +705,13 @@ func TestReadingAVariableLooksThroughTheScopes(t *testing.T) {
 func TestWritingAVariableGoesWhereTheScopeSays(t *testing.T) {
 	uc, engine, _, _, vars := newTest()
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		if in.Source != "console.log('коллекция');" {
+		if in.Source != "console.log('Collection');" {
 			return domain.ScriptRun{Scope: in.Scope, OK: true}
 		}
-		if err := in.Variables.Set(domain.ScopeEnvironment, "token", "в-окружении"); err != nil {
+		if err := in.Variables.Set(domain.ScopeEnvironment, "token", "in-environment"); err != nil {
 			t.Errorf("Set(environment): %v", err)
 		}
-		if err := in.Variables.Set(domain.ScopeGlobals, "auth", "в-глобалах"); err != nil {
+		if err := in.Variables.Set(domain.ScopeGlobals, "auth", "in-globals"); err != nil {
 			t.Errorf("Set(globals): %v", err)
 		}
 		return domain.ScriptRun{Scope: in.Scope, OK: true}
@@ -727,7 +727,7 @@ func TestWritingAVariableGoesWhereTheScopeSays(t *testing.T) {
 	if vars.writes[0].scope != domain.ScopeEnvironment || vars.writes[0].name != "token" {
 		t.Errorf("write = %+v, want the environment one first", vars.writes[0])
 	}
-	if vars.writes[1].scope != domain.ScopeGlobals || vars.writes[1].value != "в-глобалах" {
+	if vars.writes[1].scope != domain.ScopeGlobals || vars.writes[1].value != "in-globals" {
 		t.Errorf("write = %+v, want the globals one", vars.writes[1])
 	}
 	// The run's own scope is this feature's memory and goes nowhere near the port.
@@ -741,7 +741,7 @@ func TestWritingAVariableGoesWhereTheScopeSays(t *testing.T) {
 // port and into the sandbox rather than being swallowed here.
 func TestAScopeThatRefusesAWriteSaysSo(t *testing.T) {
 	uc, engine, _, _, vars := newTest()
-	vars.refused[domain.ScopeEnvironment] = "окружение только для чтения"
+	vars.refused[domain.ScopeEnvironment] = "read-only environment"
 
 	var refused error
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
@@ -753,7 +753,7 @@ func TestAScopeThatRefusesAWriteSaysSo(t *testing.T) {
 	if _, err := uc.Before(context.Background(), ws, &asked); err != nil {
 		t.Fatalf("Before: %v", err)
 	}
-	if refused == nil || !strings.Contains(refused.Error(), "только для чтения") {
+	if refused == nil || !strings.Contains(refused.Error(), "read-only") {
 		t.Errorf("error = %v, want the reason the scope gave", refused)
 	}
 }
@@ -763,7 +763,7 @@ func TestAScopeThatRefusesAWriteSaysSo(t *testing.T) {
 func TestAFailedScriptDoesNotStopTheChain(t *testing.T) {
 	uc, engine, _, store, _ := newTest()
 	engine.onRun = func(in domain.ScriptInput) domain.ScriptRun {
-		if in.Source == "console.log('вложенная');" {
+		if in.Source == "console.log('Nested');" {
 			return domain.ScriptRun{Scope: in.Scope, OK: false, Error: "ReferenceError: nope"}
 		}
 		return domain.ScriptRun{Scope: in.Scope, OK: true}
@@ -807,8 +807,8 @@ func TestASwitchedOffHalfDoesNotRun(t *testing.T) {
 	uc, engine, tree, _, _ := newTest()
 	// The collection's own half goes off, and the nested one's stays on.
 	tree.scripts["col-1"] = &domain.Scripts{
-		Pre: "console.log('коллекция');", PreOff: true,
-		Post: "console.log('после коллекции');",
+		Pre: "console.log('Collection');", PreOff: true,
+		Post: "console.log('after collection');",
 	}
 
 	asked := pass("r-1")
@@ -816,7 +816,7 @@ func TestASwitchedOffHalfDoesNotRun(t *testing.T) {
 		t.Fatalf("Before: %v", err)
 	}
 
-	want := []string{"console.log('вложенная');", "console.log('запрос');"}
+	want := []string{"console.log('Nested');", "console.log('Request');"}
 	if got := engine.sources(); !equal(got, want) {
 		t.Errorf("scripts that ran = %q, want %q", got, want)
 	}

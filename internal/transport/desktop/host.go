@@ -119,7 +119,7 @@ func (h *Host) MarkReady() {
 	h.mu.Unlock()
 
 	if u != nil {
-		h.Emit(EventUpdateChanged, u)
+		h.PublishUpdate(u)
 	}
 	if tab > 0 {
 		h.Emit(EventOpenTab, tab)

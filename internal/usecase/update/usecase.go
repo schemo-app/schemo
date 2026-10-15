@@ -17,6 +17,7 @@ type UseCase struct {
 	state    State
 	settings Settings
 	version  string
+	notes    []string
 }
 
 func NewUseCase(
@@ -25,7 +26,7 @@ func NewUseCase(
 	settings Settings,
 	info platform.BuildInfo,
 ) *UseCase {
-	return &UseCase{releases: releases, state: state, settings: settings, version: info.Version}
+	return &UseCase{releases: releases, state: state, settings: settings, version: info.Version, notes: ParseNotes(info.ReleaseNotes)}
 }
 
 func (u *UseCase) Check(ctx context.Context) (Status, error) {
@@ -59,7 +60,7 @@ func (u *UseCase) Status(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	if state.LastCheckAt == 0 {
-		return Status{Current: u.version, Development: u.Development()}, nil
+		return Status{Current: u.version, Notes: u.notes, Development: u.Development()}, nil
 	}
 	return u.offer(state), nil
 }
@@ -78,6 +79,10 @@ func (u *UseCase) StartupCheck(ctx context.Context) *Status {
 		return nil
 	}
 	if state.LastCheckAt != 0 && time.Since(time.UnixMilli(state.LastCheckAt)) < checkInterval {
+		info := u.offer(state)
+		if info.Available {
+			return &info
+		}
 		return nil
 	}
 
@@ -122,6 +127,7 @@ func (u *UseCase) offer(state domain.UpdateState) Status {
 		Latest:      state.Latest,
 		CheckedAt:   state.LastCheckAt,
 		Development: u.Development(),
+		Notes:       u.notes,
 	}
 	if state.Latest == state.Skipped || !isNewer(state.Latest, u.version) {
 		return info

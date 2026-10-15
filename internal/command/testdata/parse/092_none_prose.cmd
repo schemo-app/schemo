@@ -1,1 +1,1 @@
-сегодня надо проверить эндпоинт статей
+check the articles endpoint today

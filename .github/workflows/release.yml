@@ -66,6 +66,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           task set:version VERSION="$version"
+          git for-each-ref --format='%(contents)' "$GITHUB_REF" > internal/platform/release-notes.md
           task "$PLATFORM:package" VERSION="$version" BUILD="$BUILD" FRONTEND_PREBUILT=true
         env:
           CODE_SIGN_IDENTITY: '-'

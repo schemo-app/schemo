@@ -13,6 +13,7 @@ export type UpdatePhase = 'idle' | 'checking' | 'uptodate' | 'available' | 'inst
 const useUpdateState = createSharedComposable(() => {
   const phase = ref<UpdatePhase>('idle')
   const latest = ref('')
+  const available = ref(false)
   const notes = ref<string[]>([])
   const checkedAt = ref(0)
   const error = ref('')
@@ -22,6 +23,7 @@ const useUpdateState = createSharedComposable(() => {
   function apply(info: UpdateStatus | null): void {
     if (!info) return
     latest.value = info.latest ?? ''
+    available.value = info.available ?? false
     notes.value = info.notes ?? []
     checkedAt.value = info.checkedAt ?? 0
     development.value = info.development ?? false
@@ -99,6 +101,7 @@ const useUpdateState = createSharedComposable(() => {
   return {
     phase,
     latest,
+    available,
     notes,
     checkedAt,
     error,
@@ -122,6 +125,6 @@ export function useUpdateCheck() {
       // No backend answer: the line stays on "no check yet".
     }
   })
-  const { phase, latest, notes, checkedAt, error, development, check, install, skip, openWindow, checkIfRequested } = state
-  return { phase, latest, notes, checkedAt, error, development, check, install, skip, openWindow, checkIfRequested }
+  const { phase, latest, available, notes, checkedAt, error, development, check, install, skip, openWindow, checkIfRequested } = state
+  return { phase, latest, available, notes, checkedAt, error, development, check, install, skip, openWindow, checkIfRequested }
 }

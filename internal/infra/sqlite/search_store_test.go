@@ -27,7 +27,7 @@ func TestFindRequestsNamesTheWayDown(t *testing.T) {
 	if deep.Badge != "GET" {
 		t.Errorf("badge = %q, want the method", deep.Badge)
 	}
-	want := []string{"Пользователи", "Админ", "Список"}
+	want := []string{"Users", "Admin", "List"}
 	if len(deep.Path) != len(want) {
 		t.Fatalf("trail = %v, want %v", deep.Path, want)
 	}
@@ -85,7 +85,7 @@ func TestFindRequestsKeepsTheNameReachableUnderAnAddress(t *testing.T) {
 	}
 
 	deep := findHit(t, hits, "r-1")
-	if deep.Path[len(deep.Path)-1] != "Список" {
+	if deep.Path[len(deep.Path)-1] != "List" {
 		t.Errorf("trail = %v, want the request's own name at the end", deep.Path)
 	}
 }
@@ -102,14 +102,14 @@ func TestFindCollectionsNamesWhatIsAbove(t *testing.T) {
 	}
 
 	top := findHit(t, hits, "col-1")
-	if top.Title != "Пользователи" || len(top.Path) != 0 {
+	if top.Title != "Users" || len(top.Path) != 0 {
 		t.Errorf("top level = %q %v, want the name and nothing above it", top.Title, top.Path)
 	}
 	folder := findHit(t, hits, "f-1")
-	if folder.Title != "Админ" {
-		t.Errorf("folder title = %q, want Админ", folder.Title)
+	if folder.Title != "Admin" {
+		t.Errorf("folder title = %q, want Admin", folder.Title)
 	}
-	if len(folder.Path) != 1 || folder.Path[0] != "Пользователи" {
+	if len(folder.Path) != 1 || folder.Path[0] != "Users" {
 		t.Errorf("folder trail = %v, want its parent alone", folder.Path)
 	}
 }

@@ -1464,10 +1464,10 @@ func TestTheTwoPersonalSpacesAreFoundByTheirName(t *testing.T) {
 func TestASpaceOfOneNameInOnesOwnOrgIsStillAnotherSpace(t *testing.T) {
 	uc, store, server, _ := newEngine()
 	store.spaces = []domain.SyncSpace{
-		{ID: "here", Name: "Платежи", Kind: domain.WorkspacePersonal}}
+		{ID: "here", Name: "Payments", Kind: domain.WorkspacePersonal}}
 	server.remote = []domain.RemoteSpace{
-		{ID: "cloud-1", Name: "Платежи", OwnOrg: true, Kind: domain.WorkspacePersonal},
-		{ID: "cloud-2", Name: "Другое"},
+		{ID: "cloud-1", Name: "Payments", OwnOrg: true, Kind: domain.WorkspacePersonal},
+		{ID: "cloud-2", Name: "Other"},
 	}
 
 	round(t, uc)
@@ -1475,7 +1475,7 @@ func TestASpaceOfOneNameInOnesOwnOrgIsStillAnotherSpace(t *testing.T) {
 	if got := store.spaces[0].RemoteID; got == "cloud-1" || got == "" {
 		t.Errorf("remote = %q, want a space of this device's own", got)
 	}
-	if len(server.asked) != 1 || server.asked[0].name != "Платежи" {
+	if len(server.asked) != 1 || server.asked[0].name != "Payments" {
 		t.Errorf("asked = %+v, want this device's space made in the account", server.asked)
 	}
 	if len(store.mirrored) != 2 {
@@ -1493,8 +1493,8 @@ func TestASpaceOfOneNameInOnesOwnOrgIsStillAnotherSpace(t *testing.T) {
 func TestALocalSpaceIsNotPairedWithSomebodyElsesSpace(t *testing.T) {
 	uc, store, server, _ := newEngine()
 	store.spaces = []domain.SyncSpace{
-		{ID: "here", Name: "Платежи", Kind: domain.WorkspacePersonal}}
-	server.remote = []domain.RemoteSpace{{ID: "theirs", Name: "Платежи"}}
+		{ID: "here", Name: "Payments", Kind: domain.WorkspacePersonal}}
+	server.remote = []domain.RemoteSpace{{ID: "theirs", Name: "Payments"}}
 
 	round(t, uc)
 
@@ -1517,9 +1517,9 @@ func TestALocalSpaceIsNotPairedWithSomebodyElsesSpace(t *testing.T) {
 func TestALocalSpaceIsNotPairedWithATeamSpaceOfOnesOwn(t *testing.T) {
 	uc, store, server, _ := newEngine()
 	store.spaces = []domain.SyncSpace{
-		{ID: "here", Name: "Платежи", Kind: domain.WorkspacePersonal}}
+		{ID: "here", Name: "Payments", Kind: domain.WorkspacePersonal}}
 	server.remote = []domain.RemoteSpace{
-		{ID: "our-team", Name: "Платежи", OwnOrg: true, Kind: domain.WorkspaceTeam},
+		{ID: "our-team", Name: "Payments", OwnOrg: true, Kind: domain.WorkspaceTeam},
 	}
 
 	round(t, uc)
@@ -1549,7 +1549,7 @@ func TestTheBornWithSpaceIsPairedByWhatItIs(t *testing.T) {
 		{ID: domain.WorkspacePersonalID, Kind: domain.WorkspacePersonal}}
 	server.remote = []domain.RemoteSpace{
 		{ID: "their-own", OwnOrg: true, Kind: domain.WorkspacePersonal},
-		{ID: "team", Name: "Работа", OwnOrg: true, Kind: domain.WorkspaceTeam},
+		{ID: "team", Name: "Work", OwnOrg: true, Kind: domain.WorkspaceTeam},
 	}
 
 	round(t, uc)
@@ -1571,7 +1571,7 @@ func TestTheBornWithSpaceIsPairedByWhatItIs(t *testing.T) {
 func TestAPairedSpaceIsNotAlsoMade(t *testing.T) {
 	uc, store, server, _ := newEngine()
 	store.spaces = []domain.SyncSpace{
-		{ID: domain.WorkspacePersonalID, Name: "Дом", Kind: domain.WorkspacePersonal}}
+		{ID: domain.WorkspacePersonalID, Name: "Home", Kind: domain.WorkspacePersonal}}
 	server.remote = []domain.RemoteSpace{
 		{ID: "their-own", OwnOrg: true, Kind: domain.WorkspacePersonal},
 	}
@@ -2458,7 +2458,7 @@ func TestASpaceBeingMadeForAnotherAccountIsNotMadeInThisOne(t *testing.T) {
 	uc, store, server, _ := newEngine()
 	theirs := domain.AccountKey("https://server.test", "somebody@acme.com")
 	store.spaces = []domain.SyncSpace{{
-		ID: "pending", Name: "Секреты", Kind: domain.WorkspacePersonal, RemoteID: "id-they-named",
+		ID: "pending", Name: "Secrets", Kind: domain.WorkspacePersonal, RemoteID: "id-they-named",
 		RemoteAccount: theirs, LinkPending: true,
 	}}
 	server.remote = nil
@@ -2506,8 +2506,8 @@ func TestTheStatusDescribesOnlyTheSpacesInSight(t *testing.T) {
 	theirs := domain.AccountKey("https://server.test", "somebody@acme.com")
 	store.work = accountOf()
 	store.spaces = append(store.spaces,
-		domain.SyncSpace{ID: "theirs", Name: "Чужое", RemoteID: "r", RemoteAccount: theirs},
-		domain.SyncSpace{ID: "local", Name: "Своё"})
+		domain.SyncSpace{ID: "theirs", Name: "Foreign", RemoteID: "r", RemoteAccount: theirs},
+		domain.SyncSpace{ID: "local", Name: "Own"})
 
 	status, err := uc.Status(context.Background())
 	if err != nil {
@@ -2594,7 +2594,7 @@ func TestASpaceOfAnAccountMadeAgainWhileAnotherWasHereIsTakenBackOnReturn(t *tes
 	store.seen = map[string]string{accountOf(): "id-before-the-reset"}
 	store.owing = map[string]bool{"pending": true}
 	store.spaces = []domain.SyncSpace{{
-		ID: "pending", Name: "Не отправлено", RemoteID: "lost", RemoteAccount: accountOf(),
+		ID: "pending", Name: "Not sent", RemoteID: "lost", RemoteAccount: accountOf(),
 		State: domain.SyncSynced,
 	}}
 	server.remote = []domain.RemoteSpace{

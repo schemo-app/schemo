@@ -21,24 +21,24 @@ func setupAuthTree(t *testing.T) authTree {
 	uc, _ := newTestUseCase()
 	ctx := context.Background()
 
-	_, tree, err := uc.CreateCollection(ctx, "Коллекция", "", "")
+	_, tree, err := uc.CreateCollection(ctx, "Collection", "", "")
 	if err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 	collectionID := only(t, tree).ID
-	nestedID := nestCollection(t, uc, "Вложенная", collectionID)
+	nestedID := nestCollection(t, uc, "Nested", collectionID)
 
-	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: nestedID, Name: "Внутри"})
+	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: nestedID, Name: "Inside"})
 	if err != nil {
 		t.Fatalf("CreateNode inside: %v", err)
 	}
-	insideID := findInTree(t, tree, "Внутри").ID
+	insideID := findInTree(t, tree, "Inside").ID
 
-	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: collectionID, Name: "Рядом"})
+	_, tree, err = uc.CreateNode(ctx, NodeDraft{CollectionID: collectionID, Name: "Sibling"})
 	if err != nil {
 		t.Fatalf("CreateNode beside: %v", err)
 	}
-	besideID := findInTree(t, tree, "Рядом").ID
+	besideID := findInTree(t, tree, "Sibling").ID
 
 	return authTree{uc: uc, collectionID: collectionID, nestedID: nestedID, insideID: insideID,
 		besideID: besideID}
@@ -68,7 +68,7 @@ func TestAuthIsInheritedDownTheTree(t *testing.T) {
 	ctx := context.Background()
 	a := setupAuthTree(t)
 
-	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("коллекция")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("Collection")); err != nil {
 		t.Fatalf("SaveAuth collection: %v", err)
 	}
 
@@ -76,29 +76,29 @@ func TestAuthIsInheritedDownTheTree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AuthFor: %v", err)
 	}
-	if got == nil || got.Answer("token") != "коллекция" {
+	if got == nil || got.Answer("token") != "Collection" {
 		t.Errorf("inherited = %+v, want the collection's", got)
 	}
 
 	// A collection that answers for itself stops the walk for everything inside it, and only for that.
-	if _, err := a.uc.SaveAuth(ctx, a.nestedID, bearer("вложенная")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.nestedID, bearer("Nested")); err != nil {
 		t.Fatalf("SaveAuth nested: %v", err)
 	}
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "вложенная" {
+		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "Nested" {
 		t.Errorf("inside inherited = %+v, want the nested collection's", got)
 	}
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.besideID)); got == nil || got.Answer("token") != "коллекция" {
+		domain.DraftID(a.besideID)); got == nil || got.Answer("token") != "Collection" {
 		t.Errorf("beside inherited = %+v, want the collection's", got)
 	}
 
 	// A request that answers for itself is not the nested collection's any more.
-	if _, err := a.uc.SaveAuth(ctx, a.insideID, bearer("сам")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.insideID, bearer("self")); err != nil {
 		t.Fatalf("SaveAuth request: %v", err)
 	}
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "сам" {
+		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "self" {
 		t.Errorf("own = %+v, want the request's own", got)
 	}
 
@@ -108,7 +108,7 @@ func TestAuthIsInheritedDownTheTree(t *testing.T) {
 		t.Fatalf("SaveAuth nested none: %v", err)
 	}
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.besideID)); got == nil || got.Answer("token") != "коллекция" {
+		domain.DraftID(a.besideID)); got == nil || got.Answer("token") != "Collection" {
 		t.Errorf("after clearing the nested one = %+v, want the collection's still", got)
 	}
 	tree, err := a.uc.Tree(ctx)
@@ -127,17 +127,17 @@ func TestNoKeepsWhatWasAlreadyFilled(t *testing.T) {
 	ctx := context.Background()
 	a := setupAuthTree(t)
 
-	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("коллекция")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("Collection")); err != nil {
 		t.Fatalf("SaveAuth collection: %v", err)
 	}
-	if _, err := a.uc.SaveAuth(ctx, a.nestedID, bearer("вложенная")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.nestedID, bearer("Nested")); err != nil {
 		t.Fatalf("SaveAuth nested: %v", err)
 	}
 
 	// The tab sends the whole answer, so «None» arrives carrying the fields it was holding.
 	if _, err := a.uc.SaveAuth(ctx, a.nestedID, domain.Auth{
 		Type:   domain.AuthNone,
-		Fields: map[string]string{"prefix": "Bearer", "token": "вложенная"},
+		Fields: map[string]string{"prefix": "Bearer", "token": "Nested"},
 	}); err != nil {
 		t.Fatalf("SaveAuth nested none: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestNoKeepsWhatWasAlreadyFilled(t *testing.T) {
 	// Nothing inside authorizes itself with what the nested level held: it said «None» there, and the
 	// nearest level that did answer is the collection around it.
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "коллекция" {
+		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "Collection" {
 		t.Errorf("inside = %+v, want the outer collection's", got)
 	}
 
@@ -156,8 +156,8 @@ func TestNoKeepsWhatWasAlreadyFilled(t *testing.T) {
 		t.Fatalf("Tree: %v", err)
 	}
 	stored := findIn(t, tree, a.nestedID).Auth
-	if stored == nil || stored.Answer("token") != "вложенная" {
-		t.Fatalf("stored = %+v, want «нет» to have kept the token", stored)
+	if stored == nil || stored.Answer("token") != "Nested" {
+		t.Fatalf("stored = %+v, want «no» to have kept the token", stored)
 	}
 
 	back := *stored
@@ -166,7 +166,7 @@ func TestNoKeepsWhatWasAlreadyFilled(t *testing.T) {
 		t.Fatalf("SaveAuth nested bearer again: %v", err)
 	}
 	if got, _ := inherited(ctx, a.uc,
-		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "вложенная" {
+		domain.DraftID(a.insideID)); got == nil || got.Answer("token") != "Nested" {
 		t.Errorf("inside again = %+v, want the nested collection's token back", got)
 	}
 }
@@ -175,7 +175,7 @@ func TestAuthForAnswersNothingOutsideTheTree(t *testing.T) {
 	ctx := context.Background()
 	a := setupAuthTree(t)
 
-	for _, id := range []domain.DraftID{domain.DraftCommandLine, "нет-такого"} {
+	for _, id := range []domain.DraftID{domain.DraftCommandLine, "not-found"} {
 		got, err := inherited(ctx, a.uc, id)
 		if err != nil {
 			t.Errorf("inherited(%q) = %v, want no error", id, err)
@@ -192,7 +192,7 @@ func TestARequestSavedFromTheCommandLineInherits(t *testing.T) {
 	ctx := context.Background()
 	a := setupAuthTree(t)
 
-	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("коллекция")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("Collection")); err != nil {
 		t.Fatalf("SaveAuth: %v", err)
 	}
 
@@ -200,12 +200,12 @@ func TestARequestSavedFromTheCommandLineInherits(t *testing.T) {
 	// «None» with no answers in it.
 	fresh := domain.NewDraft().Auth
 	_, tree, err := a.uc.CreateNode(ctx, NodeDraft{
-		CollectionID: a.collectionID, Name: "С командной строки", Auth: &fresh,
+		CollectionID: a.collectionID, Name: "From command line", Auth: &fresh,
 	})
 	if err != nil {
 		t.Fatalf("CreateNode: %v", err)
 	}
-	saved := findInTree(t, tree, "С командной строки")
+	saved := findInTree(t, tree, "From command line")
 	if saved.Auth != nil {
 		t.Fatalf("stored auth = %+v, want nothing written down at all", saved.Auth)
 	}
@@ -214,7 +214,7 @@ func TestARequestSavedFromTheCommandLineInherits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AuthFor: %v", err)
 	}
-	if got == nil || got.Answer("token") != "коллекция" {
+	if got == nil || got.Answer("token") != "Collection" {
 		t.Errorf("the saved request inherits %+v, want the collection's token", got)
 	}
 }
@@ -226,7 +226,7 @@ func TestInheritIsKeptOnAFolder(t *testing.T) {
 	ctx := context.Background()
 	a := setupAuthTree(t)
 
-	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("коллекция")); err != nil {
+	if _, err := a.uc.SaveAuth(ctx, a.collectionID, bearer("Collection")); err != nil {
 		t.Fatalf("SaveAuth collection: %v", err)
 	}
 	if _, err := a.uc.SaveAuth(ctx, a.nestedID, domain.Auth{Type: domain.AuthInherit}); err != nil {
@@ -244,7 +244,7 @@ func TestInheritIsKeptOnAFolder(t *testing.T) {
 
 	// And it still inherits: the walk goes past a level that said somebody above it decides.
 	if got, _ := inherited(ctx, a.uc, domain.DraftID(a.insideID)); got == nil ||
-		got.Answer("token") != "коллекция" {
+		got.Answer("token") != "Collection" {
 		t.Errorf("inside inherited %+v, want the collection's token", got)
 	}
 }

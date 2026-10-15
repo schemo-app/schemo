@@ -13,7 +13,7 @@ import type { CaptureFilters } from '../../../bindings/schemo/internal/domain'
 import { useSetting, useSettings } from '../../composables/useSettings'
 import { useWailsEvent } from '../../composables/events/useWailsEvent'
 import { describeFailure, useMessages } from '../../i18n'
-import { EXTENSION_PAGE } from '../../lib/features'
+import { EXTENSION_STORES } from '../../lib/extensions'
 
 // The browser extension as the site draws it: whether one is connected at the top, how the two
 // sides behave together under it, and what the extension lets through at the foot. The switches
@@ -22,8 +22,6 @@ import { EXTENSION_PAGE } from '../../lib/features'
 
 const { t } = useMessages()
 const { setCaptureFilters, setExtension } = useSettings()
-
-const BROWSERS = ['Chrome', 'Firefox', 'Edge']
 
 const failure = ref('')
 
@@ -77,8 +75,8 @@ const statusNote = computed(() => {
     .join(' · ')
 })
 
-function openInstall(): void {
-  void Browser.OpenURL(EXTENSION_PAGE)
+function openInstall(url: string): void {
+  void Browser.OpenURL(url)
 }
 
 // ---- connection settings -----------------------------------------------
@@ -152,13 +150,13 @@ function setHosts(hosts: string[]): void {
       </span>
       <span v-if="!connected" class="get">
         <Button
-          v-for="name in BROWSERS"
-          :key="name"
+          v-for="store in EXTENSION_STORES"
+          :key="store.name"
           variant="outline"
           size="field"
-          @click="openInstall()"
+          @click="openInstall(store.url)"
         >
-          {{ name }}
+          {{ store.name }}
           <Icon name="ArrowUpRight" :size="10" :stroke-width="2.2" />
         </Button>
       </span>

@@ -43,7 +43,7 @@ func TestVariableReadsByName(t *testing.T) {
 	if _, found, err := u.Variable(ctx, domain.ScopeEnvironment, "token"); err != nil || found {
 		t.Errorf("the environment answered with a global: %v, %v", found, err)
 	}
-	if _, found, err := u.Variable(ctx, domain.ScopeEnvironment, "нет-такой"); err != nil || found {
+	if _, found, err := u.Variable(ctx, domain.ScopeEnvironment, "not-found"); err != nil || found {
 		t.Errorf("an unknown name = %v, %v, want nothing", found, err)
 	}
 }
@@ -58,7 +58,7 @@ func TestSetVariableAddsAndReplaces(t *testing.T) {
 	if err := u.SetVariable(ctx, domain.ScopeEnvironment, "page", "2"); err != nil {
 		t.Fatalf("SetVariable: %v", err)
 	}
-	if err := u.SetVariable(ctx, domain.ScopeGlobals, "auth", "из-скрипта"); err != nil {
+	if err := u.SetVariable(ctx, domain.ScopeGlobals, "auth", "from-script"); err != nil {
 		t.Fatalf("SetVariable: %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestSetVariableAddsAndReplaces(t *testing.T) {
 	if err != nil || !found || value != "2" {
 		t.Errorf("page = %q, %v, %v, want what the script wrote", value, found, err)
 	}
-	if value, _, _ := u.Variable(ctx, domain.ScopeGlobals, "auth"); value != "из-скрипта" {
+	if value, _, _ := u.Variable(ctx, domain.ScopeGlobals, "auth"); value != "from-script" {
 		t.Errorf("auth = %q, want what the script wrote", value)
 	}
 
@@ -129,7 +129,7 @@ func TestVariableRefusesWhatItCannotDo(t *testing.T) {
 		t.Error("writing to an environment nobody selected was allowed")
 	}
 
-	for _, scope := range []domain.VarScope{domain.ScopeRun, "какая-то"} {
+	for _, scope := range []domain.VarScope{domain.ScopeRun, "some-id"} {
 		if _, _, err := u.Variable(ctx, scope, "token"); !errors.Is(err, domain.ErrNotAllowed) {
 			t.Errorf("reading %q = %v, want ErrNotAllowed", scope, err)
 		}
