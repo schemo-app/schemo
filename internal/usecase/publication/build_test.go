@@ -290,11 +290,7 @@ func mustBuild(t *testing.T, tree domain.Collection) snapshotv1.Snapshot {
 // be a page about another collection.
 func TestTheAuthorsWordsAreThePagesProse(t *testing.T) {
 	tree := published()
-	tree.Description = "Everything the shop sells."
-	tree.Docs = domain.Docs{
-		Authorization: "Send the key in the header.",
-		Errors:        "A refused order answers 409.",
-	}
+	tree.Description = "Everything the shop sells.\n\n## Authorization\nSend the key in the header.\n\n## Errors\nA refused order answers 409."
 
 	snapshot, _ := treeWith(t, tree)
 
@@ -306,9 +302,8 @@ func TestTheAuthorsWordsAreThePagesProse(t *testing.T) {
 	if snapshot.Prose != want {
 		t.Errorf("prose = %+v, want %+v", snapshot.Prose, want)
 	}
-	if snapshot.Collection.Description != snapshot.Prose.Lead {
-		t.Errorf("the description is %q and the lead %q, want the one text",
-			snapshot.Collection.Description, snapshot.Prose.Lead)
+	if snapshot.Collection.Description != tree.Description {
+		t.Errorf("description = %q, want the complete Markdown document", snapshot.Collection.Description)
 	}
 }
 
@@ -319,7 +314,7 @@ func TestASecretWrittenIntoProseIsMasked(t *testing.T) {
 	tree.Variables = []domain.Variable{{
 		Name: "API_TOKEN", Value: "s3cr3t", Kind: domain.VariableSecret, Enabled: true,
 	}}
-	tree.Docs.Errors = "A refused call answers 401 — check {{API_TOKEN}}."
+	tree.Description = "## Errors\nA refused call answers 401 — check {{API_TOKEN}}."
 
 	snapshot, _ := treeWith(t, tree)
 	document, _ := json.Marshal(snapshot)
@@ -371,7 +366,7 @@ func TestAPublishSaysWhatMovedAtThePage(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -386,7 +381,7 @@ func TestAPublishSaysWhatMovedAtThePage(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	if len(snapshot.Changes) != 1 {
+	if len(snapshot.Changes) != 2 {
 		t.Fatalf("changes = %+v, want the one release", snapshot.Changes)
 	}
 	held := []string{}
@@ -408,7 +403,7 @@ func TestAPageNobodyMovedGainsNoRelease(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	snapshot, _, err := uc.Build(ctx, "space-1", "collection-1", "env-1", "en")
@@ -416,7 +411,7 @@ func TestAPageNobodyMovedGainsNoRelease(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	if len(snapshot.Changes) != 0 {
+	if len(snapshot.Changes) != 1 || snapshot.Changes[0].Revision != 1 || snapshot.Changes[0].Items[0].Fields[0] != "initial:2" {
 		t.Errorf("changes = %+v, want nothing said about a page nobody moved", snapshot.Changes)
 	}
 }
@@ -433,7 +428,7 @@ func TestAPagesHistoryGrowsAtTheFront(t *testing.T) {
 	publish := func() {
 		t.Helper()
 		if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1",
-			domain.VisibilityUnlisted, "en", "", true); err != nil {
+			domain.VisibilityUnlisted, "en", "", true, nil); err != nil {
 			t.Fatalf("Publish: %v", err)
 		}
 	}
@@ -448,7 +443,7 @@ func TestAPagesHistoryGrowsAtTheFront(t *testing.T) {
 	publish()
 
 	held, _ := store.find("collection-1")
-	if len(held.Changes) != 2 {
+	if len(held.Changes) != 3 {
 		t.Fatalf("changes = %+v, want the two releases", held.Changes)
 	}
 	said := []string{held.Changes[0].Items[0].Sign, held.Changes[1].Items[0].Sign}
@@ -468,7 +463,7 @@ func TestAnOlderReleaseFallsOffTheEnd(t *testing.T) {
 		})
 	}
 
-	held := appended(history, []domain.PageItem{{Sign: signChanged}}, time.UnixMilli(maxReleases))
+	held := appended(history, []domain.PageItem{{Sign: signChanged}}, time.UnixMilli(maxReleases), maxReleases+1)
 
 	if len(held) != maxReleases {
 		t.Fatalf("history is %d releases, want %d", len(held), maxReleases)

@@ -248,19 +248,6 @@ func (f *fakeStore) SaveCollection(
 	return nil
 }
 
-func (f *fakeStore) SaveDocs(_ context.Context, id string, docs domain.Docs) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	for i := range f.collections {
-		if f.collections[i].ID == id {
-			f.collections[i].Docs = docs
-			return nil
-		}
-	}
-	return nil
-}
-
 func (f *fakeStore) SaveNode(_ context.Context, node domain.CollectionNode) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

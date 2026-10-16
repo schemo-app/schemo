@@ -226,35 +226,6 @@ func (u *UseCase) Rename(ctx context.Context, id string, name string) ([]domain.
 	return u.store.Collections(ctx, workspace)
 }
 
-// SaveDocs writes what a collection says about itself on the page it is published as: how its
-// requests are authorized, what they answer when they go wrong, and what they will not do. It is a
-// collection's own writing and not a folder's, and the tree comes back because the page that is
-// published reads these three notes from the tree.
-func (u *UseCase) SaveDocs(
-	ctx context.Context,
-	id string,
-	docs domain.Docs,
-) ([]domain.Collection, error) {
-	held, err := validDocs(docs)
-	if err != nil {
-		return nil, err
-	}
-
-	workspace, err := u.scope.ActiveWorkspace(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, ok, err := u.collection(ctx, workspace, id); err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, fmt.Errorf("collection %s: %w", id, domain.ErrNotFound)
-	}
-	if err := u.store.SaveDocs(ctx, id, held); err != nil {
-		return nil, err
-	}
-	return u.store.Collections(ctx, workspace)
-}
-
 // Describe is the other edit a tree row takes: what the level is for. A folder answers it too — a
 // collection's description is what the overview draws above its tabs, and a folder has the same
 // line in the same place — and both answer with the whole tree, because the tree is where the

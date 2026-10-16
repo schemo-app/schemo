@@ -61,13 +61,6 @@ function resetWidth() {
 
 const live = computed(() => records.capture.recording)
 
-// A space with a page that has moved on says so from here, whichever collection it belongs to: what
-// the marks hold is read for the collections this device has looked at, and nothing is asked of the
-// server to draw it.
-const behind = computed(() =>
-  Object.values(publications.marks).some((mark) => mark.page != null && mark.behind)
-)
-
 const nav = computed(() => [
   {
     key: 'history',
@@ -95,7 +88,7 @@ const nav = computed(() => [
     icon: 'Radio' as const,
     kbd: '',
     live: false,
-    warn: behind.value,
+    warn: publications.hasChanges,
     active: tabs.activeKind === TabKind.TabKindPubs,
     on: () => tabs.openPublications(),
   },

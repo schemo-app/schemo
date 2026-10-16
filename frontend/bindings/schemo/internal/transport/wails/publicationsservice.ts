@@ -32,6 +32,10 @@ export function Changes(workspace: string, collection: string): $CancellableProm
     return $Call.ByID(2379839896, workspace, collection);
 }
 
+export function Details(collection: string): $CancellablePromise<domain$0.PublicationDetails> {
+    return $Call.ByID(1455976631, collection);
+}
+
 /**
  * List is the pages of a space as this device knows them, without asking anybody.
  */
@@ -42,8 +46,8 @@ export function List(workspace: string): $CancellablePromise<domain$0.Publicatio
 /**
  * Preview is what publishing this collection would do, and what is already there.
  */
-export function Preview(workspace: string, collection: string, environmentID: string): $CancellablePromise<publication$0.PublishPreview> {
-    return $Call.ByID(1250188393, workspace, collection, environmentID);
+export function Preview(workspace: string, collection: string, environmentID: string, options: domain$0.PublicationOptions | null): $CancellablePromise<publication$0.PublishPreview> {
+    return $Call.ByID(1250188393, workspace, collection, environmentID, options);
 }
 
 /**
@@ -59,6 +63,10 @@ export function Publish(choice: $models.PublishChoice): $CancellablePromise<doma
  */
 export function Refresh(workspace: string): $CancellablePromise<domain$0.Publication[] | null> {
     return $Call.ByID(3646325666, workspace);
+}
+
+export function Restore(workspace: string, collection: string, revision: number): $CancellablePromise<domain$0.Publication> {
+    return $Call.ByID(2676926663, workspace, collection, revision);
 }
 
 /**

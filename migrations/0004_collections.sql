@@ -11,10 +11,7 @@ CREATE TABLE collections (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     version INTEGER NOT NULL DEFAULT 1,
-    deleted_at INTEGER,
-    docs_authorization TEXT NOT NULL DEFAULT '',
-    docs_errors TEXT NOT NULL DEFAULT '',
-    docs_limits TEXT NOT NULL DEFAULT ''
+    deleted_at INTEGER
 );
 
 CREATE INDEX collections_workspace

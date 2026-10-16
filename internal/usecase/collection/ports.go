@@ -26,7 +26,6 @@ type Store interface {
 
 	// The prose a collection carries for the page it is published as: a write of its own, because
 	// nothing else writes these three columns and a sentence is not a reason to rewrite a row.
-	SaveDocs(ctx context.Context, id string, docs domain.Docs) error
 
 	// A level is a collection or a request, addressed in one id space — as is the command line's own
 	// draft, which is why the workspace has to be named here: the draft's id is the same word in every

@@ -125,15 +125,6 @@ export function SaveAuth(id: string, auth: domain$0.Auth): $CancellablePromise<d
 }
 
 /**
- * SaveDocs writes what a collection says about itself on the page it is published as: the three
- * notes the page gives headings of their own. The tree comes back, as it does from every other edit
- * of a row, because the page being published is drawn from it.
- */
-export function SaveDocs(id: string, docs: domain$0.Docs): $CancellablePromise<domain$0.Collection[] | null> {
-    return $Call.ByID(1024835953, id, docs);
-}
-
-/**
  * SaveDraft copies a draft into a collection as a new request — the active tab's, unless the caller
  * names another. The draft is not touched: saving a copy is not a move. The request arrives whole,
  * because the node is written once — a second call filling in an empty one could leave it saved

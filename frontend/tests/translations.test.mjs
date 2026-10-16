@@ -98,3 +98,19 @@ test('missing translations and error keys fall back to English', () => {
   assert.equal(t('common.copy'), 'Copy')
   assert.equal(te('common.copy'), true)
 })
+
+test('publication statistics use the catalogue plural forms for views and imports', async () => {
+  await loadCatalogue('ru')
+  for (const locale of ['en', 'ru']) {
+    i18n.global.locale.value = locale
+    for (const key of ['views', 'imports']) {
+      const forms = catalogues[locale].publications[key].split('|').map(form => form.trim())
+      const cases = locale === 'en'
+        ? [[0, 1], [1, 0], [2, 1], [5, 1], [21, 1], [34, 1]]
+        : [[0, 2], [1, 0], [2, 1], [5, 2], [21, 0], [34, 1]]
+      for (const [count, index] of cases) {
+        assert.equal(t(`publications.${key}`, count), forms[index].replace('{n}', String(count)))
+      }
+    }
+  }
+})

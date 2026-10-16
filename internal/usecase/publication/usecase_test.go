@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +76,7 @@ func (s *fakeStore) SavePublication(_ context.Context, held domain.Publication) 
 	s.saved++
 	for index, kept := range s.held {
 		if kept.CollectionID == held.CollectionID {
+			held.Outline, held.Changes, held.Options = kept.Outline, kept.Changes, kept.Options
 			s.held[index] = held
 			return nil
 		}
@@ -90,6 +92,7 @@ func (s *fakeStore) SavePublished(
 	collectionID string,
 	outline []domain.OutlineItem,
 	changes []domain.PageRelease,
+	options domain.PublicationOptions,
 ) error {
 	if s.refuses != nil {
 		return s.refuses
@@ -97,6 +100,7 @@ func (s *fakeStore) SavePublished(
 	for index, held := range s.held {
 		if held.CollectionID == collectionID {
 			s.held[index].Outline, s.held[index].Changes = outline, changes
+			s.held[index].Options = &options
 			return nil
 		}
 	}
@@ -130,14 +134,23 @@ func (s *fakeStore) AwaitingUnpublish(context.Context) ([]domain.Publication, er
 // fakeServer is the server as this feature uses it: it answers what a scenario tells it to, and it
 // keeps what it was sent, so a test can read the document a publish actually carried.
 type fakeServer struct {
-	answered domain.Publication
-	pages    []domain.Publication
-	err      error
+	answered         domain.Publication
+	pages            []domain.Publication
+	err              error
+	restoredDocument []byte
 
 	sent   []domain.PublicationDraft
 	taken  []string
 	asked  []string
 	listed []string
+}
+
+func (s *fakeServer) Details(context.Context, domain.Caller, string) (domain.PublicationDetails, error) {
+	return domain.PublicationDetails{}, s.err
+}
+
+func (s *fakeServer) Restore(context.Context, domain.Caller, string, int) (domain.Publication, []byte, error) {
+	return s.answered, s.restoredDocument, s.err
 }
 
 func (s *fakeServer) Publish(
@@ -153,6 +166,9 @@ func (s *fakeServer) Publish(
 	out.CollectionID, out.WorkspaceID = draft.Collection, draft.Workspace
 	if out.ID == "" {
 		out.ID = "publication-1"
+	}
+	if out.Revision == 0 {
+		out.Revision = len(s.sent)
 	}
 	if out.Status == "" {
 		out.Status = domain.PublicationActive
@@ -311,7 +327,7 @@ func TestAPageBehindAPasswordIsSentWithItAndKeptNowhere(t *testing.T) {
 	uc := newTestUseCase(store, server, fakeSession{})
 
 	if _, err := uc.Publish(context.Background(), "space-1", "collection-1", "env-1",
-		domain.VisibilityPassword, "en", "open-sesame", true); err != nil {
+		domain.VisibilityPassword, "en", "open-sesame", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -339,7 +355,7 @@ func TestAPasswordTooShortIsRefusedBeforeAnythingLeaves(t *testing.T) {
 	uc := newTestUseCase(store, server, fakeSession{})
 
 	_, err := uc.Publish(context.Background(), "space-1", "collection-1", "env-1",
-		domain.VisibilityPassword, "en", strings.Repeat("p", domain.PasswordLeast-1), true)
+		domain.VisibilityPassword, "en", strings.Repeat("p", domain.PasswordLeast-1), true, nil)
 
 	if domain.CodeOf(err) != domain.CodePasswordInvalid {
 		t.Fatalf("err = %v, want the password refused", err)
@@ -359,7 +375,7 @@ func TestAPublishLeavesUnderTheAccountsSpaceIDAndIsKeptUnderItsOwn(t *testing.T)
 	uc := newTestUseCase(store, server, fakeSession{})
 
 	if _, err := uc.Publish(context.Background(), "space-1", "collection-1", "env-1",
-		domain.VisibilityUnlisted, "en", "", true); err != nil {
+		domain.VisibilityUnlisted, "en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -390,7 +406,7 @@ func TestASpaceHeldAloneHasNothingToPublishInto(t *testing.T) {
 	uc := newTestUseCase(store, server, fakeSession{})
 
 	_, err := uc.Publish(context.Background(), "space-1", "collection-1", "env-1",
-		domain.VisibilityUnlisted, "en", "", true)
+		domain.VisibilityUnlisted, "en", "", true, nil)
 
 	if domain.CodeOf(err) != domain.CodeWorkspaceMissing {
 		t.Fatalf("err = %v, want the space refused", err)
@@ -416,7 +432,7 @@ func TestAPublishedPageCarriesNoSecretsValue(t *testing.T) {
 	uc.collections = fakeCollections{tree: tree}
 
 	if _, err := uc.Publish(context.Background(), "space-1", "collection-1", "env-1",
-		domain.VisibilityUnlisted, "en", "", true); err != nil {
+		domain.VisibilityUnlisted, "en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if len(server.sent) != 1 {
@@ -621,7 +637,7 @@ func TestAPageThatWasJustPublishedIsNotBehind(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"ru", "", true); err != nil {
+		"ru", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 
@@ -652,7 +668,7 @@ func TestAPageIsComparedAgainstTheEnvironmentItWentOutWith(t *testing.T) {
 	uc.environments = fakeEnvironments{state: both}
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	both.ActiveID = "env-2"
@@ -688,13 +704,13 @@ func TestThePopoverOpensOnThePagesOwnEnvironment(t *testing.T) {
 	uc.environments = fakeEnvironments{state: both}
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	both.ActiveID = "env-2"
 	uc.environments = fakeEnvironments{state: both}
 
-	preview, err := uc.Preview(ctx, "space-1", "collection-1", "")
+	preview, err := uc.Preview(ctx, "space-1", "collection-1", "", nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -712,7 +728,7 @@ func TestAPageSaysWhichRequestsMovedAtIt(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	moved := catalogue()
@@ -723,8 +739,8 @@ func TestAPageSaysWhichRequestsMovedAtIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Changes: %v", err)
 	}
-	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List all products"}
-	if !change.Behind || len(change.Changes) != 1 || change.Changes[0] != want {
+	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List all products", Fields: []string{"name"}}
+	if !change.Behind || len(change.Changes) != 1 || !reflect.DeepEqual(change.Changes[0], want) {
 		t.Errorf("change = %+v, want the one request that moved", change)
 	}
 }
@@ -736,7 +752,7 @@ func TestThePopoverOpensWithoutAskingTheServer(t *testing.T) {
 	server := &fakeServer{err: errors.New("the network is not here")}
 	uc := newTestUseCase(store, server, fakeSession{})
 
-	preview, err := uc.Preview(context.Background(), "space-1", "collection-1", "env-1")
+	preview, err := uc.Preview(context.Background(), "space-1", "collection-1", "env-1", nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -763,14 +779,14 @@ func TestThePopoverOpensOnWhatAPublishWouldRecord(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := uc.Publish(ctx, "space-1", "collection-1", "env-1", domain.VisibilityUnlisted,
-		"en", "", true); err != nil {
+		"en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	moved := catalogue()
 	moved.Items[0].Name = "List all products"
 	uc.collections = fakeCollections{tree: moved}
 
-	preview, err := uc.Preview(ctx, "space-1", "collection-1", "env-1")
+	preview, err := uc.Preview(ctx, "space-1", "collection-1", "env-1", nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -779,14 +795,14 @@ func TestThePopoverOpensOnWhatAPublishWouldRecord(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	if len(snapshot.Changes) != 1 {
+	if len(snapshot.Changes) != 2 {
 		t.Fatalf("changes = %+v, want the one release", snapshot.Changes)
 	}
 	recorded := snapshot.Changes[0].Items
 	want := domain.PageItem{
-		Sign: recorded[0].Sign, Method: recorded[0].Method, Name: recorded[0].Name,
+		Sign: recorded[0].Sign, Method: recorded[0].Method, Name: recorded[0].Name, Fields: recorded[0].Fields,
 	}
-	if len(preview.Changes) != len(recorded) || preview.Changes[0] != want {
+	if len(preview.Changes) != len(recorded) || !reflect.DeepEqual(preview.Changes[0], want) {
 		t.Errorf("preview = %+v, want the entry a publish would record: %+v",
 			preview.Changes, recorded)
 	}

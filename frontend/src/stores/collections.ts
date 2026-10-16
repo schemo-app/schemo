@@ -10,7 +10,6 @@ import {
   type Collection,
   type CollectionRun,
   type CollectionRunResult,
-  type Docs,
   type DraftID,
   type Variable,
 } from '../../bindings/schemo/internal/domain'
@@ -176,7 +175,6 @@ export const useCollectionsStore = defineStore('collections', () => {
   // What the collection says on the page it is published as, beside the line above it. The whole
   // set arrives as the tab holds it: the three notes belong to one document, and one save is one
   // answer about all of them.
-  const saveDocs = (id: string, docs: Docs) => changeTree(CollectionsService.SaveDocs(id, docs))
   // The `{{tokens}}` a level answers for everything inside it; Go refuses a secret, since a collection
   // is what gets exported and handed on.
   const saveVariables = (id: string, variables: Variable[]) =>
@@ -369,7 +367,6 @@ export const useCollectionsStore = defineStore('collections', () => {
     moveCollection,
     rename,
     describe,
-    saveDocs,
     saveVariables,
     saveAuth,
     duplicate,

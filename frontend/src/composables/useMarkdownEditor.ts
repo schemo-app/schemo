@@ -63,12 +63,12 @@ export function useMarkdownEditor(onChange: (markdown: string) => void) {
   let seen = ''
 
   async function open(host: HTMLElement, markdown: string) {
-    const mine = ++turn
+    const mine = turn + 1
+    seen = markdown
     await close()
     kit ??= await load()
     if (mine !== turn) return
     const { core, commonmark, gfm, history, listener, clipboard, trailing, state } = kit
-    seen = markdown
 
     const made = await core.Editor.make()
       .config((ctx) => {
@@ -109,6 +109,7 @@ export function useMarkdownEditor(onChange: (markdown: string) => void) {
   }
 
   async function close() {
+    turn++
     const was = editor
     editor = null
     await was?.destroy()

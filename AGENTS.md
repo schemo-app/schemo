@@ -42,6 +42,7 @@ Use `task --list` for other commands.
 - Use English in test names, comments, diagnostics and fixtures. Read localized expectations from the application catalogues; preserve Unicode coverage with non-ASCII fixtures.
 - Use temporary SQLite databases for persistence, migration and transaction tests.
 - Keep frontend regressions in `frontend/tests`.
+- Keep source styles readable: one declaration per line, one selector per line in selector lists, and a blank line between rules. Do not compress or minify source CSS or Vue style blocks.
 
 ### Design
 

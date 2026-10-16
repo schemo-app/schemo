@@ -47,7 +47,7 @@ func TestARequestOfAPageComesBackAsThisAppsOwn(t *testing.T) {
 	document, err := AsDocument(shipped(t, snapshotv1.Snapshot{
 		Collection: snapshotv1.Collection{
 			Name:        "Example API",
-			Description: "Where the products are",
+			Description: "Where the products are\n\n## Authorization\nSend a token.\n\n## Errors\n400 means the body is wrong.",
 			Groups: []snapshotv1.Group{{Name: "Example API", Endpoints: []snapshotv1.Endpoint{{
 				Name:        "Create a product",
 				Method:      "POST",
@@ -75,13 +75,9 @@ func TestARequestOfAPageComesBackAsThisAppsOwn(t *testing.T) {
 		t.Fatalf("collections = %d, want the one the page documents", len(document.Collections))
 	}
 	collection := document.Collections[0]
-	if collection.Name != "Example API" || collection.Description != "Where the products are" {
+	if collection.Name != "Example API" || collection.Description != "Where the products are\n\n## Authorization\nSend a token.\n\n## Errors\n400 means the body is wrong." {
 		t.Errorf("collection = %q, %q, want the page's own title and lead",
 			collection.Name, collection.Description)
-	}
-	if collection.Docs.Authorization != "Send a token." ||
-		collection.Docs.Errors != "400 means the body is wrong." {
-		t.Errorf("docs = %+v, want the notes the author wrote for the page", collection.Docs)
 	}
 	if len(collection.Variables) != 1 || collection.Variables[0].Name != "shop" ||
 		collection.Variables[0].Value != "north" {

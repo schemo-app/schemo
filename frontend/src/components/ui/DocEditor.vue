@@ -11,11 +11,12 @@ import { markdownHeadings } from '../../lib/markdown'
 import { useMarkdownEditor, type DocCommand } from '../../composables/useMarkdownEditor'
 import { useMessages } from '../../i18n'
 
-const { modelValue, emptyText, hint = '', startEditing = false } = defineProps<{
+const { modelValue, emptyText, hint = '', startEditing = false, suggestions = [] } = defineProps<{
   modelValue: string
   emptyText: string
   hint?: string
   startEditing?: boolean
+  suggestions?: { title: string; text: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +45,13 @@ const heads = computed(() => markdownHeadings(modelValue))
 
 const minLevel = computed(() => heads.value.reduce((low, head) => Math.min(low, head.level), 3))
 const hasToc = computed(() => heads.value.length >= 3)
+let scrollAfterOpen = false
+
+function addSection(section: { title: string; text: string }) {
+  emit('update:modelValue', `${modelValue.trimEnd()}\n\n## ${section.title}\n\n${section.text}\n`.trimStart())
+  scrollAfterOpen = true
+  start()
+}
 
 function toHeading(index: number) {
   const box = scrollEl.value
@@ -148,7 +156,11 @@ function onLinkKey(event: KeyboardEvent) {
 watch([editing, mode], async () => {
   if (editing.value && mode.value === 'wys') {
     await nextTick()
-    if (wysEl.value) void visual.open(wysEl.value, modelValue)
+    if (wysEl.value) await visual.open(wysEl.value, modelValue)
+    if (scrollAfterOpen && scrollEl.value) {
+      scrollEl.value.scrollTo({ top: scrollEl.value.scrollHeight, behavior: 'smooth' })
+      scrollAfterOpen = false
+    }
   } else {
     void visual.close()
   }
@@ -445,7 +457,7 @@ defineExpose({
           <div class="doc-body" @dblclick="start">
             <MarkdownText :text="modelValue" />
           </div>
-          <div v-if="hasToc" class="doc-toc" data-toc>
+          <div v-if="hasToc || suggestions.length" class="doc-toc" data-toc>
             <span class="doc-toc-title">{{ t('request.docs.onPage') }}</span>
             <button
               v-for="(head, i) in heads"
@@ -458,6 +470,19 @@ defineExpose({
             >
               {{ head.label }}
             </button>
+            <template v-if="suggestions.length">
+              <span class="doc-toc-title doc-toc-add">{{ t('request.docs.addToPage') }}</span>
+              <button
+                v-for="section in suggestions"
+                :key="section.title"
+                type="button"
+                class="doc-toc-item doc-toc-suggestion"
+                @click="addSection(section)"
+              >
+                <Icon name="Plus" :size="12" />
+                {{ section.title }}
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -682,7 +707,7 @@ defineExpose({
 .doc-center {
   container-type: inline-size;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 2.5rem;
   padding: 1.5rem 2rem 4rem;
 }
@@ -738,6 +763,15 @@ defineExpose({
 
 .doc-toc-item.lead {
   @apply text-text;
+}
+
+.doc-toc-add {
+  padding-top: 1rem;
+}
+
+.doc-toc-suggestion {
+  @apply flex items-center text-accent cursor-pointer;
+  gap: 0.375rem;
 }
 
 .doc-toc-item:hover {

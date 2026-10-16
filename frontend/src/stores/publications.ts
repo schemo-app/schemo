@@ -1,15 +1,17 @@
-import { computed, onScopeDispose, ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type { Publication } from '../../bindings/schemo/internal/domain'
+import type { Publication, PublicationOptions } from '../../bindings/schemo/internal/domain'
 import type { Change, PublishPreview } from '../../bindings/schemo/internal/usecase/publication'
 import { PublicationsService } from '../../bindings/schemo/internal/transport/wails'
 import { useLocale } from '../composables/useLocale'
 import { useToast } from '../composables/useToast'
 import { t } from '../i18n'
 import { isVisibility } from '../lib/publications'
+import { findCollection } from '../lib/collectionTree'
 import { callOrToast, runOrToast } from './calls'
 import { useEnvironmentsStore } from './environments'
 import { useWorkspacesStore } from './workspaces'
+import { useCollectionsStore } from './collections'
 import { useWorkspaceSnapshot } from '../composables/workspace/useWorkspaceSnapshot'
 
 /** The three accesses a page may have. The text the window shows for them is the catalogue's. */
@@ -29,6 +31,7 @@ export function hostOf(url: string): string {
  *  asked anything — and it asks nothing of the network to do it. */
 export const usePublicationsStore = defineStore('publications', () => {
   const workspaces = useWorkspacesStore()
+  const collections = useCollectionsStore()
   const env = useEnvironmentsStore()
   const toast = useToast()
   const { locale } = useLocale()
@@ -41,15 +44,21 @@ export const usePublicationsStore = defineStore('publications', () => {
   // Whether each collection's page is behind what this device holds, keyed by collection: what a
   // collection's own head draws its button from, without opening the popover.
   const marks = ref<Record<string, Change>>({})
+  const marking = new Map<string, ReturnType<typeof PublicationsService.Changes>>()
+  const hasChanges = computed(() => Object.values(marks.value).some(mark =>
+    mark.page?.status === 'active' && !mark.page.pendingUnpublish && mark.behind,
+  ))
 
   // The page a person has asked to take down, asked about before it is.
   const asking = ref('')
+  const selectedCollection = ref('')
 
   // The popover: one at a time, on the collection it was opened from, holding what Preview said.
   const open = ref(false)
   const collection = ref('')
   const environment = ref('')
   const visibility = ref<Visibility>('unlisted')
+  const options = ref<PublicationOptions | null>(null)
 
   // The password a page is about to stand behind. It lives in the window and nowhere else: Go hands
   // it to the server once and keeps no copy, so the only moment it exists is between the field and
@@ -97,12 +106,33 @@ export const usePublicationsStore = defineStore('publications', () => {
   async function mark(collectionID: string): Promise<void> {
     if (!collectionID || !space()) return
     const signal = pageSnapshot.signal()
+    marking.get(collectionID)?.cancel()
+    const request = PublicationsService.Changes(space(), collectionID).cancelOn(signal)
+    marking.set(collectionID, request)
     const answer = await callOrToast(
-      PublicationsService.Changes(space(), collectionID).cancelOn(signal),
+      request,
       'publications.readFailed'
     )
+    if (marking.get(collectionID) !== request) return
+    marking.delete(collectionID)
     if (answer && !signal.aborted) marks.value = { ...marks.value, [collectionID]: answer }
   }
+
+  watch(() => collections.tree, () => {
+    const ids = new Set([...Object.keys(marks.value), ...pages.value.map(page => page.collectionId)])
+    if (collection.value) ids.add(collection.value)
+    for (const id of ids) {
+      if (findCollection(collections.tree, id)) continue
+      ids.delete(id)
+      marking.get(id)?.cancel()
+      marking.delete(id)
+      delete marks.value[id]
+    }
+    void markAll([...ids])
+    if (!collection.value) return
+    if (ids.has(collection.value)) void readPreview()
+    else closeShare()
+  })
 
   // Every page the list holds is marked at once, so the rail and the sidebar say what is behind
   // without a popover having been opened on each of them. Nothing here asks the server.
@@ -131,10 +161,11 @@ export const usePublicationsStore = defineStore('publications', () => {
     if (!collection.value) return
     const signal = previewSnapshot.signal()
     const answer = await callOrToast(
-      previewSnapshot.take(PublicationsService.Preview(space(), collection.value, environment.value)),
+      previewSnapshot.take(PublicationsService.Preview(space(), collection.value, environment.value, adopt ? null : options.value)),
       'publications.readFailed'
     )
     if (!answer || signal.aborted || preview.value !== answer) return
+    options.value = answer.options
     // A page that is already up opens on the access it has; a person who has not touched the field
     // is not silently asking for something else.
     const held = answer.publication?.visibility
@@ -150,12 +181,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     }
   }
 
-  function openShare(collectionID: string) {
-    // Publishing writes to the space, and a space this person may only read refuses every write.
-    if (!workspaces.canWrite) {
-      toast.show(t('errors.codes.workspaceReadOnly'))
-      return
-    }
+  function edit(collectionID: string) {
     closeShare()
     collection.value = collectionID
     // The empty id means the environment the page went out with, or the one the app works in when
@@ -166,9 +192,18 @@ export const usePublicationsStore = defineStore('publications', () => {
     const known = marks.value[collectionID]?.page?.visibility
     visibility.value = isVisibility(known) ? known : 'unlisted'
     password.value = ''
-    open.value = true
+    options.value = null
     void readPreview(true)
     void mark(collectionID)
+  }
+
+  function openShare(collectionID: string) {
+    if (!workspaces.canWrite) {
+      toast.show(t('errors.codes.workspaceReadOnly'))
+      return
+    }
+    edit(collectionID)
+    open.value = collection.value === collectionID
   }
 
   function closeShare() {
@@ -177,10 +212,17 @@ export const usePublicationsStore = defineStore('publications', () => {
     previewSnapshot.reset()
     busy.value = false
     password.value = ''
+    options.value = null
   }
 
   async function choose(environmentID: string): Promise<void> {
     environment.value = environmentID
+    await readPreview()
+  }
+
+  async function chooseOption(key: keyof PublicationOptions): Promise<void> {
+    if (!options.value || busy.value || reading.value) return
+    options.value = { ...options.value, [key]: !options.value[key] }
     await readPreview()
   }
 
@@ -199,14 +241,16 @@ export const usePublicationsStore = defineStore('publications', () => {
           visibility: visibility.value,
           locale: locale.value,
           confirmed,
+          options: options.value,
           password: visibility.value === 'password' ? password.value : '',
         }).cancelOn(signal),
         'publications.publishFailed'
       )
       if (!held || signal.aborted) return false
+      password.value = ''
       await readPreview()
       if (signal.aborted) return false
-      await mark(collection.value)
+      await markAll([...new Set([...Object.keys(marks.value), collection.value, held.collectionId])])
       if (signal.aborted) return false
       await load()
       return true
@@ -223,16 +267,10 @@ export const usePublicationsStore = defineStore('publications', () => {
     if (busy.value) return false
     const held = pages.value.find((page) => page.collectionId === collectionID)
     if (!held) return false
-    // A page behind a password cannot be updated blind: the server is told the text again or it
-    // would put up a page with no lock at all, so the popover opens and the person is asked for it.
-    if (held.visibility === 'password') {
-      openShare(collectionID)
-      return false
-    }
     closeShare()
     const signal = AbortSignal.any([pageSnapshot.signal(), previewSnapshot.signal()])
     collection.value = collectionID
-    visibility.value = held.visibility === 'public' ? 'public' : 'unlisted'
+    visibility.value = isVisibility(held.visibility) ? held.visibility : 'unlisted'
     environment.value = ''
     await readPreview()
     if (signal.aborted) return false
@@ -258,9 +296,9 @@ export const usePublicationsStore = defineStore('publications', () => {
     if (!id) return false
     const done = await runOrToast(PublicationsService.Unpublish(id).cancelOn(signal), 'publications.unpublishFailed')
     if (!done || signal.aborted) return false
-    if (open.value) await readPreview()
+    if (collection.value) await readPreview()
     if (signal.aborted) return false
-    await mark(id)
+    await markAll([...new Set([...Object.keys(marks.value), id])])
     if (signal.aborted) return false
     await load()
     return true
@@ -269,7 +307,9 @@ export const usePublicationsStore = defineStore('publications', () => {
   function reset() {
     pageSnapshot.reset()
     marks.value = {}
+    marking.clear()
     asking.value = ''
+    selectedCollection.value = ''
     closeShare()
   }
 
@@ -280,11 +320,14 @@ export const usePublicationsStore = defineStore('publications', () => {
     pages,
     loading,
     marks,
+    hasChanges,
     asking,
+    selectedCollection,
     open,
     collection,
     environment,
     visibility,
+    options,
     password,
     preview,
     publication,
@@ -300,8 +343,10 @@ export const usePublicationsStore = defineStore('publications', () => {
     load,
     refresh,
     openShare,
+    edit,
     closeShare,
     choose,
+    chooseOption,
     publish,
     updatePage,
     askUnpublish,

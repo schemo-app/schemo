@@ -15,23 +15,11 @@ type Collection struct {
 	Children    []Collection     `json:"children"`
 	Auth        *Auth            `json:"auth,omitempty"`
 	Variables   []Variable       `json:"variables,omitempty"`
-	// Docs is what the author wrote for the page this collection is published as, beside the line
-	// above it: the three notes the page gives headings of their own.
-	Docs Docs `json:"docs"`
 	// A level's own code, carried by a file and written only where a tree is written whole — the
 	// import and the duplicate. It is deliberately not written by SaveCollection: that is called
 	// with rows read from the shallow tree, which carries no code, so writing it there would erase
 	// the code of a level whenever anything about it is renamed.
 	Scripts *Scripts `json:"scripts,omitempty"`
-}
-
-// Docs is the prose a collection carries for the page it is published as. The lead is the
-// collection's own description, because it is written once and read in both places; these are the
-// notes that belong to a page and nowhere else, and an empty one is a block the page does not draw.
-type Docs struct {
-	Authorization string `json:"authorization,omitempty"`
-	Errors        string `json:"errors,omitempty"`
-	Limits        string `json:"limits,omitempty"`
 }
 
 type LevelRow struct {

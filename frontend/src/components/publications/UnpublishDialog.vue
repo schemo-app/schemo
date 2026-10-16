@@ -30,7 +30,7 @@ const url = computed(() => {
   if (store.collection === store.asking && store.preview?.publication) {
     return store.preview.publication.url ?? ''
   }
-  return page.value?.url ?? ''
+  return page.value?.url ?? store.markOf(store.asking)?.page?.url ?? ''
 })
 </script>
 
@@ -38,8 +38,7 @@ const url = computed(() => {
   <Dialog
     :open="open"
     tone="cover"
-    class="w-115"
-    @escape-key-down.prevent
+    class="unpublish-dialog"
     @update:open="store.cancelUnpublish()"
   >
     <div class="ask">
@@ -49,8 +48,8 @@ const url = computed(() => {
       <span class="why">{{ t('publications.unpublishBody', { url }) }}</span>
     </div>
     <div class="actions">
-      <Button size="lg" @click="store.cancelUnpublish()">{{ t('common.cancel') }}</Button>
-      <Button size="lg" variant="danger" @click="store.confirmUnpublish()">
+      <Button size="lg" class="cancel-button" @click="store.cancelUnpublish()">{{ t('common.cancel') }}</Button>
+      <Button size="lg" variant="danger" class="unpublish-button" @click="store.confirmUnpublish()">
         {{ t('publications.unpublish') }}
       </Button>
     </div>
@@ -59,6 +58,13 @@ const url = computed(() => {
 
 <style scoped>
 @reference "../../style.css";
+
+:global(.dialog.unpublish-dialog) {
+  width: 460px;
+  max-width: calc(100vw - 48px);
+  font-size: var(--text-13);
+  line-height: normal;
+}
 
 .ask {
   @apply flex flex-col;
@@ -83,5 +89,25 @@ const url = computed(() => {
   gap: 0.5rem;
   padding: 0.875rem 1.25rem;
   border-top: 1px solid var(--border);
+}
+
+.actions .cancel-button {
+  border: 0;
+  background: var(--chip);
+  font-weight: 400;
+  box-shadow: none;
+}
+
+.actions .unpublish-button {
+  @apply border-0 text-white;
+  padding: 0 1rem;
+  background: var(--red);
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.actions .unpublish-button:hover:not(:disabled) {
+  background: var(--red);
+  filter: brightness(1.06);
 }
 </style>

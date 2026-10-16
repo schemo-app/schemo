@@ -920,3 +920,140 @@ test('canceled operations do not overwrite a newer sheet notice', async () => {
   assert.equal(await notice.withNotice(() => Promise.reject(new CancelError())), false)
   assert.equal(notice.notice.value, 'newer failure')
 })
+
+test('publication options are sent to the preview and discarded when the popover closes', async () => {
+  setupPublications()
+  const chosen = []
+  globalThis.publicationServices.Preview = (workspace, collection, environment, options) => {
+    chosen.push(options)
+    return CancellablePromise.resolve({environments: [], options: options ?? {docs: true, examples: true}})
+  }
+  store.openShare('collection')
+  await new Promise(resolve => setImmediate(resolve))
+  await store.chooseOption('examples')
+  assert.equal(chosen[0], null)
+  assert.deepEqual(chosen[1], {docs: true, examples: false})
+  assert.equal(store.options.examples, false)
+  store.closeShare()
+  assert.equal(store.options, null)
+})
+
+test('saved tree changes refresh published ancestors, cached folders and the open preview', async () => {
+  setupPublications()
+  const publications = store
+  const collections = useCollectionsStore()
+  publications.pages = [{ collectionId: 'parent' }]
+  publications.marks = { child: { behind: false } }
+  const marked = []
+  globalThis.publicationServices.Changes = (workspace, id) => {
+    marked.push(id)
+    return CancellablePromise.resolve({ behind: true, changes: [{name: id}] })
+  }
+  let previews = 0
+  globalThis.publicationServices.Preview = () => {
+    previews++
+    return CancellablePromise.resolve({ behind: true, environments: [], options: {docs: true, examples: true} })
+  }
+  publications.openShare('child')
+  await new Promise(resolve => setImmediate(resolve))
+  marked.length = 0
+  const before = previews
+  globalThis.collectionServices.Describe = () => CancellablePromise.resolve([
+    {...collection('parent'), children: [collection('child')]},
+  ])
+  await collections.describe('child', 'Updated folder description.')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(marked.sort(), ['child', 'parent'])
+  assert.equal(publications.markOf('parent').behind, true)
+  assert.equal(publications.markOf('child').behind, true)
+  assert.equal(previews, before + 1)
+})
+
+test('the publications page refreshes its editing preview without opening a share popover', async () => {
+  setupPublications()
+  const publications = store
+  const collections = useCollectionsStore()
+  const previews = []
+  globalThis.publicationServices.Preview = (workspace, id, environment, options) => {
+    previews.push({id, options})
+    return CancellablePromise.resolve({environments: [], options: options ?? {docs: true, examples: true}})
+  }
+  publications.edit('collection')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(publications.open, false)
+  await publications.chooseOption('examples')
+  collections.tree = [collection('collection')]
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(previews.length, 3)
+  assert.deepEqual(previews.at(-1), {id: 'collection', options: {docs: true, examples: false}})
+  assert.equal(publications.collection, 'collection')
+})
+
+test('an earlier publication mark cannot overwrite a newer saved-tree result', async () => {
+  setupPublications()
+  const old = deferred()
+  globalThis.publicationServices.Changes = () => old.promise
+  const earlier = store.mark('collection')
+  globalThis.publicationServices.Changes = () => CancellablePromise.resolve({behind: true})
+  await store.mark('collection')
+  old.resolve({behind: false})
+  await earlier
+  assert.equal(store.markOf('collection').behind, true)
+  assert.deepEqual(globalThis.notices, [])
+})
+
+test('removing a folder cancels its pending publication mark and drops the cached result', async () => {
+  setupPublications()
+  const publications = store
+  const collections = useCollectionsStore()
+  const old = deferred()
+  globalThis.publicationServices.Changes = () => old.promise
+  publications.marks = { child: { behind: false } }
+  const pending = publications.mark('child')
+  collections.tree = [collection('parent')]
+  await new Promise(resolve => setImmediate(resolve))
+  old.resolve({behind: true})
+  await pending
+  assert.equal(publications.markOf('child'), null)
+  assert.deepEqual(globalThis.notices, [])
+})
+
+test('publishing clears stale child marks while preserving changes in another publication', async () => {
+  setupPublications()
+  const page = {collectionId: 'parent', status: 'active'}
+  const other = {collectionId: 'other', status: 'active'}
+  store.marks = {
+    parent: {page, behind: true},
+    child: {page, behind: true, inheritedFrom: 'Parent'},
+    other: {page: other, behind: true},
+  }
+  store.collection = 'parent'
+  globalThis.publicationServices.Publish = () => CancellablePromise.resolve(page)
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({environments: []})
+  globalThis.publicationServices.List = () => CancellablePromise.resolve([page, other])
+  globalThis.publicationServices.Changes = (workspace, id) =>
+    CancellablePromise.resolve({page: id === 'other' ? other : page, behind: id === 'other'})
+  assert.equal(store.hasChanges, true)
+  assert.equal(await store.publish(true), true)
+  assert.equal(store.markOf('parent').behind, false)
+  assert.equal(store.markOf('child').behind, false)
+  assert.equal(store.hasChanges, true)
+  store.marks.other = {page: other, behind: false}
+  assert.equal(store.hasChanges, false)
+})
+
+test('unpublishing clears cached descendant marks and inactive pages do not warn in the sidebar', async () => {
+  setupPublications()
+  const page = {collectionId: 'parent', status: 'active'}
+  store.marks = {parent: {page, behind: true}, child: {page, behind: true}}
+  store.askUnpublish('parent')
+  globalThis.publicationServices.Unpublish = () => CancellablePromise.resolve()
+  globalThis.publicationServices.List = () => CancellablePromise.resolve([])
+  globalThis.publicationServices.Changes = () => CancellablePromise.resolve({behind: false})
+  assert.equal(await store.confirmUnpublish(), true)
+  assert.equal(store.hasChanges, false)
+  for (const inactive of [{...page, status: 'revoked'}, {...page, pendingUnpublish: true}]) {
+    store.marks = {parent: {page: inactive, behind: true}}
+    assert.equal(store.hasChanges, false)
+  }
+})

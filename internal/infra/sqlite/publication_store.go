@@ -19,7 +19,7 @@ import (
 // in one query is not forgotten in another.
 const publicationColumns = `collection_id, workspace_id, publication_id, slug, public_url,
 	visibility, status, revision, content_hash, environment_name, can_manage, pending_unpublish,
-	updated_at, outline, changes`
+	updated_at, outline, changes, options`
 
 // Publication is what is known about a collection's page, and whether anything is known at all. A
 // collection nobody published answers nothing rather than an error: a question nobody asked is not
@@ -107,6 +107,7 @@ func (s *Store) SavePublished(
 	collectionID string,
 	outline []domain.OutlineItem,
 	changes []domain.PageRelease,
+	options domain.PublicationOptions,
 ) error {
 	encodedOutline, err := json.Marshal(outline)
 	if err != nil {
@@ -117,8 +118,12 @@ func (s *Store) SavePublished(
 		return fmt.Errorf("writing the changes at publication %s: %w", collectionID, err)
 	}
 
-	const query = `UPDATE publications SET outline = ?, changes = ? WHERE collection_id = ?`
-	_, err = s.db.ExecContext(ctx, query, string(encodedOutline), string(encodedChanges), collectionID)
+	encodedOptions, err := json.Marshal(options)
+	if err != nil {
+		return fmt.Errorf("writing publication options: %w", err)
+	}
+	const query = `UPDATE publications SET outline = ?, changes = ?, options = ? WHERE collection_id = ?`
+	_, err = s.db.ExecContext(ctx, query, string(encodedOutline), string(encodedChanges), string(encodedOptions), collectionID)
 	if err != nil {
 		return fmt.Errorf("saving the history of publication %s: %w", collectionID, err)
 	}
@@ -141,12 +146,12 @@ func (s *Store) ForgetPublication(ctx context.Context, collectionID string) erro
 // because a row read here is written again: a takedown is the same row with two fields changed.
 func scannedPublication(row rowScanner) (domain.Publication, error) {
 	var (
-		held             domain.Publication
-		outline, changes string
+		held                      domain.Publication
+		outline, changes, options string
 	)
 	err := row.Scan(&held.CollectionID, &held.WorkspaceID, &held.ID, &held.Slug, &held.URL,
 		&held.Visibility, &held.Status, &held.Revision, &held.ContentHash, &held.EnvironmentName,
-		&held.CanManage, &held.PendingUnpublish, &held.UpdatedAt, &outline, &changes)
+		&held.CanManage, &held.PendingUnpublish, &held.UpdatedAt, &outline, &changes, &options)
 	if err != nil {
 		return domain.Publication{}, err
 	}
@@ -160,6 +165,7 @@ func scannedPublication(row rowScanner) (domain.Publication, error) {
 	}{
 		{outline, &held.Outline, "the outline"},
 		{changes, &held.Changes, "the changes"},
+		{options, &held.Options, "the display options"},
 	} {
 		if part.raw == "" {
 			continue

@@ -43,12 +43,13 @@ type Choice struct {
 }
 
 type PublishPreview struct {
-	Collection   string              `json:"collectionId"`
-	Publication  *domain.Publication `json:"publication,omitempty"`
-	Behind       bool                `json:"behind"`
-	Changes      []domain.PageItem   `json:"changes,omitempty"`
-	Environments []Choice            `json:"environments"`
-	Report       Report              `json:"report"`
+	Options      domain.PublicationOptions `json:"options"`
+	Collection   string                    `json:"collectionId"`
+	Publication  *domain.Publication       `json:"publication,omitempty"`
+	Behind       bool                      `json:"behind"`
+	Changes      []domain.PageItem         `json:"changes,omitempty"`
+	Environments []Choice                  `json:"environments"`
+	Report       Report                    `json:"report"`
 	// InheritedFrom names the folder whose page contains this collection, and is empty for a
 	// collection that holds a page of its own.
 	InheritedFrom string `json:"inheritedFrom,omitempty"`
@@ -127,13 +128,14 @@ func (u *UseCase) inside(
 		return nil, err
 	}
 	held := map[string]bool{}
-	eachNode(tree, func(id string) { held[PageID(pageID, id)] = true })
+	eachItem(tree, func(id string) { held[PageID(pageID, id)] = true })
 	return held, nil
 }
 
 func (u *UseCase) Preview(
 	ctx context.Context,
 	workspace, collectionID, environmentID string,
+	options *domain.PublicationOptions,
 ) (PublishPreview, error) {
 	owner, err := u.pageOf(ctx, workspace, collectionID)
 	if err != nil {
@@ -148,7 +150,7 @@ func (u *UseCase) Preview(
 	if environmentID == "" {
 		environmentID = environmentNamed(state, owner.Page.EnvironmentName)
 	}
-	snapshot, report, err := u.Build(ctx, workspace, owner.Collection, environmentID, "")
+	snapshot, report, err := u.build(ctx, workspace, owner.Collection, environmentID, "", options)
 	if err != nil {
 		return PublishPreview{}, err
 	}
@@ -158,6 +160,7 @@ func (u *UseCase) Preview(
 	}
 
 	out := PublishPreview{
+		Options:      domain.PublicationOptions{Docs: snapshot.Options.Docs, Examples: snapshot.Options.Examples},
 		Collection:   owner.Collection,
 		Environments: choices(state),
 		Report:       report,
@@ -182,12 +185,15 @@ func (u *UseCase) Publish(
 	workspace, collectionID, environmentID, visibility, locale string,
 	password string,
 	confirmed bool,
+	options *domain.PublicationOptions,
 ) (domain.Publication, error) {
 	switch visibility {
 	case domain.VisibilityPublic, domain.VisibilityUnlisted:
 	case domain.VisibilityPassword:
-		if err := passwordFits(password); err != nil {
-			return domain.Publication{}, err
+		if password != "" {
+			if err := passwordFits(password); err != nil {
+				return domain.Publication{}, err
+			}
 		}
 	default:
 		return domain.Publication{}, domain.Refuse(domain.CodeNotAllowed, domain.ErrNotAllowed,
@@ -208,9 +214,21 @@ func (u *UseCase) Publish(
 	if err != nil {
 		return domain.Publication{}, err
 	}
-	snapshot, _, err := u.Build(ctx, workspace, owner.Collection, environmentID, locale)
+	if visibility == domain.VisibilityPassword && password == "" && (!owner.Held || owner.Page.Visibility != domain.VisibilityPassword) {
+		return domain.Publication{}, passwordFits(password)
+	}
+	snapshot, _, err := u.build(ctx, workspace, owner.Collection, environmentID, locale, options)
 	if err != nil {
 		return domain.Publication{}, err
+	}
+	if !owner.Held {
+		requests := 0
+		for _, group := range snapshot.Collection.Groups {
+			requests += len(group.Endpoints)
+		}
+		snapshot.Changes = snapshotChanges(appended(nil, []domain.PageItem{{
+			Sign: signAdded, Fields: []string{"initial:" + strconv.Itoa(requests)},
+		}}, u.now(), 1))
 	}
 	packed, digest, err := Encode(snapshot)
 	if err != nil {
@@ -245,7 +263,8 @@ func (u *UseCase) Publish(
 		return domain.Publication{}, err
 	}
 	changes := storedChanges(snapshot.Changes)
-	if err := u.store.SavePublished(ctx, owner.Collection, outline, changes); err != nil {
+	chosen := domain.PublicationOptions{Docs: snapshot.Options.Docs, Examples: snapshot.Options.Examples}
+	if err := u.store.SavePublished(ctx, owner.Collection, outline, changes, chosen); err != nil {
 		return domain.Publication{}, err
 	}
 	return held, nil

@@ -1,15 +1,11 @@
 package publication
 
-// What a page says has moved at it since it last went up.
-//
-// The page is told this: it draws the entries and numbers them from its own revision. What this
-// device keeps for itself is the outline the last publish put up, and it is the only thing the next
-// publish can be compared against — nothing else here remembers what the page looked like before.
-
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sort"
+	"strconv"
 	"time"
 
 	snapshotv1 "github.com/schemo-app/proto/snapshot/v1"
@@ -24,24 +20,43 @@ const (
 	signGone    = "-"
 )
 
-// outlineOf is what a document puts up, request by request, in the order the page draws them, with
-// the fingerprint of what each one says. An id is the page's own and stays the same for as long as
-// the request is, which is what lets a rename read as one request changed rather than as two.
+// outlineOf fingerprints collection metadata, folders and requests independently.
 func outlineOf(snapshot snapshotv1.Snapshot) ([]domain.OutlineItem, error) {
 	var out []domain.OutlineItem
+	appendItem := func(id, method, name string, content any) error {
+		held, err := json.Marshal(content)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(held)
+		parts, err := partsOf(held)
+		if err != nil {
+			return err
+		}
+		out = append(out, domain.OutlineItem{
+			ID: id, Method: method, Name: name, Fingerprint: hex.EncodeToString(sum[:])[:12], Parts: parts,
+		})
+		return nil
+	}
+	collection := snapshot.Collection
+	collection.Groups = nil
+	metadata := map[string]any{"name": collection.Name, "description": collection.Description,
+		"variables": collection.Variables, "environment": snapshot.Environment, "options": snapshot.Options}
+	if err := appendItem(collection.ID, "", collection.Name, metadata); err != nil {
+		return nil, err
+	}
 	for _, group := range snapshot.Collection.Groups {
-		for _, endpoint := range group.Endpoints {
-			held, err := json.Marshal(endpoint)
-			if err != nil {
+		if group.ID != collection.ID {
+			metadata := group
+			metadata.Endpoints = nil
+			if err := appendItem(group.ID, "", group.Name, metadata); err != nil {
 				return nil, err
 			}
-			sum := sha256.Sum256(held)
-			out = append(out, domain.OutlineItem{
-				ID:          endpoint.ID,
-				Method:      endpoint.Method,
-				Name:        endpoint.Name,
-				Fingerprint: hex.EncodeToString(sum[:])[:12],
-			})
+		}
+		for _, endpoint := range group.Endpoints {
+			if err := appendItem(endpoint.ID, endpoint.Method, endpoint.Name, endpoint); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return out, nil
@@ -79,7 +94,8 @@ func moved(before, now []domain.OutlineItem) ([]domain.PageItem, bool) {
 		case !known:
 			out = append(out, domain.PageItem{Sign: signAdded, Method: item.Method, Name: item.Name})
 		case was.Fingerprint != item.Fingerprint:
-			out = append(out, domain.PageItem{Sign: signChanged, Method: item.Method, Name: item.Name})
+			fields := changedParts(was.Parts, item.Parts)
+			out = append(out, domain.PageItem{Sign: signChanged, Method: item.Method, Name: item.Name, Fields: fields})
 		}
 	}
 	for _, item := range before {
@@ -95,15 +111,14 @@ func moved(before, now []domain.OutlineItem) ([]domain.PageItem, bool) {
 	return out, cut
 }
 
-// eachNode walks a level and calls back with the id of every request it holds, the folders under it
-// included: a folder's own list is every request a reader of it would see, and not the rows of the
-// level alone.
-func eachNode(level domain.Collection, seen func(id string)) {
+// eachItem includes folders as well as their requests, so inherited changes include descriptions.
+func eachItem(level domain.Collection, seen func(id string)) {
+	seen(level.ID)
 	for _, node := range level.Items {
 		seen(node.ID)
 	}
 	for _, child := range level.Children {
-		eachNode(child, seen)
+		eachItem(child, seen)
 	}
 }
 
@@ -130,13 +145,82 @@ func appended(
 	history []domain.PageRelease,
 	items []domain.PageItem,
 	at time.Time,
+	revision int,
 ) []domain.PageRelease {
 	if len(items) == 0 {
 		return history
 	}
-	out := append([]domain.PageRelease{{At: at, Items: items}}, history...)
+	out := append([]domain.PageRelease{{At: at, Revision: revision, Items: items}}, history...)
 	if len(out) > maxReleases {
 		out = out[:maxReleases]
 	}
 	return out
+}
+
+func partsOf(content []byte) (map[string]string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(content, &fields); err != nil {
+		return nil, err
+	}
+	parts := map[string]string{}
+	add := func(key string, value []byte) {
+		sum := sha256.Sum256(value)
+		parts[key] = hex.EncodeToString(sum[:])[:12]
+	}
+	for key, value := range fields {
+		switch key {
+		case "id", "endpoints", "groups":
+			continue
+		case "parameters":
+			var parameters []snapshotv1.Parameter
+			if err := json.Unmarshal(value, &parameters); err != nil {
+				return nil, err
+			}
+			for _, parameter := range parameters {
+				encoded, err := json.Marshal(parameter)
+				if err != nil {
+					return nil, err
+				}
+				add("parameter:"+parameter.In+":"+parameter.Name, encoded)
+			}
+		case "responses":
+			var responses []snapshotv1.Response
+			if err := json.Unmarshal(value, &responses); err != nil {
+				return nil, err
+			}
+			for _, response := range responses {
+				encoded, err := json.Marshal(response)
+				if err != nil {
+					return nil, err
+				}
+				add("response:"+strconv.FormatInt(response.Status, 10)+":"+response.Name, encoded)
+			}
+		default:
+			add(key, value)
+		}
+	}
+	return parts, nil
+}
+
+func changedParts(before, after map[string]string) []string {
+	keys := map[string]bool{}
+	for key, fingerprint := range before {
+		if after[key] != fingerprint {
+			keys[key] = true
+		}
+	}
+	for key, fingerprint := range after {
+		if before[key] != fingerprint {
+			keys[key] = true
+		}
+	}
+	fields := make([]string, 0, len(keys))
+	for key := range keys {
+		fields = append(fields, key)
+	}
+	sort.Strings(fields)
+	if len(fields) == 0 {
+		return []string{"order"}
+	}
+	return fields
 }

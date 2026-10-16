@@ -2,6 +2,7 @@ package publication
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -41,7 +42,7 @@ func tiers() domain.Collection {
 func put(t *testing.T, uc *UseCase, collectionID string) {
 	t.Helper()
 	if _, err := uc.Publish(context.Background(), "space-1", collectionID, "env-1",
-		domain.VisibilityUnlisted, "en", "", true); err != nil {
+		domain.VisibilityUnlisted, "en", "", true, nil); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 }
@@ -91,8 +92,8 @@ func TestAFolderIsToldOfItsOwnRequestsAlone(t *testing.T) {
 		t.Fatalf("Changes: %v", err)
 	}
 
-	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List every order"}
-	if len(change.Changes) != 1 || change.Changes[0] != want {
+	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List every order", Fields: []string{"name"}}
+	if len(change.Changes) != 1 || !reflect.DeepEqual(change.Changes[0], want) {
 		t.Errorf("changes = %+v, want the folder's own request and not the page's", change.Changes)
 	}
 }
@@ -156,7 +157,7 @@ func TestAPublishFromAFolderCarriesThePageThatHoldsIt(t *testing.T) {
 	server.sent = nil
 
 	held, err := uc.Publish(ctx, "space-1", "folder-2", "env-1", domain.VisibilityUnlisted,
-		"en", "", true)
+		"en", "", true, nil)
 	if err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -192,7 +193,7 @@ func TestAFoldersPopoverIsThePagesWithTheFoldersChanges(t *testing.T) {
 	moved.Children[0].Items[0].Name = "List every order"
 	uc.collections = fakeCollections{tree: moved}
 
-	folder, err := uc.Preview(ctx, "space-1", "folder-1", "env-1")
+	folder, err := uc.Preview(ctx, "space-1", "folder-1", "env-1", nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -202,12 +203,12 @@ func TestAFoldersPopoverIsThePagesWithTheFoldersChanges(t *testing.T) {
 	if folder.Publication == nil || !folder.Behind {
 		t.Errorf("preview = %+v, want the page that went up and is behind", folder)
 	}
-	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List every order"}
-	if len(folder.Changes) != 1 || folder.Changes[0] != want {
+	want := domain.PageItem{Sign: signChanged, Method: "GET", Name: "List every order", Fields: []string{"name"}}
+	if len(folder.Changes) != 1 || !reflect.DeepEqual(folder.Changes[0], want) {
 		t.Errorf("changes = %+v, want the folder's own request", folder.Changes)
 	}
 
-	page, err := uc.Preview(ctx, "space-1", "collection-1", "env-1")
+	page, err := uc.Preview(ctx, "space-1", "collection-1", "env-1", nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}

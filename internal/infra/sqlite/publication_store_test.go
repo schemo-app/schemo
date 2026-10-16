@@ -54,6 +54,30 @@ func TestAPublicationRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPublicationOptionsSurviveServerRefresh(t *testing.T) {
+	store := newMigratedStore(t)
+	ctx := context.Background()
+	if err := store.SavePublication(ctx, page("col-1", ws)); err != nil {
+		t.Fatal(err)
+	}
+	options := domain.PublicationOptions{Docs: true, Examples: false}
+	if err := store.SavePublished(ctx, "col-1", nil, nil, options); err != nil {
+		t.Fatal(err)
+	}
+	refreshed := page("col-1", ws)
+	refreshed.Revision++
+	if err := store.SavePublication(ctx, refreshed); err != nil {
+		t.Fatal(err)
+	}
+	held, known, err := store.Publication(ctx, "col-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !known || held.Options == nil || *held.Options != options || held.Revision != refreshed.Revision {
+		t.Fatalf("publication after refresh = %+v, want revision %d and options %+v", held, refreshed.Revision, options)
+	}
+}
+
 // A collection nobody published answers nothing rather than an error: the popover asks about it the
 // moment it opens, and a question nobody has answered is not a failure.
 func TestACollectionNobodyPublishedIsAnsweredAsNothing(t *testing.T) {

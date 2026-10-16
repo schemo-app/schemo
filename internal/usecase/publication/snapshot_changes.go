@@ -18,9 +18,9 @@ func snapshotChanges(releases []domain.PageRelease) []snapshotv1.Release {
 			items = make([]snapshotv1.Item, len(release.Items))
 		}
 		for at, item := range release.Items {
-			items[at] = snapshotv1.Item{Sign: item.Sign, Method: item.Method, Name: item.Name}
+			items[at] = snapshotv1.Item{Sign: item.Sign, Method: item.Method, Name: item.Name, Fields: item.Fields}
 		}
-		out[index] = snapshotv1.Release{At: release.At, Items: items}
+		out[index] = snapshotv1.Release{At: release.At, Items: items, Revision: int64(release.Revision)}
 	}
 	return out
 }
@@ -37,9 +37,9 @@ func storedChanges(releases []snapshotv1.Release) []domain.PageRelease {
 			items = make([]domain.PageItem, len(release.Items))
 		}
 		for at, item := range release.Items {
-			items[at] = domain.PageItem{Sign: item.Sign, Method: item.Method, Name: item.Name}
+			items[at] = domain.PageItem{Sign: item.Sign, Method: item.Method, Name: item.Name, Fields: item.Fields}
 		}
-		out[index] = domain.PageRelease{At: release.At, Items: items}
+		out[index] = domain.PageRelease{At: release.At, Items: items, Revision: int(release.Revision)}
 	}
 	return out
 }

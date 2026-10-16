@@ -70,6 +70,14 @@ func (u *UseCase) Build(
 	ctx context.Context,
 	workspace, collectionID, environmentID, locale string,
 ) (snapshotv1.Snapshot, Report, error) {
+	return u.build(ctx, workspace, collectionID, environmentID, locale, nil)
+}
+
+func (u *UseCase) build(
+	ctx context.Context,
+	workspace, collectionID, environmentID, locale string,
+	options *domain.PublicationOptions,
+) (snapshotv1.Snapshot, Report, error) {
 	tree, err := u.collections.FullOf(ctx, workspace, collectionID)
 	if err != nil {
 		return snapshotv1.Snapshot{}, Report{}, err
@@ -112,8 +120,7 @@ func (u *UseCase) Build(
 		return snapshotv1.Snapshot{}, Report{}, err
 	}
 
-	// The description is written once and read in two places: it is the collection's own line and the
-	// lead of its page, and a page whose lead differed from it would be a page about another thing.
+	// Mask the complete document before deriving the public sections from it.
 	description := walk.cut(title, tree.Description, maxTextRunes)
 	addresses, err := listed(state, environment, hidden)
 	if err != nil {
@@ -134,19 +141,24 @@ func (u *UseCase) Build(
 		},
 		Environment:  environmentOf(environment, hidden),
 		Environments: addresses,
-		Prose: snapshotv1.Prose{
-			Lead:   description,
-			Auth:   walk.cut(title, tree.Docs.Authorization, maxTextRunes),
-			Errors: walk.cut(title, tree.Docs.Errors, maxTextRunes),
-			Limits: walk.cut(title, tree.Docs.Limits, maxTextRunes),
-		},
+		Prose:        descriptionProse(description),
 	}
 
 	// What has moved at the page since it last went up travels with the document, so the digest covers
 	// it: a page whose changelog grew is a page that moved, and a device can say so while offline.
-	if held, published, err := u.store.Publication(ctx, collectionID); err != nil {
+	held, published, err := u.store.Publication(ctx, collectionID)
+	if err != nil {
 		return snapshotv1.Snapshot{}, Report{}, err
-	} else if published {
+	}
+	chosen := held.PageOptions()
+	if options != nil {
+		chosen = *options
+	}
+	applyOptions(&snapshot, chosen)
+	if !chosen.Examples {
+		walk.report.Examples = 0
+	}
+	if published {
 		items, cut, err := pending(held, snapshot)
 		if err != nil {
 			return snapshotv1.Snapshot{}, Report{}, err
@@ -155,7 +167,7 @@ func (u *UseCase) Build(
 			walk.note(domain.CodeTooManyItems, shown,
 				domain.Args{"what": "changes", "max": strconv.Itoa(maxReleaseItems)})
 		}
-		snapshot.Changes = snapshotChanges(appended(held.Changes, items, u.now()))
+		snapshot.Changes = snapshotChanges(appended(held.Changes, items, u.now(), held.Revision+1))
 	}
 
 	packed, _, err := Encode(snapshot)
@@ -195,6 +207,9 @@ func (p *page) groups(level domain.Collection, depth int) ([]snapshotv1.Group, e
 	}
 
 	group := snapshotv1.Group{ID: PageID(p.collection, level.ID), Name: shown}
+	if depth > 0 {
+		group.Description = p.cut(shown, level.Description, maxTextRunes)
+	}
 	for _, node := range level.Items {
 		endpoint, err := p.endpoint(node)
 		if err != nil {
@@ -204,7 +219,7 @@ func (p *page) groups(level domain.Collection, depth int) ([]snapshotv1.Group, e
 	}
 
 	var out []snapshotv1.Group
-	if len(group.Endpoints) > 0 {
+	if len(group.Endpoints) > 0 || group.Description != "" {
 		out = append(out, group)
 	}
 	for _, child := range level.Children {

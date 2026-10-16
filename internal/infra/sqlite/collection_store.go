@@ -17,7 +17,7 @@ import (
 func (s *Store) Collections(ctx context.Context, workspaceID string) ([]domain.Collection, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, description, position, created_at, updated_at, auth_json, ifnull(parent_id, ''),
-		        variables_json, docs_authorization, docs_errors, docs_limits
+		        variables_json
 		   FROM collections WHERE workspace_id = ? AND deleted_at IS NULL
 		  ORDER BY position, created_at`, workspaceID)
 	if err != nil {
@@ -33,8 +33,7 @@ func (s *Store) Collections(ctx context.Context, workspaceID string) ([]domain.C
 			variables sql.NullString
 		)
 		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Position, &c.CreatedAt, &c.UpdatedAt,
-			&auth, &c.ParentID, &variables, &c.Docs.Authorization, &c.Docs.Errors,
-			&c.Docs.Limits); err != nil {
+			&auth, &c.ParentID, &variables); err != nil {
 			return nil, fmt.Errorf("listing collections: %w", err)
 		}
 		if auth.Valid {
@@ -334,23 +333,6 @@ func (s *Store) SaveCollection(ctx context.Context, workspaceID string, c domain
 			return fmt.Errorf("saving collection %s: %w", c.ID, err)
 		}
 		return enqueue(ctx, tx, workspaceID, entityCollection, c.ID, action)
-	})
-}
-
-// SaveDocs writes the prose a collection carries for the page it is published as. It is an edit of
-// its own rather than a field of SaveCollection, which is handed a row read from the shallow tree
-// and would write three empty columns over prose it never read. It is not enqueued for sync.
-func (s *Store) SaveDocs(ctx context.Context, id string, docs domain.Docs) error {
-	now := time.Now().UnixMilli()
-	return s.inTx(ctx, "saving collection docs "+id, func(tx *writeTx) error {
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE collections SET docs_authorization = ?, docs_errors = ?, docs_limits = ?,
-			        updated_at = ?
-			  WHERE id = ? AND deleted_at IS NULL`,
-			docs.Authorization, docs.Errors, docs.Limits, now, id); err != nil {
-			return fmt.Errorf("saving collection docs %s: %w", id, err)
-		}
-		return nil
 	})
 }
 

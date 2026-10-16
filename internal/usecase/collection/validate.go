@@ -14,10 +14,8 @@ import (
 // the same thing wherever it is typed.
 const maxNameLength = 120
 
-// maxDescriptionLength is what still reads as a description and not as a document pasted into a
-// header. It is generous: a description is markdown now, and a page about what a collection is for
-// is a page, not a paragraph.
-const maxDescriptionLength = 2000
+// maxDescriptionLength accommodates the complete Markdown document, including public sections.
+const maxDescriptionLength = 8000
 
 func validName(name string) (string, error) {
 	return domain.CleanName(name, maxNameLength)
@@ -33,24 +31,6 @@ func validDescription(description string) (string, error) {
 			domain.Args{"max": strconv.Itoa(maxDescriptionLength)})
 	}
 	return description, nil
-}
-
-// validDocs trims the prose a collection carries and holds each note to the same ceiling a
-// description has: all four are written in the same editor and read as the same kind of page. An
-// empty note is an answer — the page draws the three headings it has something under.
-func validDocs(docs domain.Docs) (domain.Docs, error) {
-	held := domain.Docs{
-		Authorization: strings.TrimSpace(docs.Authorization),
-		Errors:        strings.TrimSpace(docs.Errors),
-		Limits:        strings.TrimSpace(docs.Limits),
-	}
-	for _, note := range []string{held.Authorization, held.Errors, held.Limits} {
-		if len([]rune(note)) > maxDescriptionLength {
-			return domain.Docs{}, domain.Refuse(domain.CodeDescriptionTooLong, domain.ErrNotAllowed,
-				domain.Args{"max": strconv.Itoa(maxDescriptionLength)})
-		}
-	}
-	return held, nil
 }
 
 // clip keeps a name inside the ceiling. Duplicating at the limit is a thing a user does, and

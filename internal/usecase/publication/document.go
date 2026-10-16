@@ -81,19 +81,12 @@ func AsDocument(packed []byte) (domain.Document, error) {
 	return document, nil
 }
 
-// readCollection is the collection a page documents. The page names the level it stands on after
-// the collection itself, which is what tells those requests apart from the ones of a folder that
-// happens to be called the same: the first heading by that name is the collection's own.
+// Group IDs distinguish the collection's own requests from equally named child folders.
 func readCollection(snapshot snapshotv1.Snapshot) domain.Collection {
 	from := snapshot.Collection
 	out := domain.Collection{
 		Name:        from.Name,
 		Description: from.Description,
-		Docs: domain.Docs{
-			Authorization: snapshot.Prose.Auth,
-			Errors:        snapshot.Prose.Errors,
-			Limits:        snapshot.Prose.Limits,
-		},
 	}
 	for index, variable := range from.Variables {
 		out.Variables = append(out.Variables, domain.Variable{
@@ -110,7 +103,7 @@ func readCollection(snapshot snapshotv1.Snapshot) domain.Collection {
 	at := int64(0)
 	own := true
 	for _, group := range from.Groups {
-		if own && group.Name == from.Name {
+		if own && group.ID == from.ID {
 			own = false
 			for _, endpoint := range group.Endpoints {
 				at++
@@ -128,7 +121,7 @@ func readCollection(snapshot snapshotv1.Snapshot) domain.Collection {
 // for where it sat on the page, and it comes back as a folder of that name rather than as the
 // nesting the page had no room to draw.
 func readFolder(group snapshotv1.Group, position int64) domain.Collection {
-	out := domain.Collection{Name: group.Name, Position: position}
+	out := domain.Collection{Name: group.Name, Description: group.Description, Position: position}
 	for index, endpoint := range group.Endpoints {
 		out.Items = append(out.Items, readEndpoint(endpoint, int64(index+1)))
 	}

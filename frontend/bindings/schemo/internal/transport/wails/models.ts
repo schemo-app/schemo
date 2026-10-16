@@ -41,6 +41,7 @@ export interface NodeEditor {
  * seven strings in a row is one transposition away from publishing the wrong environment.
  */
 export interface PublishChoice {
+    "options": domain$0.PublicationOptions | null;
     "workspace": string;
     "collection": string;
     "environmentId": string;

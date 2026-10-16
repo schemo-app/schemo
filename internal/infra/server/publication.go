@@ -43,6 +43,37 @@ func (c *Client) Publish(
 	return publicationOf(answer.GetPublication()), nil
 }
 
+func (c *Client) Details(ctx context.Context, caller domain.Caller, id string) (domain.PublicationDetails, error) {
+	answer, err := call(c, ctx, caller, func(ctx context.Context, conn *grpc.ClientConn) (*publication.GetPublicationDetailsResponse, error) {
+		return publication.NewPublicationServiceClient(conn).GetPublicationDetails(ctx,
+			publication.GetPublicationDetailsRequest_builder{PublicationId: id}.Build())
+	})
+	if err != nil {
+		return domain.PublicationDetails{}, err
+	}
+	details := domain.PublicationDetails{Views: answer.GetViews(), Imports: answer.GetImports()}
+	for _, version := range answer.GetVersions() {
+		item := domain.PublicationVersion{Revision: int(version.GetRevision()), EnvironmentName: version.GetEnvironmentName(),
+			Requests: int(version.GetRequestCount()), RestoredFrom: int(version.GetRestoredFrom())}
+		if at := version.GetPublishedAt(); at != nil {
+			item.PublishedAt = at.AsTime().UnixMilli()
+		}
+		details.Versions = append(details.Versions, item)
+	}
+	return details, nil
+}
+
+func (c *Client) Restore(ctx context.Context, caller domain.Caller, id string, revision int) (domain.Publication, []byte, error) {
+	answer, err := call(c, ctx, caller, func(ctx context.Context, conn *grpc.ClientConn) (*publication.RestorePublicationResponse, error) {
+		return publication.NewPublicationServiceClient(conn).RestorePublication(ctx,
+			publication.RestorePublicationRequest_builder{PublicationId: id, Revision: int64(revision)}.Build())
+	})
+	if err != nil {
+		return domain.Publication{}, nil, err
+	}
+	return publicationOf(answer.GetPublication()), answer.GetDocument(), nil
+}
+
 // Unpublish takes a page down. The address stays taken, which is the server's rule and a good one:
 // a link that was handed out once must never come to mean something else.
 func (c *Client) Unpublish(

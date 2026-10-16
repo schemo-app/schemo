@@ -15,7 +15,7 @@ type Store interface {
 	// and what has moved at it since. It is not part of SavePublication, which writes the server's
 	// answers over the row and is told about neither.
 	SavePublished(ctx context.Context, collectionID string, outline []domain.OutlineItem,
-		changes []domain.PageRelease) error
+		changes []domain.PageRelease, options domain.PublicationOptions) error
 	ForgetPublication(ctx context.Context, collectionID string) error
 	AwaitingUnpublish(ctx context.Context) ([]domain.Publication, error)
 }
@@ -32,6 +32,8 @@ type Environments interface {
 }
 
 type Server interface {
+	Details(ctx context.Context, caller domain.Caller, publicationID string) (domain.PublicationDetails, error)
+	Restore(ctx context.Context, caller domain.Caller, publicationID string, revision int) (domain.Publication, []byte, error)
 	Publish(
 		ctx context.Context,
 		caller domain.Caller,

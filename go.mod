@@ -11,6 +11,7 @@ require (
 	github.com/icholy/digest v1.2.0
 	github.com/jinzhu/inflection v1.0.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.28
+	github.com/yuin/goldmark v1.7.16
 	github.com/zalando/go-keyring v0.2.8
 	go.uber.org/fx v1.24.0
 	go.yaml.in/yaml/v3 v3.0.4
@@ -43,7 +44,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/schemo-app/proto v0.1.1
+	github.com/schemo-app/proto v0.1.4
 	go.uber.org/dig v1.19.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect

@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import Icon from '../ui/Icon.vue'
+import PublicationFields from './PublicationFields.vue'
+import PublicationOptions from './PublicationOptions.vue'
+import PublicationPassword from './PublicationPassword.vue'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu'
+import type { PublicationDetails } from '../../../bindings/schemo/internal/domain'
+import { PublicationsService } from '../../../bindings/schemo/internal/transport/wails'
 import { hostOf, usePublicationsStore } from '../../stores/publications'
 import { useCollectionsStore } from '../../stores/collections'
 import { useTabsStore } from '../../stores/tabs'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { callOrToast } from '../../stores/calls'
+import { useWorkspaceSnapshot } from '../../composables/workspace/useWorkspaceSnapshot'
 import { useToast } from '../../composables/useToast'
 import { copyToClipboard } from '../../lib/clipboard'
 import { findCollection } from '../../lib/collectionTree'
-import { changeNotes } from '../../lib/publications'
+import { changeNotes, passwordFits } from '../../lib/publications'
+import { PASSWORD } from '../../lib/layout'
 import { methodInkClass } from '../../lib/format'
 import { formatAgo, useMessages } from '../../i18n'
 
@@ -17,8 +27,14 @@ const store = usePublicationsStore()
 const collections = useCollectionsStore()
 const tabs = useTabsStore()
 const toast = useToast()
+const workspaces = useWorkspacesStore()
+const details = useWorkspaceSnapshot<PublicationDetails | null>(null)
+const restoring = ref(0)
 
-const selected = ref('')
+const selected = computed({
+  get: () => store.selectedCollection,
+  set: (id: string) => { store.selectedCollection = id },
+})
 
 onMounted(async () => {
   await store.load()
@@ -26,7 +42,7 @@ onMounted(async () => {
   await store.markAll(store.pages.map((page) => page.collectionId))
 })
 
-const live = computed(() => store.pages.filter((page) => page.status === 'active'))
+const live = computed(() => store.pages.filter((page) => page.status === 'active' && !page.pendingUnpublish))
 
 const current = computed(() => {
   const list = live.value
@@ -52,22 +68,47 @@ const rail = computed(() =>
 )
 
 const mark = computed(() => (current.value ? store.markOf(current.value.collectionId) : null))
-const behind = computed(() => mark.value?.behind === true)
-const notes = computed(() => (behind.value ? changeNotes(mark.value?.changes ?? []) : []))
+const behind = computed(() => store.collection === current.value?.collectionId ? store.behind : mark.value?.behind === true)
+const notes = computed(() => behind.value ? changeNotes(store.changes) : [])
+const editable = computed(() => !!current.value?.canManage && workspaces.canWrite)
+const disabled = computed(() => !editable.value || store.busy || store.reading || restoring.value !== 0)
+const passwordOk = computed(() => store.visibility !== 'password' || passwordFits(store.password) || (!store.password && current.value?.visibility === 'password'))
+const pending = computed(() => behind.value || store.visibility !== current.value?.visibility || !!store.password)
+const environmentLabel = computed(() => store.environments.find(choice => choice.id === store.environment)?.name ?? current.value?.environmentName ?? t('publications.envNone'))
+
+watch([() => current.value?.collectionId, () => current.value?.revision], async () => {
+  details.reset()
+  const page = current.value
+  if (!page) { store.closeShare(); return }
+  store.edit(page.collectionId)
+  await readDetails()
+}, { immediate: true })
+onUnmounted(() => store.closeShare())
+
+async function readDetails() {
+  const page = current.value
+  if (page) await callOrToast(details.take(PublicationsService.Details(page.collectionId)), 'publications.readFailed')
+}
+
+async function restore(revision: number) {
+  const page = current.value
+  if (!page || disabled.value) return
+  restoring.value = revision
+  const signal = details.signal()
+  try {
+    const restored = await callOrToast(PublicationsService.Restore(workspaces.activeId, page.collectionId, revision).cancelOn(signal), 'publications.restoreFailed')
+    if (!restored || signal.aborted) return
+    await store.markAll(Object.keys(store.marks))
+    if (!signal.aborted) await store.load()
+  } finally { restoring.value = 0 }
+}
 
 const name = computed(() => {
   const page = current.value
   if (!page) return ''
   return findCollection(collections.tree, page.collectionId)?.name || page.slug || ''
 })
-
-const meta = computed(() => {
-  const page = current.value
-  if (!page) return ''
-  return [page.environmentName ?? '', page.updatedAt ? formatAgo(page.updatedAt) : '']
-    .filter(Boolean)
-    .join(' · ')
-})
+const address = computed(() => current.value?.url?.replace(/^https?:\/\//, '') ?? '')
 
 function accessOf(visibility: string | undefined): string {
   if (visibility === 'public') return t('publications.visPublic')
@@ -95,8 +136,8 @@ function openCollection() {
 }
 
 async function update() {
-  const page = current.value
-  if (page && !store.busy) await store.updatePage(page.collectionId)
+  if (disabled.value || !passwordOk.value) return
+  if (await store.publish(true)) await readDetails()
 }
 </script>
 
@@ -133,10 +174,10 @@ async function update() {
         >
           <span class="rail-dot" :class="{ behind: row.behind }"></span>
           <span class="rail-text">
-            <span class="rail-name cap-line">
+            <span class="rail-name">
               {{ findCollection(collections.tree, row.page.collectionId)?.name || row.page.slug }}
             </span>
-            <span class="rail-meta cap-line">
+            <span class="rail-meta">
               {{ accessOf(row.page.visibility) }} · {{ revisionOf(row.page.revision) }}
             </span>
           </span>
@@ -151,19 +192,38 @@ async function update() {
           <div class="pane-top">
             <div class="pane-head">
               <div class="pane-title-row">
-                <span class="pane-name cap-line">{{ name }}</span>
-                <span class="pane-gap"></span>
-                <button type="button" class="link" @click="openPage">
-                  {{ t('publications.openPage') }}
-                  <Icon name="ArrowUpRight" :size="11" :stroke-width="2.1" />
-                </button>
+                <span class="pane-name">{{ name }}</span>
+                <div class="pane-actions">
+                  <button v-if="pending && editable" type="button" class="update" :disabled="disabled || !passwordOk" @click="update">
+                    <Icon name="ArrowUp" :size="14" :stroke-width="2.2" />
+                    {{ store.busy ? t('publications.updating') : behind ? t('publications.updateTo', { n: (current.revision ?? 0) + 1 }) : t('common.save') }}
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <button type="button" class="more-button" :title="t('publications.actions')" :aria-label="t('publications.actions')"><Icon name="Ellipsis" :size="16" /></button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent class="publication-actions-menu" align="end" :side-offset="6">
+                      <DropdownMenuItem @select="openPage"><Icon name="ExternalLink" :size="15" />{{ t('publications.openPage') }}</DropdownMenuItem>
+                      <DropdownMenuItem @select="openCollection"><Icon name="Folder" :size="15" />{{ t('publications.openCollection') }}</DropdownMenuItem>
+                      <template v-if="editable">
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem class="bad" @select="store.askUnpublish(current.collectionId)"><Icon name="Link2Off" :size="15" />{{ t('publications.unpublish') }}</DropdownMenuItem>
+                      </template>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-              <span class="pane-meta cap-line">{{ meta }}</span>
+              <span v-if="details.state.value" class="pane-meta" :title="t('publications.statisticsHint')">
+                {{ t('publications.statistics', {
+                  views: t('publications.views', details.state.value.views),
+                  imports: t('publications.imports', details.state.value.imports),
+                }) }}
+              </span>
             </div>
 
             <div class="pane-url">
               <div class="url-text">
-                <span class="url-address">{{ current.url }}</span>
+                <span class="url-address" :title="current.url">{{ address }}</span>
                 <span
                   v-if="current.visibility === 'password'"
                   class="url-lock"
@@ -171,32 +231,17 @@ async function update() {
                 >
                   <Icon name="Lock" :size="12" :stroke-width="1.9" />
                 </span>
+                <button type="button" class="copy-btn" :title="t('publications.copyLink')" :aria-label="t('publications.copyLink')" @click="copy"><Icon name="Copy" :size="14" /></button>
               </div>
-              <button type="button" class="copy-btn" @click="copy">
-                {{ t('publications.copy') }}
-              </button>
             </div>
           </div>
 
           <div class="pane-changes">
             <div class="changes-head">
               <span class="changes-title">{{ t('publications.changes') }}</span>
-              <span class="pane-gap"></span>
-              <button
-                v-if="behind"
-                type="button"
-                class="update"
-                :disabled="store.busy"
-                @click="update"
-              >
-                {{
-                  store.busy
-                    ? t('publications.updating')
-                    : t('publications.updateTo', { n: (current.revision ?? 0) + 1 })
-                }}
-              </button>
+              <span v-if="notes.length" class="changes-count">{{ t('publications.unpublishedChanges', { n: notes.length }) }}</span>
             </div>
-            <div v-if="!behind" class="changes-none">
+            <div v-if="!pending" class="changes-none">
               <Icon name="Check" :size="13" :stroke-width="2.6" class="mark-ok" />
               <span>{{ t('publications.noChanges') }}</span>
             </div>
@@ -210,23 +255,42 @@ async function update() {
                 {{ row.method }}
               </span>
               <span class="chg-name">{{ row.name }}</span>
-              <span class="chg-what">{{ row.what }}</span>
+              <span class="chg-what" :title="row.what">{{ row.what }}</span>
             </div>
           </div>
 
-          <div class="pane-foot">
-            <button type="button" class="link" @click="openCollection">
-              {{ t('publications.openCollection') }}
-            </button>
-            <button
-              v-if="current.canManage"
-              type="button"
-              class="link bad"
-              @click="store.askUnpublish(current.collectionId)"
-            >
-              {{ t('publications.unpublish') }}
-            </button>
-          </div>
+          <section class="pane-settings">
+            <div class="changes-head"><span class="changes-title">{{ t('publications.settings') }}</span></div>
+            <PublicationFields :visibility="store.visibility" :environment="store.environment"
+              :environment-label="environmentLabel" :environments="store.environments" :disabled="disabled"
+              @visibility="store.visibility = $event" @environment="store.choose" />
+            <PublicationPassword v-if="store.visibility === 'password'" v-model="store.password" class="password-row" save :disabled="disabled"
+              :placeholder="t('publications.newPassword')" :save-disabled="!passwordFits(store.password)" @save="update" />
+            <span v-if="store.password && !passwordOk" class="password-note">{{ t('publications.passwordLength', { min: PASSWORD.min, max: PASSWORD.max }) }}</span>
+            <PublicationOptions v-if="store.options" :options="store.options" :disabled="disabled" @choose="store.chooseOption" />
+          </section>
+
+          <section class="pane-versions">
+            <div class="changes-head"><span class="changes-title" :title="t('publications.versionsHint')">{{ t('publications.versions') }}</span></div>
+            <span v-if="details.loading.value" class="spinner"></span>
+            <div v-for="version in details.state.value?.versions ?? []" :key="version.revision" class="version-row">
+              <span class="version-number">v{{ version.revision }}</span>
+              <span class="version-summary">
+                {{ formatAgo(version.publishedAt) }}
+                <span class="version-note">
+                  ·
+                  <template v-if="version.restoredFrom">{{ t('publications.restoredFrom', { n: version.restoredFrom }) }}</template>
+                  <template v-else>{{ t('publications.versionRequests', { n: version.requests }) }}<template v-if="version.environmentName"> · {{ version.environmentName }}</template></template>
+                </span>
+              </span>
+              <span v-if="version.revision === current.revision" class="version-current">{{ t('publications.onPage') }}</span>
+              <button v-else-if="editable" type="button" class="link" :disabled="disabled" @click="restore(version.revision)">
+                {{ t(restoring === version.revision ? 'publications.restoring' : 'publications.restore') }}
+              </button>
+            </div>
+            <button v-if="!details.state.value && !details.loading.value" type="button" class="link" @click="readDetails">{{ t('publications.retryDetails') }}</button>
+          </section>
+
         </div>
       </div>
     </div>
@@ -238,6 +302,7 @@ async function update() {
 
 .pubs-page {
   @apply flex-1 min-h-0 flex flex-col;
+  line-height: normal;
 }
 
 .pubs-head {
@@ -246,7 +311,7 @@ async function update() {
   padding: 0 1.5rem;
   gap: 0.875rem;
   border-bottom: 1px solid var(--border);
-  box-sizing: content-box;
+  box-sizing: border-box;
 }
 
 .pubs-title {
@@ -313,7 +378,7 @@ async function update() {
 .rail-row {
   @apply flex items-center flex-none cursor-default text-left;
   gap: 0.625rem;
-  padding: 0.85rem 0.65rem;
+  padding: 0.5625rem 0.625rem;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
@@ -343,15 +408,15 @@ async function update() {
 
 .rail-text {
   @apply flex flex-col flex-1 min-w-0;
-  gap: 0.6rem;
+  gap: 0.125rem;
 }
 
 .rail-name {
-  @apply font-medium;
+  @apply truncate font-medium;
 }
 
 .rail-meta {
-  @apply text-text-tertiary;
+  @apply truncate text-text-tertiary;
   font-size: var(--text-12);
 }
 
@@ -374,39 +439,36 @@ async function update() {
 
 .pane-inner {
   @apply flex flex-col;
-  min-width: 30rem;
-  gap: 1.625rem;
+  max-width: 61.25rem;
+  gap: 1.75rem;
 }
 
 .pane-top {
   @apply flex flex-col;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .pane-head {
   @apply flex flex-col;
-  gap: 0.6rem;
+  gap: 0.25rem;
 }
 
 .pane-title-row {
-  @apply flex items-center;
-  gap: 0.625rem;
+  @apply flex items-center flex-wrap;
+  gap: 0.5rem 0.625rem;
 }
 
 .pane-name {
-  @apply min-w-0;
+  @apply truncate;
+  flex: 1 1 8.75rem;
+  min-width: 7.5rem;
   font-size: var(--text-20);
   font-weight: 600;
   letter-spacing: -0.015em;
 }
 
-.pane-gap {
-  @apply flex-1;
-}
-
 .pane-meta {
   @apply text-text-tertiary;
-  font-size: var(--text-12-5);
 }
 
 .link {
@@ -414,10 +476,6 @@ async function update() {
   gap: 0.3125rem;
   font-family: inherit;
   font-size: var(--text-12-5);
-}
-
-.link.bad {
-  color: var(--red);
 }
 
 .pane-url {
@@ -438,7 +496,7 @@ async function update() {
 }
 
 .url-address {
-  @apply min-w-0 truncate;
+  @apply flex-1 min-w-0 truncate;
 }
 
 .url-lock {
@@ -446,22 +504,20 @@ async function update() {
 }
 
 .copy-btn {
-  @apply flex-none cursor-pointer border-0 font-medium;
-  height: 2.125rem;
-  padding: 0 0.875rem;
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-family: inherit;
-  font-size: var(--text-13);
+  @apply flex items-center justify-center flex-none border-0 bg-transparent text-text-secondary cursor-pointer;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin-right: -0.375rem;
+  padding: 0;
+  border-radius: 0.375rem;
 }
 
 .copy-btn:hover {
-  filter: brightness(1.06);
+  background: var(--bg-hover);
 }
 
 .pane-changes {
-  @apply flex flex-col;
+  @apply flex flex-col min-w-0;
 }
 
 .changes-head {
@@ -477,14 +533,16 @@ async function update() {
 }
 
 .update {
-  @apply flex-none cursor-pointer border-0 font-medium;
-  height: 1.625rem;
-  padding: 0 0.6875rem;
-  border-radius: 0.4375rem;
+  @apply flex items-center flex-none cursor-pointer border-0;
+  height: 1.875rem;
+  padding: 0 0.875rem 0 0.6875rem;
+  gap: 0.4375rem;
+  border-radius: 0.5rem;
   background: var(--accent);
   color: var(--accent-text);
-  font-family: inherit;
-  font-size: var(--text-12-5);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .update:hover {
@@ -506,7 +564,7 @@ async function update() {
 
 .chg-row {
   @apply flex items-center;
-  height: 2.125rem;
+  min-height: 2.125rem;
   gap: 0.625rem;
   border-top: 1px solid var(--line2);
   font-size: var(--text-13);
@@ -555,6 +613,7 @@ async function update() {
   @apply min-w-0 truncate text-text-tertiary;
   flex: 0 1 auto;
   font-size: var(--text-12-5);
+  overflow-wrap: anywhere;
 }
 
 .mark-ok {
@@ -565,9 +624,106 @@ async function update() {
   @apply flex-none text-orange;
 }
 
-.pane-foot {
+.pane-settings {
+  @apply min-w-0;
+  font-size: var(--text-13);
+}
+
+.pane-settings :deep(.publication-field) {
+  height: 2.5rem;
+  border-top: 1px solid var(--line2);
+}
+
+.password-row {
   @apply flex;
-  gap: 1.125rem;
-  padding-top: 0.125rem;
+  gap: 0.375rem;
+  padding: 0 0 0.5rem;
+}
+
+.password-note {
+  @apply text-red text-12;
+}
+
+button:disabled {
+  @apply cursor-default opacity-45;
+}
+
+.version-row {
+  @apply flex items-center;
+  min-height: 2.375rem;
+  gap: 0.75rem;
+  border-top: 1px solid var(--line2);
+  font-size: var(--text-12-5);
+}
+
+.version-number {
+  @apply flex-none font-semibold text-text-secondary;
+  width: 1.625rem;
+  font-family: var(--mono);
+  font-size: var(--text-12);
+}
+
+.version-summary {
+  @apply flex-1 min-w-0 truncate;
+}
+
+.version-note {
+  @apply text-text-tertiary;
+}
+
+.version-current {
+  @apply text-text-tertiary text-12-5;
+}
+
+.pane-actions {
+  @apply flex flex-none;
+  gap: 0.5rem;
+}
+
+.more-button {
+  @apply flex items-center justify-center flex-none border-0 text-text cursor-pointer;
+  width: 1.875rem;
+  height: 1.875rem;
+  padding: 0;
+  border-radius: 0.5rem;
+  background: var(--chip);
+}
+
+.more-button:hover {
+  background: var(--bg-hover);
+}
+
+.changes-count {
+  @apply text-orange text-11-5;
+  margin-left: 0.5rem;
+}
+
+:global(.menu.publication-actions-menu) {
+  width: 196px;
+  min-width: 176px;
+  padding: 0.3125rem;
+  border-radius: 0.625rem;
+}
+
+:global(.publication-actions-menu .menu-item) {
+  height: 2rem;
+  padding: 0 0.625rem;
+  gap: 0.625rem;
+  border-radius: 0.4375rem;
+}
+
+:global(.publication-actions-menu .menu-item svg) {
+  color: var(--text-secondary);
+  flex: none;
+}
+
+:global(.publication-actions-menu .menu-item.bad),
+:global(.publication-actions-menu .menu-item.bad svg) {
+  color: var(--red);
+}
+
+:global(.publication-actions-menu .menu-item.bad:hover),
+:global(.publication-actions-menu .menu-item.bad[data-highlighted]) {
+  background: var(--red-soft);
 }
 </style>

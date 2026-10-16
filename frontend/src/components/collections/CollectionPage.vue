@@ -4,7 +4,7 @@ import Icon from '../ui/Icon.vue'
 import TabText from '../ui/TabText.vue'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import CollectionAuth from './CollectionAuth.vue'
-import CollectionDocs from './CollectionDocs.vue'
+import DescriptionEditor from './DescriptionEditor.vue'
 import CollectionOverview from './CollectionOverview.vue'
 import CollectionRuns from './CollectionRuns.vue'
 import CollectionScripts from './CollectionScripts.vue'
@@ -12,6 +12,7 @@ import CollectionVariables from './CollectionVariables.vue'
 import SharePopover from '../publications/SharePopover.vue'
 import { useCollectionsStore, type CollectionSection } from '../../stores/collections'
 import { usePublicationsStore } from '../../stores/publications'
+import { useTabsStore } from '../../stores/tabs'
 import { useTransferStore } from '../../stores/transfer'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { findCollection } from '../../lib/collectionTree'
@@ -27,6 +28,7 @@ import { useWorkspaceSnapshot } from '../../composables/workspace/useWorkspaceSn
 const { t } = useMessages()
 const store = useCollectionsStore()
 const publications = usePublicationsStore()
+const tabs = useTabsStore()
 const transfer = useTransferStore()
 const workspaces = useWorkspacesStore()
 
@@ -62,6 +64,19 @@ watch(
 const level = computed(() => findCollection(store.tree, store.collectionId))
 const levelId = computed(() => level.value?.id ?? '')
 const title = computed(() => level.value?.name ?? '')
+const inheritedPublication = computed(() => {
+  const mark = publications.markOf(levelId.value)
+  return mark?.inheritedFrom && mark.page?.status === 'active' && !mark.page.pendingUnpublish
+    ? mark
+    : null
+})
+
+function openPublicationSettings() {
+  const owner = inheritedPublication.value?.page?.collectionId
+  if (!owner) return
+  publications.selectedCollection = owner
+  void tabs.openPublications()
+}
 
 const contentsSnapshot = useWorkspaceSnapshot<LevelRow[]>([])
 const { state: requests, loading } = contentsSnapshot
@@ -146,7 +161,7 @@ function addRequest() {
       <span class="col-count">{{ countText }}</span>
       <span class="col-gap"></span>
 
-      <SharePopover v-if="levelId" :collection-id="levelId" />
+      <SharePopover v-if="levelId && !level?.parentId" :collection-id="levelId" />
 
       <button
         type="button"
@@ -192,6 +207,16 @@ function addRequest() {
           </TabText>
         </TabsTrigger>
       </TabsList>
+      <button
+        v-if="inheritedPublication"
+        type="button"
+        class="publication-notice"
+        :title="t('publications.inheritedPublication', { name: inheritedPublication.inheritedFrom })"
+        @click="openPublicationSettings"
+      >
+        <span class="publication-dot"></span>
+        {{ t('publications.visibleOnPage') }}
+      </button>
     </Tabs>
 
     <div class="col-body">
@@ -202,7 +227,14 @@ function addRequest() {
         @open="openRow"
         @open-docs="openDocs"
       />
-      <CollectionDocs v-else-if="section === 'docs'" :key="levelId" :id="levelId" :start-editing="docsEdit" />
+      <DescriptionEditor
+        v-else-if="section === 'docs'"
+        :key="levelId"
+        :id="levelId"
+        empty-key="request.docs.emptyCollection"
+        :start-editing="docsEdit"
+        suggest-sections
+      />
       <CollectionAuth v-else-if="section === 'auth'" :level-id="levelId" />
       <CollectionVariables v-else-if="section === 'vars'" />
       <CollectionScripts
@@ -297,7 +329,7 @@ function addRequest() {
 .col-subtabs {
   @apply flex flex-none;
   height: 2.125rem;
-  padding: 0 1rem;
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -312,5 +344,25 @@ function addRequest() {
 
 .col-body {
   @apply flex flex-col flex-1 min-h-0;
+}
+
+.publication-notice {
+  @apply flex items-center flex-none border-0 bg-transparent text-text-tertiary cursor-pointer;
+  gap: 0.4375rem;
+  padding: 0 0 0.5625rem;
+  font: inherit;
+  font-size: var(--text-12-5);
+  white-space: nowrap;
+}
+
+.publication-notice:hover {
+  color: var(--text);
+}
+
+.publication-dot {
+  @apply flex-none bg-green;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
 }
 </style>

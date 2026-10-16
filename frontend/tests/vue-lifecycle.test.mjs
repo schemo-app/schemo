@@ -290,7 +290,7 @@ test('closing during a draft flush prevents the following collection save', asyn
 test('collection changes cancel old reads instead of rendering their rows', async (context) => {
   const older = deferred()
   ports.collections = reactive({ collectionId: 'old', tree: [{ id: 'old' }, { id: 'new' }], lastRun: null })
-  ports.publications = { mark() {} }
+  ports.publications = { mark() {}, markOf: () => null }
   ports.transfer = {}
   ports.workspaces = {}
   ports.services.Collections.Contents = id => id === 'old' ? older.promise : CancellablePromise.resolve([{ id: 'new-row' }])
@@ -302,6 +302,39 @@ test('collection changes cancel old reads instead of rendering their rows', asyn
   await settle()
   assert.deepEqual(rendered(root, 'CollectionOverview').props.rows.map(item => item.row.id), ['new-row'])
   assert.deepEqual(ports.notices, [])
+})
+
+test('an inherited publication notice opens the parent settings and follows publication state', async (context) => {
+  const publication = ref(null)
+  let opened = 0
+  ports.collections = reactive({collectionId: 'folder', tree: [{id: 'folder', parentId: 'catalog'}]})
+  ports.publications = {
+    mark() {},
+    markOf: () => publication.value,
+    selectedCollection: '',
+  }
+  ports.tabs = {openPublications() { opened++ }}
+  ports.transfer = {}
+  ports.workspaces = {}
+  ports.services.Collections.Contents = () => CancellablePromise.resolve([])
+  ports.services.Scripting.Scripts = () => CancellablePromise.resolve(null)
+
+  const root = mount(context, components.CollectionPage)
+  assert.equal(rendered(root, 'SharePopover'), undefined)
+  assert.equal(all(root).find(child => child.props.class === 'publication-notice'), undefined)
+
+  publication.value = {inheritedFrom: 'Catalog', page: {collectionId: 'catalog', status: 'active'}}
+  await settle()
+  const notice = all(root).find(child => child.props.class === 'publication-notice')
+  assert.ok(notice)
+  notice.props.onClick()
+  assert.equal(ports.publications.selectedCollection, 'catalog')
+  assert.equal(opened, 1)
+  assert.equal(rendered(root, 'SharePopover'), undefined)
+
+  publication.value.page.pendingUnpublish = true
+  await settle()
+  assert.equal(all(root).find(child => child.props.class === 'publication-notice'), undefined)
 })
 
 function inspectionFor(context, body) {

@@ -11,7 +11,8 @@ import (
 // here is the last answer it gave, kept so that a window draws a published collection as published
 // before anybody is asked anything.
 type Publication struct {
-	CollectionID string `json:"collectionId"`
+	Options      *PublicationOptions `json:"options,omitempty"`
+	CollectionID string              `json:"collectionId"`
 
 	// WorkspaceID is the space the collection lives in, which is where the window's list of pages
 	// asks for it.
@@ -48,35 +49,61 @@ type Publication struct {
 	Changes []PageRelease `json:"changes,omitempty"`
 }
 
+type PublicationOptions struct {
+	Docs     bool `json:"docs"`
+	Examples bool `json:"examples"`
+}
+
+func (p Publication) PageOptions() PublicationOptions {
+	if p.Options != nil {
+		return *p.Options
+	}
+	return PublicationOptions{Docs: true, Examples: true}
+}
+
 // OutlineItem is one request as the last publish put it up: enough to know it again, and enough to
 // tell a request that changed from one that is new. The fingerprint is of the request the page
 // drew, so a changelog entry says nothing a reader of the page was not already shown.
 type OutlineItem struct {
-	ID          string `json:"id"`
-	Method      string `json:"method"`
-	Name        string `json:"name"`
-	Fingerprint string `json:"fingerprint"`
+	ID          string            `json:"id"`
+	Method      string            `json:"method"`
+	Name        string            `json:"name"`
+	Fingerprint string            `json:"fingerprint"`
+	Parts       map[string]string `json:"parts"`
 }
 
 // PageRelease is one entry of what a page says has moved at it, and PageItem one request the entry
 // touched. Sign is this device's own word — "+" for one that arrived, "~" for one that changed, "-"
 // for one that went — and a page draws the colour it stands for without translating it.
 type PageRelease struct {
-	At    time.Time  `json:"at"`
-	Items []PageItem `json:"items"`
+	Revision int        `json:"revision"`
+	At       time.Time  `json:"at"`
+	Items    []PageItem `json:"items"`
 }
 
 // PageItem is one request a release touched: what happened to it, and which request it was.
 type PageItem struct {
-	Sign   string `json:"sign"`
-	Method string `json:"method"`
-	Name   string `json:"name"`
+	Fields []string `json:"fields"`
+	Sign   string   `json:"sign"`
+	Method string   `json:"method"`
+	Name   string   `json:"name"`
 }
 
-// PublicationDraft is a collection on its way to a page: the document this device built, the digest
-// of what it says, and what the person chose. It carries bytes rather than a collection because
-// that is what the server keeps — it stores them and never rewrites them, and it reads nothing out
-// of them for anything but the page itself.
+type PublicationVersion struct {
+	Revision        int    `json:"revision"`
+	PublishedAt     int64  `json:"publishedAt"`
+	EnvironmentName string `json:"environmentName"`
+	Requests        int    `json:"requests"`
+	RestoredFrom    int    `json:"restoredFrom"`
+}
+
+type PublicationDetails struct {
+	Views    int64                `json:"views"`
+	Imports  int64                `json:"imports"`
+	Versions []PublicationVersion `json:"versions"`
+}
+
+// PublicationDraft carries the public document, its digest and access settings to the server.
 type PublicationDraft struct {
 	Collection  string
 	Workspace   string

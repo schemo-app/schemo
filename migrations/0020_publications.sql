@@ -13,7 +13,8 @@ CREATE TABLE publications (
     pending_unpublish INTEGER NOT NULL DEFAULT 0 CHECK (pending_unpublish IN (0, 1)),
     updated_at INTEGER NOT NULL,
     outline TEXT NOT NULL DEFAULT '',
-    changes TEXT NOT NULL DEFAULT ''
+    changes TEXT NOT NULL DEFAULT '',
+    options TEXT NOT NULL DEFAULT 'null'
 );
 
 CREATE INDEX publications_workspace

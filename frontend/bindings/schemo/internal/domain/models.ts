@@ -275,12 +275,6 @@ export interface Collection {
     "variables"?: Variable[] | null;
 
     /**
-     * Docs is what the author wrote for the page this collection is published as, beside the line
-     * above it: the three notes the page gives headings of their own.
-     */
-    "docs": Docs;
-
-    /**
      * A level's own code, carried by a file and written only where a tree is written whole — the
      * import and the duplicate. It is deliberately not written by SaveCollection: that is called
      * with rows read from the shallow tree, which carries no code, so writing it there would erase
@@ -431,17 +425,6 @@ export enum DocKind {
     DocCSV = "csv",
     DocHTML = "html",
 };
-
-/**
- * Docs is the prose a collection carries for the page it is published as. The lead is the
- * collection's own description, because it is written once and read in both places; these are the
- * notes that belong to a page and nowhere else, and an empty one is a block the page does not draw.
- */
-export interface Docs {
-    "authorization"?: string;
-    "errors"?: string;
-    "limits"?: string;
-}
 
 export interface Draft {
     "id": DraftID;
@@ -985,12 +968,14 @@ export interface OutlineItem {
     "method": string;
     "name": string;
     "fingerprint": string;
+    "parts": { [_ in string]?: string } | null;
 }
 
 /**
  * PageItem is one request a release touched: what happened to it, and which request it was.
  */
 export interface PageItem {
+    "fields": string[] | null;
     "sign": string;
     "method": string;
     "name": string;
@@ -1002,6 +987,7 @@ export interface PageItem {
  * for one that went — and a page draws the colour it stands for without translating it.
  */
 export interface PageRelease {
+    "revision": number;
     "at": string;
     "items": PageItem[] | null;
 }
@@ -1109,6 +1095,7 @@ export interface ProxySettings {
  * before anybody is asked anything.
  */
 export interface Publication {
+    "options"?: PublicationOptions | null;
     "collectionId": string;
 
     /**
@@ -1157,6 +1144,25 @@ export interface Publication {
      */
     "outline"?: OutlineItem[] | null;
     "changes"?: PageRelease[] | null;
+}
+
+export interface PublicationDetails {
+    "views": number;
+    "imports": number;
+    "versions": PublicationVersion[] | null;
+}
+
+export interface PublicationOptions {
+    "docs": boolean;
+    "examples": boolean;
+}
+
+export interface PublicationVersion {
+    "revision": number;
+    "publishedAt": number;
+    "environmentName": string;
+    "requests": number;
+    "restoredFrom": number;
 }
 
 /**

@@ -24,12 +24,13 @@ func NewPublicationsService(uc *publication.UseCase) *PublicationsService {
 // than seven arguments because the window sends back exactly what Preview answered, and a call of
 // seven strings in a row is one transposition away from publishing the wrong environment.
 type PublishChoice struct {
-	Workspace     string `json:"workspace"`
-	Collection    string `json:"collection"`
-	EnvironmentID string `json:"environmentId"`
-	Visibility    string `json:"visibility"`
-	Locale        string `json:"locale"`
-	Confirmed     bool   `json:"confirmed"`
+	Options       *domain.PublicationOptions `json:"options"`
+	Workspace     string                     `json:"workspace"`
+	Collection    string                     `json:"collection"`
+	EnvironmentID string                     `json:"environmentId"`
+	Visibility    string                     `json:"visibility"`
+	Locale        string                     `json:"locale"`
+	Confirmed     bool                       `json:"confirmed"`
 	// Password is held here for as long as a publish takes and is written down nowhere: it is what a
 	// locked page answers to, and the row keeps a hash of it rather than the text.
 	Password string `json:"password"`
@@ -41,8 +42,9 @@ func (s *PublicationsService) Preview(
 	workspace string,
 	collection string,
 	environmentID string,
+	options *domain.PublicationOptions,
 ) (publication.PublishPreview, error) {
-	return s.publications.Preview(ctx, workspace, collection, environmentID)
+	return s.publications.Preview(ctx, workspace, collection, environmentID, options)
 }
 
 // Publish puts the page at an address, or replaces what that address already carries.
@@ -51,7 +53,7 @@ func (s *PublicationsService) Publish(
 	choice PublishChoice,
 ) (domain.Publication, error) {
 	return s.publications.Publish(ctx, choice.Workspace, choice.Collection, choice.EnvironmentID,
-		choice.Visibility, choice.Locale, choice.Password, choice.Confirmed)
+		choice.Visibility, choice.Locale, choice.Password, choice.Confirmed, choice.Options)
 }
 
 // Unpublish takes a page down. A takedown the network did not carry is kept and played back later,
@@ -84,4 +86,12 @@ func (s *PublicationsService) Changes(
 	collection string,
 ) (publication.Change, error) {
 	return s.publications.Changes(ctx, workspace, collection)
+}
+
+func (s *PublicationsService) Details(ctx context.Context, collection string) (domain.PublicationDetails, error) {
+	return s.publications.Details(ctx, collection)
+}
+
+func (s *PublicationsService) Restore(ctx context.Context, workspace, collection string, revision int) (domain.Publication, error) {
+	return s.publications.Restore(ctx, workspace, collection, revision)
 }

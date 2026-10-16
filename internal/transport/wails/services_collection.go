@@ -147,17 +147,6 @@ func (s *CollectionsService) Describe(
 	return s.collections.Describe(ctx, id, description)
 }
 
-// SaveDocs writes what a collection says about itself on the page it is published as: the three
-// notes the page gives headings of their own. The tree comes back, as it does from every other edit
-// of a row, because the page being published is drawn from it.
-func (s *CollectionsService) SaveDocs(
-	ctx context.Context,
-	id string,
-	docs domain.Docs,
-) ([]domain.Collection, error) {
-	return s.collections.SaveDocs(ctx, id, docs)
-}
-
 // SaveAuth writes what a collection authorizes its requests with. «None» is the same call with an
 // empty auth: a level that has none is a level the ones below it inherit past, and the overview
 // then draws the tab the way a collection without one looks.

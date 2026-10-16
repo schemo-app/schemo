@@ -1,7 +1,6 @@
-import { HiddenReason } from '../../bindings/schemo/internal/domain'
 import type { PageItem } from '../../bindings/schemo/internal/domain'
 import type { Problem } from '../../bindings/schemo/internal/usecase/publication'
-import { t, te, type MessageKey } from '../i18n'
+import { t, te, currentLocale, type MessageKey } from '../i18n'
 import { PASSWORD } from './layout'
 import type { Visibility } from '../stores/publications'
 
@@ -21,18 +20,6 @@ export function problemText(problem: Problem): string {
     args.what = te(part) ? t(part) : what
   }
   return t(key, args)
-}
-
-const HIDDEN_WORDS: Partial<Record<HiddenReason, MessageKey>> = {
-  [HiddenReason.HiddenSecret]: 'publications.hiddenSecret',
-  [HiddenReason.HiddenLinked]: 'publications.hiddenLinked',
-  [HiddenReason.HiddenLooksSecret]: 'publications.hiddenLooksSecret',
-}
-
-/** Why a variable is not on the page, as the frame under the publish button says it. */
-export function hiddenText(reason: HiddenReason): string {
-  const key = HIDDEN_WORDS[reason]
-  return key ? t(key) : ''
 }
 
 /** The three accesses a page may have, with the line that says what each one means. */
@@ -66,12 +53,7 @@ export function passwordFits(password: string): boolean {
   return password.length >= PASSWORD.min && password.length <= PASSWORD.max
 }
 
-/**
- * The three ways a request moves at a page, with the sign, the tone and the words each one draws.
- * Which of the three happened is Go's to say — it is the same word the page's own record carries —
- * and these are the words this window puts beside it. A rename is one of the three: a device that
- * compares fingerprints can say a request is not what it was, not which of its parts moved.
- */
+/** Localized labels and colors for the changes identified by Go. */
 const CHANGE_SIGNS: Record<string, { glyph: string; tone: string; word: MessageKey; tally: MessageKey }> =
   {
     '+': {
@@ -112,9 +94,30 @@ export function changeNotes(items: PageItem[]): ChangeNote[] {
       tone: held?.tone ?? '',
       method: item.method,
       name: item.name,
-      what: held ? t(held.word) : '',
+      what: changeText(item),
     }
   })
+}
+
+function changeText(item: PageItem): string {
+  const fields = item.fields ?? []
+  const restored = fields.find(field => field.startsWith('restored:'))
+  if (restored) return t('publications.restoredFrom', { n: Number(restored.slice(9)) })
+  const initial = fields.find(field => field.startsWith('initial:'))
+  if (initial) return t('publications.changeInitial', { n: Number(initial.slice(8)) })
+  if (item.sign !== '~') {
+    if (!item.method) return t(item.sign === '+' ? 'publications.changeSectionNew' : 'publications.changeSectionGone')
+    const sign = CHANGE_SIGNS[item.sign]
+    return sign ? t(sign.word) : ''
+  }
+  const labels = fields.map(field => {
+    const [kind, value, ...name] = field.split(':')
+    if (kind === 'parameter') return t('publications.changeParameter', { location: value, name: name.join(':') })
+    if (kind === 'response') return t('publications.changeResponse', { status: value, name: name.join(':') }).trim()
+    const key = `publications.changeFields.${field}`
+    return te(key) ? t(key) : t('publications.changeEdited')
+  })
+  return labels.length ? new Intl.ListFormat(currentLocale(), { style: 'long', type: 'conjunction' }).format(labels) : t('publications.changeEdited')
 }
 
 /** One count of the tally: a sign, its tone, and how many requests moved by it. */
