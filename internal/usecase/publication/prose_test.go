@@ -28,6 +28,11 @@ func TestDescriptionSections(t *testing.T) {
 			want:     snapshotv1.Prose{Lead: "```md\n## Errors\nexample\n```\n\n> ## Limits\n> example\n\n### Authorization\nNested."},
 		},
 		{
+			name:     "formatted links code and multiline headings retain their visible titles",
+			markdown: "## [**Auth**](https://example.com)\nSend a token.\n\n## `Errors`\nBad request.\n\nRate\nlimits\n------\n60 requests.",
+			want:     snapshotv1.Prose{Auth: "Send a token.", Errors: "Bad request.", Limits: "60 requests."},
+		},
+		{
 			name:     "setext headings and CRLF are parsed as Markdown",
 			markdown: "Intro.\r\n\r\nErrors\r\n------\r\nBad request.\r\n\r\n## Limits\r\n60 requests.\r\n",
 			want:     snapshotv1.Prose{Lead: "Intro.", Errors: "Bad request.", Limits: "60 requests."},

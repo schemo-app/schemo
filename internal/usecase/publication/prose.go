@@ -36,7 +36,7 @@ func descriptionProse(markdown string) snapshotv1.Prose {
 		}
 		key := ""
 		if held.Level == 2 {
-			key = proseSection(string(held.Text(source)))
+			key = proseSection(headingTitle(held, source))
 		}
 		headings = append(headings, heading{start: start, end: end, key: key})
 	}
@@ -62,6 +62,26 @@ func descriptionProse(markdown string) snapshotv1.Prose {
 		Lead: strings.TrimSpace(lead.String()), Auth: sections["auth"],
 		Errors: sections["errors"], Limits: sections["limits"],
 	}
+}
+
+func headingTitle(heading *ast.Heading, source []byte) string {
+	var title strings.Builder
+	_ = ast.Walk(heading, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch node := node.(type) {
+		case *ast.Text:
+			title.Write(node.Value(source))
+			if node.SoftLineBreak() || node.HardLineBreak() {
+				title.WriteByte(' ')
+			}
+		case *ast.String:
+			title.Write(node.Value)
+		}
+		return ast.WalkContinue, nil
+	})
+	return title.String()
 }
 
 func proseSection(title string) string {
