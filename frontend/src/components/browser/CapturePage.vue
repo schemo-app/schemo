@@ -1,81 +1,71 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { RecordSource } from '../../../bindings/schemo/internal/domain'
-import {
-  BridgeService,
-  RecordsService,
-} from '../../../bindings/schemo/internal/transport/wails'
+import { computed, ref } from 'vue'
+import { RecordsService } from '../../../bindings/schemo/internal/transport/wails'
+import { Browser } from '@wailsio/runtime'
 import { useRecordsStore } from '../../stores/records'
 import { useSetting } from '../../composables/useSettings'
 import { useToast } from '../../composables/useToast'
-import { groupHue, groupLabel, tabGroups } from '../../lib/recordTabs'
+import { groupHue, groupLabel, tabKeyOf } from '../../lib/recordTabs'
+import { recordsByDay } from '../../lib/requestRecord'
+import { splitAddress } from '../../lib/address'
+import { methodInkClass, statusTone } from '../../lib/format'
 import { EXTENSION_STORES } from '../../lib/extensions'
-import { formatDate, useMessages } from '../../i18n'
+import {
+  describeFailure,
+  formatBytes,
+  formatClock,
+  formatDuration,
+  formatStatus,
+  useMessages,
+} from '../../i18n'
 import CaptureFiltersSheet from './CaptureFiltersSheet.vue'
 import Icon from '../ui/Icon.vue'
-import { Switch } from '../ui/switch'
-import { Browser } from '@wailsio/runtime'
+import { Button } from '../ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '../ui/dropdown-menu'
 
-// The capture: what the extension is recording right now, the browser tabs it has taken, and the
-// rules the two sides agreed on. A session opens the history filtered by that tab, where its
-// requests are read like any other record.
 const store = useRecordsStore()
 const toast = useToast()
 const filters = useSetting('captureFilters')
 const { t } = useMessages()
+const selected = ref('')
+const filtersOpen = ref(false)
 
-const listening = ref(false)
-
-onMounted(async () => {
-  try {
-    listening.value = await BridgeService.Listening()
-  } catch {
-    // The bridge file is the extension's side; the page just says nothing is connected.
-  }
+const sessions = computed(() => store.captureSessions)
+const selectedSession = computed(() => sessions.value.find(session => session.key === selected.value))
+const selectedAction = computed(() => {
+  const session = selectedSession.value
+  if (!session?.tab) return t('capture.selectedOnly')
+  return session.tab.paused ? t('capture.resumeSelected') : t('capture.pauseSelected')
 })
+const selectedNote = computed(() => {
+  const session = selectedSession.value
+  if (!session) return t('capture.selectTabHint')
+  if (!session.tab) return t('capture.ended')
+  return groupLabel(session)
+})
+const canToggleSelected = computed(() => !!selectedSession.value?.tab)
+const openTabs = computed(() => store.capture.tabList)
+const liveTabs = computed(() => openTabs.value.filter(tab => !tab.paused))
+const recording = computed(() => store.capture.connected && store.capture.recording)
+const captured = computed(() => store.browserRecords)
+const rows = computed(() => captured.value.filter(record => !selected.value || tabKeyOf(record) === selected.value))
 
-const captured = computed(() =>
-  store.records.filter((r) => r.source === RecordSource.SourceBrowser)
-)
-
-const sessions = computed(() =>
-  tabGroups(captured.value).map((group) => ({
-    key: group.key,
-    label: groupLabel(group),
-    host: group.url ? hostOf(group.url) : '',
-    count: group.items.length,
-    when: group.items[0] ? formatDate(group.items[0].startedAt, { hour: '2-digit', minute: '2-digit' }) : '',
-    letter: groupLabel(group).slice(0, 1).toUpperCase(),
-    tint: `hsl(${groupHue(group.key)}, 58%, 45%)`,
-    live: store.capture.tabList.some((tab) => String(tab.tabId) === group.key),
-  }))
-)
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
-}
-
-function openSession(key: string) {
-  store.openSession(key)
-}
-
-const recording = computed(() => store.capture.recording)
-
-const connectedNote = computed(() => {
+const groups = computed(() => recordsByDay(rows.value))
+const status = computed(() => {
   if (!store.capture.connected) return t('capture.notConnected')
-  const browser = store.capture.browser || 'Chrome'
-  return store.capture.version
-    ? t('capture.connected', { browser, version: store.capture.version })
-    : t('capture.connectedPlain', { browser })
+  if (!openTabs.value.length) return t('extension.idle')
+  if (!liveTabs.value.length) return t('capture.pausedAll')
+  return t('capture.recordingTabs', { active: liveTabs.value.length, total: openTabs.value.length })
 })
 
 const rules = computed(() => {
   const hosts = filters.value.hosts ?? []
-  const onOff = (on: boolean) => (on ? t('capture.skipped') : t('capture.kept'))
+  const onOff = (on: boolean) => on ? t('capture.skipped') : t('capture.kept')
   return [
     { label: t('extension.hosts'), value: hosts.length ? hosts.join(', ') : t('extension.hostsAll') },
     { label: t('extension.skipStatic'), value: onOff(filters.value.static) },
@@ -83,59 +73,103 @@ const rules = computed(() => {
   ]
 })
 
-async function exportHar() {
-  const written = await RecordsService.ExportHar(t('files.exportHar'), '')
-  if (written) toast.show(t('browser.saved'))
-}
-
-// The rules are read here and written here: the panel opens over the page rather than sending the
-// window to the settings for one switch.
-const filtersOpen = ref(false)
-
-// What stands on the page while nothing is connected: the three steps the extension is brought in
-// by, and the way to the page that carries it.
-
-function openInstall(url: string) {
-  void Browser.OpenURL(url)
-}
-
 const introSteps = computed(() => [
   { title: t('capture.stepInstall'), note: t('capture.stepInstallNote') },
   { title: t('capture.stepOpen'), note: t('capture.stepOpenNote') },
   { title: t('capture.stepEnable'), note: t('capture.stepEnableNote') },
 ])
+
+function openInstall(url: string) {
+  void Browser.OpenURL(url)
+}
+
+function pick(key: string) {
+  selected.value = selected.value === key ? '' : key
+}
+
+function showHistory() {
+  store.openSession(selected.value)
+}
+
+function toggleSelected() {
+  if (canToggleSelected.value) void store.toggleCapture(selected.value)
+}
+
+function onScroll(event: Event) {
+  const element = event.currentTarget as HTMLElement
+  if (element.scrollHeight - element.scrollTop - element.clientHeight < 300) {
+    void store.loadOlder()
+  }
+}
+
+async function exportHar() {
+  try {
+    const saved = await RecordsService.ExportHar(t('files.exportHar'), selected.value)
+    if (saved) toast.show(t('browser.saved'))
+  } catch (error) {
+    toast.show(describeFailure(error), 'error')
+  }
+}
 </script>
 
 <template>
   <div class="capture-page">
     <div class="cap-head">
       <span class="cap-title">{{ t('sidebar.capture') }}</span>
-      <span v-if="store.capture.connected" class="cap-status">
-        <span class="cap-dot ok"></span>{{ connectedNote }}
+      <span
+        class="cap-status"
+        :class="store.capture.connected ? 'text-text-secondary' : 'text-text-tertiary'"
+      >
+        <span class="cap-dot" :class="{ live: recording }"></span>
+        {{ status }}
       </span>
-      <span v-else class="cap-status none">
-        <span class="cap-dot"></span>{{ connectedNote }}
-      </span>
-      <span class="cap-spacer"></span>
-      <template v-if="store.capture.connected">
-        <button class="cap-ghost" @click="exportHar()">{{ t('files.exportHar') }}</button>
-        <span class="cap-rec">
-          <span class="cap-rec-text">
-            {{ recording ? t('capture.recording') : t('capture.paused') }}
-          </span>
-          <Switch
-            :model-value="recording"
-            :title="recording ? t('status.pauseCapture') : t('status.resumeCapture')"
-            :aria-label="recording ? t('status.pauseCapture') : t('status.resumeCapture')"
-            @update:model-value="store.toggleCapture()"
-          />
-        </span>
-      </template>
+      <span class="flex-1 min-w-0"></span>
+      <Button
+        v-if="captured.length || store.capture.connected"
+        size="field"
+        @click="exportHar()"
+      >
+        {{ t('files.exportHar') }}
+      </Button>
+      <div v-if="store.capture.connected" class="cap-control" :class="{ paused: !recording }">
+        <button
+          type="button"
+          class="cap-toggle"
+          :disabled="!openTabs.length"
+          :title="t('capture.allTabsHint')"
+          @click="store.toggleCapture()"
+        >
+          <Icon v-if="recording" name="Pause" :size="12" :stroke-width="1.5" />
+          <span v-else class="record-dot"></span>
+          {{ recording ? t('capture.pauseAll') : t('capture.resumeAll') }}
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <button
+              type="button"
+              class="cap-toggle-menu"
+              :title="t('capture.chooseTabs')"
+              :aria-label="t('capture.chooseTabs')"
+            >
+              <Icon name="ChevronDown" :size="11" :stroke-width="1.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent class="cap-menu">
+            <DropdownMenuItem class="cap-menu-item" :disabled="!openTabs.length" @select="store.toggleCapture()">
+              <span>{{ recording ? t('capture.pauseAll') : t('capture.resumeAll') }}</span>
+              <span class="cap-menu-note">
+                {{ t('capture.openAndRecording', { total: openTabs.length, active: liveTabs.length }) }}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem class="cap-menu-item" :disabled="!canToggleSelected" @select="toggleSelected">
+              <span>{{ selectedAction }}</span>
+              <span class="cap-menu-note">{{ selectedNote }}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
-
-    <!-- Nobody is connected: the page has nothing to list, so it says what it would do and how to
-         bring the extension to it. -->
-    <div v-if="!store.capture.connected" class="cap-intro">
+    <div v-if="!store.capture.connected && !sessions.length" class="cap-intro">
       <div class="intro-top">
         <span class="intro-tile"><Icon name="Puzzle" :size="24" :stroke-width="1.5" /></span>
         <span class="intro-text">
@@ -155,57 +189,136 @@ const introSteps = computed(() => [
       </div>
 
       <div class="intro-install">
-        <button v-for="store in EXTENSION_STORES" :key="store.name" class="intro-btn" @click="openInstall(store.url)">
-          <Icon name="Download" :size="12" :stroke-width="2.2" />
-          <span class="cap-line">{{ store.name }}</span>
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="primary" size="lg">
+              <Icon name="Download" :size="12" :stroke-width="2.2" />
+              <span>{{ t('capture.install') }}</span>
+              <Icon name="ChevronDown" :size="12" :stroke-width="2.2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem v-for="store in EXTENSION_STORES" :key="store.name" @select="openInstall(store.url)">
+              <span class="flex-1">{{ store.name }}</span>
+              <Icon name="ArrowUpRight" :size="12" class="shrink-0 text-text-tertiary" />
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <span class="intro-also">{{ t('capture.installAlso') }}</span>
-        <span class="cap-spacer"></span>
+        <span class="flex-1 min-w-0"></span>
         <span class="intro-wait">
-          <span class="intro-spinner"></span>{{ t('capture.waiting') }}
+          <span class="intro-spinner"></span>
+          {{ t('capture.waiting') }}
         </span>
       </div>
     </div>
 
-    <div v-else class="cap-scroll">
-      <div class="cap-grid cap-head-row">
-        <span></span>
-        <span>{{ t('capture.colTab') }}</span>
-        <span class="right">{{ t('capture.colCount') }}</span>
-        <span class="cap-when">{{ t('capture.colWhen') }}</span>
-        <span></span>
+    <template v-else>
+      <div class="cap-filter-bar">
+        <div class="cap-chips">
+          <button
+            type="button"
+            class="cap-chip"
+            :class="{ selected: !selected }"
+            :aria-pressed="!selected"
+            @click="selected = ''"
+          >
+            {{ t('capture.allTabs') }}
+          </button>
+          <button
+            v-for="session in sessions"
+            :key="session.key"
+            type="button"
+            class="cap-chip cap-chip--tab"
+            :class="{ selected: selected === session.key, ended: !session.tab }"
+            :title="groupLabel(session)"
+            :aria-pressed="selected === session.key"
+            @click="pick(session.key)"
+          >
+            <span
+              class="cap-avatar"
+              :style="{ '--tab-hue': groupHue(session.key) }"
+            >
+              {{ groupLabel(session).slice(0, 1).toUpperCase() }}
+            </span>
+            <span class="cap-chip-name">{{ groupLabel(session) }}</span>
+            <span
+              v-if="session.tab && !session.tab.paused && store.capture.connected"
+              class="cap-dot live"
+              :title="t('capture.recording')"
+            ></span>
+            <span v-else class="cap-chip-state">{{ session.tab ? t('capture.tabPaused') : t('capture.ended') }}</span>
+          </button>
+        </div>
+        <div class="cap-filter-actions">
+          <span>{{ t('history.requestsN', { n: rows.length }) }}</span>
+          <button type="button" class="cap-link" @click="showHistory()">{{ t('capture.showHistory') }}</button>
+        </div>
       </div>
-
-      <div
-        v-for="s in sessions"
-        :key="s.key"
-        class="cap-grid cap-row"
-        @click="openSession(s.key)"
-      >
-        <span class="cap-tile" :style="{ background: s.tint }">{{ s.letter }}</span>
-        <span class="cap-text">
-          <span class="cap-name">{{ s.label }}</span>
-          <span class="cap-host">{{ s.host }}</span>
+      <div class="cap-scroll" :class="{ filtered: !!selected }" @scroll.passive="onScroll">
+        <div class="cap-grid cap-table-head">
+          <span>{{ t('history.colWhen') }}</span>
+          <span v-if="!selected">{{ t('capture.colTab') }}</span>
+          <span>{{ t('history.colMethod') }}</span>
+          <span>{{ t('history.colAddress') }}</span>
+          <span>{{ t('history.colStatus') }}</span>
+          <span class="text-right">{{ t('history.colTime') }}</span>
+          <span class="text-right">{{ t('history.colSize') }}</span>
+        </div>
+        <template v-for="group in groups" :key="group.label">
+          <div class="cap-group">{{ group.label }}</div>
+          <button
+            v-for="record in group.items"
+            :key="record.id"
+            type="button"
+            class="cap-grid cap-row"
+            @click="store.selectRecord(record.id, $event.metaKey || $event.ctrlKey)"
+          >
+            <span class="cap-num text-text-tertiary">{{ formatClock(record.startedAt) }}</span>
+            <span v-if="!selected" class="cap-row-tab">
+              <span
+                class="cap-avatar small"
+                :style="{ '--tab-hue': groupHue(tabKeyOf(record)) }"
+              >
+                {{ (record.tabTitle || record.tabURL || t('history.tab')).slice(0, 1).toUpperCase() }}
+              </span>
+              <span class="truncate">{{ record.tabTitle || splitAddress(record.tabURL || record.url).host }}</span>
+            </span>
+            <span class="cap-method" :class="methodInkClass(record.method)">{{ record.method }}</span>
+            <span class="cap-address">
+              <span class="text-text-tertiary">{{ splitAddress(record.url).host }}</span>{{ splitAddress(record.url).path }}
+            </span>
+            <span>
+              <span class="cap-status-badge" :class="statusTone(record)">
+                {{ formatStatus(record.status, record.error) }}
+              </span>
+            </span>
+            <span class="cap-num text-text-secondary text-right">{{ formatDuration(record.durationUs) }}</span>
+            <span class="cap-num text-text-secondary text-right">
+              {{ record.responseBody?.size ? formatBytes(record.responseBody.size) : '—' }}
+            </span>
+          </button>
+        </template>
+        <div
+          v-if="!rows.length"
+          class="cap-empty"
+        >
+          {{ selected ? t('capture.noTabRequests') : t('capture.noSessions') }}
+        </div>
+        <div v-if="store.olderLoading" class="cap-empty">{{ t('history.loadingOlder') }}</div>
+      </div>
+      <div class="cap-rules">
+        <span
+          v-for="rule in rules"
+          :key="rule.label"
+          class="truncate"
+        >
+          {{ rule.label }}: <span class="text-text-secondary">{{ rule.value }}</span>
         </span>
-        <span class="right cap-num">{{ s.count }}</span>
-        <span class="cap-when cap-when-cell">{{ s.when }}</span>
-        <span class="cap-live-slot">
-          <span v-if="s.live" class="cap-live">
-            <span class="cap-dot live"></span>{{ t('capture.live') }}
-          </span>
-        </span>
+        <span class="flex-1 min-w-0"></span>
+        <button type="button" class="cap-link" @click="filtersOpen = true">{{ t('capture.editRules') }}</button>
       </div>
-
-      <div v-if="sessions.length === 0" class="cap-empty">{{ t('capture.noSessions') }}</div>
-
-      <div class="cap-rules-title">{{ t('capture.rules') }}</div>
-      <div v-for="r in rules" :key="r.label" class="cap-grid cap-rule">
-        <span class="cap-rule-label">{{ r.label }}</span>
-        <span class="cap-rule-value">{{ r.value }}</span>
-        <a class="cap-rule-edit" @click="filtersOpen = true">{{ t('common.change') }}</a>
-      </div>
-    </div>
-
+    </template>
     <CaptureFiltersSheet v-if="filtersOpen" @close="filtersOpen = false" @saved="filtersOpen = false" />
   </div>
 </template>
@@ -223,78 +336,253 @@ const introSteps = computed(() => [
   gap: 0.875rem;
   padding: 0 1.5rem;
   border-bottom: 1px solid var(--border);
-  box-sizing: content-box;
 }
 
 .cap-title {
-  @apply flex-none;
-  font-size: var(--text-17);
-  font-weight: 600;
+  @apply flex-none text-17 font-semibold;
   letter-spacing: -0.01em;
 }
 
 .cap-status {
-  @apply flex items-center min-w-0 truncate;
+  @apply flex items-center min-w-0 truncate text-12-5;
   gap: 0.4375rem;
-  font-size: var(--text-12-5);
-  color: var(--text-secondary);
-}
-
-.cap-status.none {
-  color: var(--text-tertiary);
 }
 
 .cap-dot {
-  @apply flex-none;
+  @apply flex-none rounded-full;
   width: 0.4375rem;
   height: 0.4375rem;
-  border-radius: 999px;
   background: var(--text-tertiary);
 }
 
-.cap-status.none .cap-dot {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
-}
-
-.cap-dot.ok {
-  background: var(--green);
-}
-
-.cap-dot.live {
+.cap-dot.live,
+.record-dot {
   background: var(--red);
 }
 
-.cap-spacer {
-  @apply flex-1;
-}
-
-.cap-ghost {
-  @apply flex-none;
-  height: 2rem;
-  padding: 0 0.75rem;
-  border: 0;
+.cap-control {
+  @apply flex flex-none;
   border-radius: 0.5rem;
-  background: transparent;
+  background: var(--chip);
   color: var(--text);
-  font: inherit;
-  cursor: default;
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.cap-ghost:hover {
+.cap-control.paused {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.cap-toggle,
+.cap-toggle-menu {
+  @apply flex items-center justify-center cursor-pointer border-none bg-transparent text-inherit;
+  height: 2rem;
+  font-weight: 500;
+}
+
+.cap-toggle {
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.cap-toggle-menu {
+  width: 1.75rem;
+  padding: 0;
+  border-radius: 0 0.5rem 0.5rem 0;
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
+.cap-toggle:disabled {
+  @apply opacity-45 cursor-default;
+}
+
+.cap-toggle:hover:not(:disabled),
+.cap-toggle-menu:hover {
   background: var(--bg-hover);
 }
 
-.cap-rec {
-  @apply flex items-center flex-none;
-  gap: 0.5rem;
+.record-dot {
+  @apply rounded-full;
+  width: 0.5625rem;
+  height: 0.5625rem;
 }
 
-.cap-rec-text {
-  @apply whitespace-nowrap;
-  font-size: var(--text-12-5);
-  color: var(--text-secondary);
+.cap-menu {
+  width: 18.75rem;
+}
+
+.cap-menu-item {
+  @apply flex flex-col items-start;
+  gap: 0.125rem;
+  padding: 0.5rem 0.625rem;
+}
+
+.cap-menu-item[data-disabled] {
+  @apply opacity-45 cursor-default;
+}
+
+.cap-menu-note {
+  @apply text-12 text-text-tertiary truncate max-w-full;
+}
+
+.cap-filter-bar {
+  @apply flex items-start flex-none;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem 0.75rem;
+}
+
+.cap-chips {
+  @apply flex flex-1 min-w-0 flex-wrap;
+  gap: 0.375rem;
+}
+
+.cap-chip {
+  @apply inline-flex items-center flex-none bg-transparent text-text border-none cursor-pointer;
+  height: 1.75rem;
+  max-width: 15.625rem;
+  gap: 0.4375rem;
+  padding: 0 0.75rem;
+  border-radius: 0.875rem;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.cap-chip--tab {
+  padding-left: 0.3125rem;
+}
+
+.cap-chip:hover,
+.cap-chip.selected {
+  background: var(--bg-hover);
+}
+
+.cap-chip.selected {
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.cap-chip.ended {
+  opacity: 0.6;
+}
+
+.cap-chip-name {
+  @apply truncate min-w-0;
+}
+
+.cap-chip-state {
+  @apply flex-none text-11-5 text-text-tertiary;
+}
+
+.cap-avatar {
+  @apply flex items-center justify-center flex-none rounded-full text-white text-10 font-bold;
+  width: 1.125rem;
+  height: 1.125rem;
+  background: hsl(var(--tab-hue) 58% 45%);
+}
+
+.cap-avatar.small {
+  font-size: 0.5625rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+.cap-filter-actions {
+  @apply flex items-center flex-none whitespace-nowrap text-12 text-text-tertiary;
+  height: 1.75rem;
+  gap: 0.875rem;
+}
+
+.cap-link {
+  @apply flex-none border-none bg-transparent text-accent cursor-pointer whitespace-nowrap text-12-5 p-0;
+}
+
+.cap-link:hover {
+  text-decoration: underline;
+}
+
+.cap-scroll {
+  @apply flex-1 min-h-0 overflow-auto;
+  padding: 0 1.5rem 0.75rem;
+}
+
+.cap-grid {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(5.625rem, 10.625rem) 3.25rem minmax(10rem, 1fr) 3.5rem 4rem 4.25rem;
+  align-items: center;
+  min-width: 42rem;
+  padding: 0 0.5rem;
+}
+
+.filtered .cap-grid {
+  grid-template-columns: 3.25rem 3.25rem minmax(10rem, 1fr) 3.5rem 4rem 4.25rem;
+  min-width: 30rem;
+}
+
+.cap-table-head {
+  height: 1.75rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-11-5);
+}
+
+.cap-group {
+  @apply text-11-5 font-semibold text-text-tertiary;
+  padding: 0.75rem 0.5rem 0.25rem;
+}
+
+.cap-row {
+  @apply w-full border-0 bg-transparent text-text text-left cursor-pointer;
+  height: 2.125rem;
+  border-radius: 0.375rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.cap-row:hover {
+  background: var(--bg-hover);
+}
+
+.cap-row-tab {
+  @apply flex items-center min-w-0 text-text-secondary;
+  gap: 0.4375rem;
+  padding-right: 0.75rem;
+}
+
+.cap-method {
+  @apply font-mono text-11 font-bold;
+}
+
+.cap-address {
+  @apply min-w-0 truncate font-mono text-12;
+}
+
+.cap-status-badge {
+  @apply font-mono text-11 font-semibold;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.3125rem;
+}
+
+.is-ok {
+  background: var(--green-soft);
+  color: var(--green-text);
+}
+
+.is-bad {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.cap-num {
+  @apply tabular-nums;
+}
+
+.cap-empty {
+  @apply text-text-tertiary text-center;
+  padding: 2.5rem 0.5rem;
+}
+
+.cap-rules {
+  @apply flex items-center flex-none text-text-tertiary text-12-5 min-w-0;
+  height: 2.5rem;
+  gap: 1.375rem;
+  padding: 0 1.5rem;
+  border-top: 1px solid var(--border);
 }
 
 .cap-intro {
@@ -392,23 +680,6 @@ const introSteps = computed(() => [
   gap: 0.625rem 1rem;
 }
 
-.intro-btn {
-  @apply flex items-center justify-center cursor-default border-0;
-  height: 2rem;
-  padding: 0 0.875rem;
-  gap: 0.4375rem;
-  border-radius: 0.5rem;
-  background: var(--accent);
-  color: var(--accent-text);
-  font: inherit;
-  font-size: var(--text-13);
-  font-weight: 500;
-}
-
-.intro-btn:hover {
-  filter: brightness(1.06);
-}
-
 .intro-also {
   color: var(--text-tertiary);
   font-size: var(--text-12-5);
@@ -430,118 +701,4 @@ const introSteps = computed(() => [
   animation: spin 1.4s linear infinite;
 }
 
-.cap-scroll {
-  @apply flex-1 min-h-0 overflow-auto;
-  padding: 1.125rem 1.5rem 1.5rem;
-}
-
-.cap-grid {
-  display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr) 5.625rem 8.125rem 6.875rem;
-  align-items: center;
-  padding: 0 0.625rem;
-}
-
-.cap-head-row {
-  height: 1.75rem;
-  font-size: var(--text-11-5);
-  color: var(--text-tertiary);
-}
-
-.cap-row {
-  height: 3.25rem;
-  border-radius: 0.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  cursor: default;
-}
-
-.cap-row:hover {
-  background: var(--bg-hover);
-}
-
-.right {
-  text-align: right;
-}
-
-.cap-tile {
-  @apply flex items-center justify-center flex-none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 0.375rem;
-  color: #fff;
-  font-size: var(--text-11);
-  font-weight: 700;
-}
-
-.cap-text {
-  @apply flex flex-col min-w-0;
-  gap: 2px;
-}
-
-.cap-name {
-  @apply truncate;
-  font-weight: 500;
-}
-
-.cap-host {
-  @apply truncate;
-  font-family: var(--mono);
-  font-size: var(--text-11-5);
-  color: var(--text-tertiary);
-}
-
-.cap-num {
-  font-variant-numeric: tabular-nums;
-}
-
-.cap-when {
-  padding-left: 1.5rem;
-}
-
-.cap-when-cell {
-  color: var(--text-secondary);
-}
-
-.cap-live-slot {
-  @apply flex justify-end;
-}
-
-.cap-live {
-  @apply flex items-center flex-none;
-  gap: 0.375rem;
-  font-size: var(--text-12);
-  color: var(--red-text);
-}
-
-.cap-empty {
-  padding: 1.5rem 0.625rem;
-  color: var(--text-tertiary);
-}
-
-.cap-rules-title {
-  font-weight: 600;
-  padding: 1.875rem 0.625rem 0.5rem;
-}
-
-.cap-rule {
-  grid-template-columns: 12.5rem minmax(0, 1fr) auto;
-  height: 2.5rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-}
-
-.cap-rule-label {
-  color: var(--text-secondary);
-}
-
-.cap-rule-value {
-  @apply truncate;
-}
-
-.cap-rule-edit {
-  font-size: var(--text-12-5);
-}
-
-.cap-rule-edit:hover {
-  text-decoration: underline;
-}
 </style>

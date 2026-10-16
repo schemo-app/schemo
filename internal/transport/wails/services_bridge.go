@@ -3,6 +3,7 @@ package wails
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -38,6 +39,27 @@ func (s *BridgeService) PauseCapture() {
 // ResumeCapture broadcasts a resume command to all connected extensions.
 func (s *BridgeService) ResumeCapture() {
 	s.server.Broadcast([]byte(`{"type":"resume"}`))
+}
+
+// SetTabCapture pauses or resumes one tab in the specified browser.
+func (s *BridgeService) SetTabCapture(tabID int, browser string, paused bool) error {
+	if tabID <= 0 || browser == "" {
+		return errors.New("invalid capture tab")
+	}
+	frame := struct {
+		Type    string `json:"type"`
+		TabID   int    `json:"tabId"`
+		Browser string `json:"browser"`
+	}{Type: "resume", TabID: tabID, Browser: browser}
+	if paused {
+		frame.Type = "pause"
+	}
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		return err
+	}
+	s.server.Broadcast(payload)
+	return nil
 }
 
 // ApplyCaptureFilters broadcasts updated capture rules to all connected extension clients.

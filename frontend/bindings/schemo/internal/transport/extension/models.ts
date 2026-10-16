@@ -10,17 +10,12 @@ export interface CaptureState {
     "paused": boolean;
     "tabs": number;
     "browser": string;
-
-    /**
-     * Version is the extension's own version, which is what the window names it by beside the
-     * browser. An extension that does not send one is still a connected one.
-     */
-    "version"?: string;
+    "version": string;
 
     /**
      * TabList contains details for each individual tab currently under capture.
      */
-    "tabList"?: TabState[] | null;
+    "tabList": TabState[] | null;
 }
 
 /**
@@ -39,4 +34,7 @@ export interface Status {
 export interface TabState {
     "tabId": number;
     "since": number;
+    "title": string;
+    "url": string;
+    "paused": boolean;
 }

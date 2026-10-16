@@ -1,5 +1,6 @@
 import { t } from '../i18n'
 import type { Record as RequestRecord } from '../../bindings/schemo/internal/domain'
+import type { TabState } from '../../bindings/schemo/internal/transport/extension'
 
 /** Represents captured network traffic grouped by browser tab. */
 export interface TabGroup {
@@ -8,6 +9,22 @@ export interface TabGroup {
   url: string
   favIconUrl: string
   items: RequestRecord[]
+}
+
+/** A captured tab and its saved requests, including tabs that have not sent a request yet. */
+export interface CaptureSession extends TabGroup {
+  tab?: TabState
+}
+
+/** Combines active capture metadata with history without creating synthetic requests. */
+export function captureSessions(records: RequestRecord[], tabs: TabState[]): CaptureSession[] {
+  const groups = new Map<string, CaptureSession>(tabGroups(records).map(group => [group.key, group]))
+  for (const tab of tabs) {
+    const key = String(tab.tabId)
+    const group = groups.get(key) ?? { key, title: '', url: '', favIconUrl: '', items: [] }
+    groups.set(key, { ...group, title: tab.title || group.title, url: tab.url || group.url, tab })
+  }
+  return [...groups.values()].sort((a, b) => Number(!!b.tab) - Number(!!a.tab))
 }
 
 /**

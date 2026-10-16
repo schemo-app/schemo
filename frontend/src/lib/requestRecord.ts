@@ -4,6 +4,22 @@ import type {
   HeaderPair,
   Record as RequestRecord,
 } from '../../bindings/schemo/internal/domain'
+import { formatDay } from '../i18n'
+
+/** Groups adjacent history records by display date, preserving their order. */
+export function recordsByDay(records: RequestRecord[]): { label: string; items: RequestRecord[] }[] {
+  const groups: { label: string; items: RequestRecord[] }[] = []
+  for (const record of records) {
+    const label = formatDay(record.startedAt)
+    const last = groups.at(-1)
+    if (last?.label === label) {
+      last.items.push(record)
+    } else {
+      groups.push({ label, items: [record] })
+    }
+  }
+  return groups
+}
 
 /** Flattened view model of a backend record with normalized collections and extracted body content. */
 export type RecordView = Omit<

@@ -1,4 +1,3 @@
-import { RecordSource } from '../../../bindings/schemo/internal/domain'
 import { useRecordsStore } from '../../stores/records'
 import { useCollectionsStore } from '../../stores/collections'
 import { ownerOf } from '../../stores/content'
@@ -16,9 +15,6 @@ export function useRecordEvents(
 
   // Handles new ingested records from browser capture or manual sampling
   useWailsEvent('record:added', (ev) => {
-    if (ev.data.source === RecordSource.SourceBrowser) {
-      store.setCaptureState({ connected: true, recording: true, paused: false })
-    }
     store.addIngested(ev.data)
   })
 

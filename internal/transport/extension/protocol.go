@@ -31,17 +31,18 @@ type CaptureState struct {
 	Paused    bool   `json:"paused"`
 	Tabs      int    `json:"tabs"`
 	Browser   string `json:"browser"`
-	// Version is the extension's own version, which is what the window names it by beside the
-	// browser. An extension that does not send one is still a connected one.
-	Version string `json:"version,omitempty"`
+	Version   string `json:"version"`
 	// TabList contains details for each individual tab currently under capture.
-	TabList []TabState `json:"tabList,omitempty"`
+	TabList []TabState `json:"tabList"`
 }
 
 // TabState represents a single captured tab along with the Unix timestamp (in milliseconds) when it was armed.
 type TabState struct {
-	TabID int   `json:"tabId"`
-	Since int64 `json:"since"`
+	TabID  int    `json:"tabId"`
+	Since  int64  `json:"since"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+	Paused bool   `json:"paused"`
 }
 
 // FocusRequest represents a command from the extension asking the window to focus on a specific tab.

@@ -1,3 +1,5 @@
+import { onMounted, onScopeDispose } from 'vue'
+import type { CaptureState } from '../../../bindings/schemo/internal/transport/extension'
 import { BridgeService } from '../../../bindings/schemo/internal/transport/wails'
 import { useSettings } from '../useSettings'
 import { useRecordsStore } from '../../stores/records'
@@ -5,24 +7,44 @@ import { useWailsEvent } from './useWailsEvent'
 
 /** Subscribes to browser extension capture events and synchronizes state with the requests store. */
 export function useCaptureEvents(store: ReturnType<typeof useRecordsStore>): void {
-  useWailsEvent('capture-state', (ev) => {
-    store.setCaptureState({
-      connected: true,
-      recording: ev.data.recording,
-      paused: ev.data.paused,
-      tabs: ev.data.tabs,
-      browser: ev.data.browser ?? '',
-      version: ev.data.version ?? '',
-      tabList: ev.data.tabList ?? [],
-    })
-    // Re-apply what the extension is told on reconnect or state updates: the filters, and the two
-    // switches — an extension that just connected knows nothing of either yet.
-    void store.applyCaptureFilters()
-    const extension = useSettings().settings.value?.extension
-    if (extension) void BridgeService.ApplyExtensionSettings(extension)
+  let changed = false
+  onScopeDispose(() => { changed = true })
+  onMounted(async () => {
+    try {
+      const status = await BridgeService.Status()
+      if (!changed && status.connected) applyState(status.state)
+    } catch {
+      // The next bridge event will supply the state if the initial read fails.
+    }
   })
 
+  useWailsEvent('capture-state', (ev) => {
+    changed = true
+    applyState(ev.data)
+  })
+
+  function applyState(state: CaptureState): void {
+    store.setCaptureState({
+      connected: true,
+      recording: state.recording,
+      paused: state.paused,
+      tabs: state.tabs,
+      browser: state.browser,
+      version: state.version,
+      tabList: state.tabList ?? [],
+    })
+    // A newly connected browser needs the current filters and settings.
+    void store.applyCaptureFilters()
+    const extension = useSettings().settings.value?.extension
+    if (extension) {
+      void BridgeService.ApplyExtensionSettings(extension).catch(() => {
+        // The bridge may disconnect during propagation; the next state retries it.
+      })
+    }
+  }
+
   useWailsEvent('capture-disconnected', () => {
+    changed = true
     store.setCaptureState({
       connected: false,
       recording: false,
@@ -35,7 +57,6 @@ export function useCaptureEvents(store: ReturnType<typeof useRecordsStore>): voi
   })
 
   useWailsEvent('open-tab', (ev) => {
-    // The extension asks the window to look at a tab under capture: the history opens on it.
     store.openSession(String(ev.data))
   })
 }

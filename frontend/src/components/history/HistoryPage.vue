@@ -5,13 +5,13 @@ import { RecordsService } from '../../../bindings/schemo/internal/transport/wail
 import { useRecordsStore } from '../../stores/records'
 import { splitAddress } from '../../lib/address'
 import { methodInkClass, statusTone } from '../../lib/format'
-import { effectiveTab, groupLabel, tabGroups, tabKeyOf } from '../../lib/recordTabs'
+import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
+import { recordsByDay } from '../../lib/requestRecord'
 import {
   daysAgo,
   describeFailure,
   formatBytes,
   formatClock,
-  formatDay,
   formatDuration,
   formatStatus,
   useMessages,
@@ -31,11 +31,9 @@ const store = useRecordsStore()
 const toast = useToast()
 const { t } = useMessages()
 
-type Source = 'all' | 'manual' | 'browser' | 'mcp'
+type Source = typeof store.historySource
 type ClearMessage = 'clearedShown' | 'clearedOlder'
 
-const query = ref('')
-const source = ref<Source>('all')
 const clearOpen = ref(false)
 
 const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
@@ -63,8 +61,8 @@ function matches(r: RequestRecord, q: string): boolean {
 }
 
 const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase()
-  const selectedSource = source.value
+  const q = store.historyQuery.trim().toLowerCase()
+  const selectedSource = store.historySource
   const session = store.sessionFilter
 
   return store.records.filter(
@@ -75,22 +73,7 @@ const filtered = computed(() => {
   )
 })
 
-const groups = computed(() => {
-  const result: { label: string; items: RequestRecord[] }[] = []
-
-  for (const record of filtered.value) {
-    const label = formatDay(record.startedAt)
-    const last = result[result.length - 1]
-
-    if (last?.label === label) {
-      last.items.push(record)
-    } else {
-      result.push({ label, items: [record] })
-    }
-  }
-
-  return result
-})
+const groups = computed(() => recordsByDay(filtered.value))
 
 const count = computed(() =>
     t('history.countOf', {
@@ -105,17 +88,11 @@ const older = computed(() =>
     store.records.filter((r) => daysAgo(r.startedAt) > 0),
 )
 
-const browserRecords = computed(() =>
-    store.records.filter((r) => r.source === RecordSource.SourceBrowser),
-)
-
-const browserTabGroups = computed(() => tabGroups(browserRecords.value))
-
 const sessionGroup = computed(() => {
   const session = store.sessionFilter
 
   return session
-      ? browserTabGroups.value.find((group) => group.key === session)
+      ? store.captureSessions.find((group) => group.key === session)
       : undefined
 })
 
@@ -123,16 +100,30 @@ const sessionTitle = computed(() =>
     sessionGroup.value ? groupLabel(sessionGroup.value) : '',
 )
 
-const liveGroup = computed(() => effectiveTab(browserTabGroups.value, ''))
-const recording = computed(() => store.capture.recording)
+const selectedTab = computed(() => sessionGroup.value?.tab)
+const recording = computed(() => selectedTab.value ? !selectedTab.value.paused : store.capture.recording)
+const showCapture = computed(() =>
+  store.capture.connected && (store.sessionFilter ? !!selectedTab.value : store.capture.recording),
+)
+const captureAction = computed(() => {
+  if (!store.sessionFilter) return t('capture.pauseAll')
+  return recording.value ? t('history.pause') : t('history.resume')
+})
 
 const liveLine = computed(() => {
   const parts: string[] = []
 
-  if (liveGroup.value) parts.push(groupLabel(liveGroup.value))
+  if (sessionGroup.value) parts.push(groupLabel(sessionGroup.value))
   if (store.capture.browser) parts.push(store.capture.browser)
 
-  parts.push(t('history.requestsN', browserRecords.value.length))
+  if (store.sessionFilter) {
+    parts.push(t('history.requestsN', { n: sessionGroup.value?.items.length ?? 0 }))
+  } else {
+    parts.push(t('capture.recordingTabs', {
+      active: store.capture.tabList.filter(tab => !tab.paused).length,
+      total: store.capture.tabList.length,
+    }))
+  }
 
   return parts.join(' · ')
 })
@@ -242,7 +233,7 @@ watch(filtered, (rows) => {
       <div class="hist-search">
         <Icon name="Search" :size="12" :stroke-width="2" class="hist-search-icon" />
         <input
-            v-model="query"
+            v-model="store.historyQuery"
             class="hist-search-input"
             spellcheck="false"
             :placeholder="t('history.filterPlaceholder')"
@@ -254,8 +245,8 @@ watch(filtered, (rows) => {
           size="sm"
           :grow="false"
           :options="sources"
-          :value="source"
-          @pick="source = $event as Source"
+          :value="store.historySource"
+          @pick="store.historySource = $event as Source"
       />
 
       <DropdownMenu v-model:open="clearOpen">
@@ -321,12 +312,16 @@ watch(filtered, (rows) => {
       <span class="hist-count">{{ count }}</span>
     </div>
 
-    <div v-if="recording" class="hist-rec">
+    <div v-if="showCapture" class="hist-rec" :class="{ paused: !recording }">
       <span class="hist-rec-dot"></span>
-      <span class="hist-rec-title">{{ t('history.recording') }}</span>
+      <span class="hist-rec-title">{{ recording ? t('history.recording') : t('history.paused') }}</span>
       <span class="hist-rec-line">{{ liveLine }}</span>
-      <button class="hist-rec-btn" @click="store.toggleCapture()">
-        {{ t('history.pause') }}
+      <button
+        type="button"
+        class="hist-rec-btn"
+        @click="store.toggleCapture(store.sessionFilter || undefined)"
+      >
+        {{ captureAction }}
       </button>
       <button class="hist-rec-btn" @click="exportHar()">
         {{ t('files.exportHar') }}
@@ -562,6 +557,11 @@ watch(filtered, (rows) => {
   border-radius: 999px;
   background: var(--red);
   box-shadow: 0 0 0 0.1875rem var(--red-soft);
+}
+
+.hist-rec.paused .hist-rec-dot {
+  background: var(--text-tertiary);
+  box-shadow: none;
 }
 
 .hist-rec-title {

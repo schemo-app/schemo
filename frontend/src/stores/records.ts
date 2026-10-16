@@ -18,6 +18,7 @@ import { focusUrlField } from '../composables/intents'
 import { callOrToast, runOrToast } from './calls'
 import { useTabsStore } from './tabs'
 import { adoptRecord as adoptInTabs, flushAll } from './content'
+import { captureSessions as groupCaptureSessions } from '../lib/recordTabs'
 
 type CaptureState = Omit<BridgeCaptureState, 'type' | 'version' | 'tabList'> & {
   connected: boolean
@@ -42,6 +43,8 @@ export const useRecordsStore = defineStore('records', () => {
   // The captured browser tab the history page is filtered by — set from the capture page, cleared
   // by its chip.
   const sessionFilter = ref('')
+  const historySource = ref<'all' | 'manual' | 'browser' | 'mcp'>('all')
+  const historyQuery = ref('')
   const capture = ref<CaptureState>({
     connected: false,
     recording: false,
@@ -51,6 +54,8 @@ export const useRecordsStore = defineStore('records', () => {
     version: '',
     tabList: [],
   })
+  const browserRecords = computed(() => records.value.filter(record => record.source === RecordSource.SourceBrowser))
+  const captureSessions = computed(() => groupCaptureSessions(browserRecords.value, capture.value.tabList))
 
   // The line the bookmark saves is the active request tab's draft; the record the work area shows
   // is the active request tab's answer. Both are the strip's answers, read through it.
@@ -134,6 +139,8 @@ export const useRecordsStore = defineStore('records', () => {
     olderExhausted.value = false
     bodies.value = {}
     sessionFilter.value = ''
+    historySource.value = 'all'
+    historyQuery.value = ''
   }
 
   // Inserts or updates a record at the head of the list if accepted by workspace filter.
@@ -158,6 +165,8 @@ export const useRecordsStore = defineStore('records', () => {
   // A session of the capture page: the history page opens filtered by that browser tab.
   function openSession(key: string) {
     sessionFilter.value = key
+    historySource.value = 'browser'
+    historyQuery.value = ''
     void tabs.openHistory()
   }
 
@@ -188,8 +197,17 @@ export const useRecordsStore = defineStore('records', () => {
     }
   }
 
-  async function toggleCapture() {
-    const call = capture.value.paused ? BridgeService.ResumeCapture() : BridgeService.PauseCapture()
+  async function toggleCapture(key?: string) {
+    if (key) {
+      const tab = capture.value.tabList.find(tab => String(tab.tabId) === key)
+      if (!tab) return
+      await callOrToast(
+        BridgeService.SetTabCapture(tab.tabId, capture.value.browser, !tab.paused),
+        'browser.captureFailed',
+      )
+      return
+    }
+    const call = capture.value.recording ? BridgeService.PauseCapture() : BridgeService.ResumeCapture()
     await callOrToast(call, 'browser.captureFailed')
   }
 
@@ -257,7 +275,11 @@ export const useRecordsStore = defineStore('records', () => {
     records,
     bodies,
     sessionFilter,
+    historySource,
+    historyQuery,
     capture,
+    browserRecords,
+    captureSessions,
     url,
     markClean,
     flush,

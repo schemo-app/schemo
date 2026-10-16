@@ -55,6 +55,13 @@ export function ResumeCapture(): $CancellablePromise<void> {
 }
 
 /**
+ * SetTabCapture pauses or resumes one tab in the specified browser.
+ */
+export function SetTabCapture(tabID: number, browser: string, paused: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1786147628, tabID, browser, paused);
+}
+
+/**
  * Status is what the extension section draws at the top: whether a browser is connected, and what
  * it last said about itself. It is a reading rather than an answer — a window that opens after the
  * extension has already spoken has nothing coming to it.

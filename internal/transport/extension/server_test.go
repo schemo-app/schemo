@@ -184,11 +184,17 @@ func TestAWindowIsToldWhatTheExtensionLastSaid(t *testing.T) {
 		t.Errorf("status = %+v, want nothing before the extension has spoken", got)
 	}
 
-	send(t, conn, CaptureState{Type: "state", Browser: "Chrome 129", Tabs: 2})
+	send(t, conn, CaptureState{
+		Type: "state", Browser: "Chrome 129", Tabs: 2,
+		TabList: []TabState{{TabID: 7, Since: 1, Title: "New tab", URL: "https://example.com/products", Paused: false}},
+	})
 
 	eventually(t, "the state to be remembered", func() bool {
 		got := s.Status()
-		return got.Connected && got.State.Browser == "Chrome 129" && got.State.Tabs == 2
+		return got.Connected && got.State.Browser == "Chrome 129" && got.State.Tabs == 2 &&
+			len(got.State.TabList) == 1 && got.State.TabList[0].Title == "New tab" &&
+			got.State.TabList[0].URL == "https://example.com/products" &&
+			!got.State.TabList[0].Paused
 	})
 }
 
