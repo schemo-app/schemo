@@ -43,10 +43,10 @@ const capturedRecord = computed(() =>
   responseSource.value === 'browser' ? (tabs.pane?.record ?? null) : null
 )
 
-function openCapturedInRequest() {
+async function openCapturedInRequest() {
   const record = capturedRecord.value
   if (!record) return
-  void tabs.open({ kind: TabKind.TabKindRequest, ref: record.id, record: record.id, newTab: true })
+  await tabs.editRecord(record.id)
   focusUrlField()
 }
 </script>

@@ -63,6 +63,24 @@ func (s *TabsService) Open(
 	return s.settled(ctx, stripped, err)
 }
 
+// EditRecord opens an independent editable copy of a history request.
+func (s *TabsService) EditRecord(ctx context.Context, recordID string) (tabstrip.Strip, error) {
+	draftID, err := s.tabs.MintDraftID(ctx)
+	if err != nil {
+		return tabstrip.Strip{}, err
+	}
+	if err := s.seedFromRecord(ctx, draftID, recordID); err != nil {
+		return tabstrip.Strip{}, err
+	}
+	stripped, err := s.tabs.Open(ctx, tabstrip.OpenInput{
+		Kind: domain.TabKindRequest, DraftID: draftID, NewTab: true,
+	})
+	if err != nil {
+		_ = s.drafts.Discard(ctx, draftID)
+	}
+	return s.settled(ctx, stripped, err)
+}
+
 // New appends a blank request tab at the end and shows it.
 func (s *TabsService) New(ctx context.Context) (tabstrip.Strip, error) {
 	stripped, err := s.tabs.New(ctx)

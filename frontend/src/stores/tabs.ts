@@ -118,6 +118,10 @@ export const useTabsStore = defineStore('tabs', () => {
     await open({ kind: TabKind.TabKindRequest, record: id, newTab: keep, background })
   }
 
+  async function editRecord(id: string) {
+    await change(TabsService.EditRecord(id))
+  }
+
   // How many times a tab has been turned to. The same tab clicked again is still a turn to it —
   // the work area may be showing a section's own page, and this is how it steps aside.
   const activationTick = ref(0)
@@ -216,6 +220,7 @@ export const useTabsStore = defineStore('tabs', () => {
     openCollection,
     openNode,
     openRecord,
+    editRecord,
     activate,
     close,
     closeOthers,

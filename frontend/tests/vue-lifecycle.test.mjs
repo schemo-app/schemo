@@ -87,7 +87,7 @@ const vite = await createServer({
 })
 after(() => vite.close())
 const { CancellablePromise } = await vite.ssrLoadModule('test:wails')
-const { TabKind } = await vite.ssrLoadModule('/bindings/schemo/internal/domain/models.ts')
+const { RecordSource, TabKind } = await vite.ssrLoadModule('/bindings/schemo/internal/domain/models.ts')
 const content = await vite.ssrLoadModule('/src/stores/content.ts')
 const { useInspection } = await vite.ssrLoadModule('/src/composables/response/useInspection.ts')
 const components = Object.fromEntries(await Promise.all(componentNames.map(async name => [
@@ -175,6 +175,31 @@ test('request editor is not mounted with placeholder values before its draft arr
   ports.tabs.pane.draftId = 'loaded'
   await nextTick()
   assert.ok(rendered(root, 'RequestBuilder'))
+})
+
+test('repeating a captured request opens its editable copy', async (context) => {
+  const edited = []
+  ports.tabs = shallowReactive({
+    activeKind: TabKind.TabKindRequest, activeId: 'capture',
+    activeTab: { kind: TabKind.TabKindRequest, draftId: 'capture-draft' },
+    activeInstance: { kind: TabKind.TabKindRequest, reading: ref(false), node: ref(null) },
+    pane: { draftId: 'capture-draft', blank: false, record: { id: 'record', source: RecordSource.SourceBrowser } },
+    async editRecord(id) {
+      edited.push(id)
+      ports.tabs.activeId = 'copy'
+      ports.tabs.activeTab = { kind: TabKind.TabKindRequest, draftId: 'copy-draft' }
+      ports.tabs.pane = { draftId: 'copy-draft', blank: false }
+    },
+  })
+  const root = mount(context, components.Workspace)
+  const captured = rendered(root, 'CapturedRequestBar')
+  assert.ok(captured)
+  assert.equal(rendered(root, 'RequestBuilder'), undefined)
+  await captured.props.onOpenInRequest()
+  await settle()
+  assert.deepEqual(edited, ['record'])
+  assert.equal(rendered(root, 'CapturedRequestBar'), undefined)
+  assert.equal(rendered(root, 'RequestBuilder').props.source.draftId, 'copy-draft')
 })
 
 test('saving a draft as a collection request replaces the editor that owned the old draft', async (context) => {

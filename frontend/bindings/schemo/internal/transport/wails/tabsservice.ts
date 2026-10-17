@@ -63,6 +63,13 @@ export function Duplicate(id: string): $CancellablePromise<tabstrip$0.Strip> {
 }
 
 /**
+ * EditRecord opens an independent editable copy of a history request.
+ */
+export function EditRecord(recordID: string): $CancellablePromise<tabstrip$0.Strip> {
+    return $Call.ByID(2789063765, recordID);
+}
+
+/**
  * Keep takes a preview out of the preview slot.
  */
 export function Keep(id: string): $CancellablePromise<tabstrip$0.Strip> {
