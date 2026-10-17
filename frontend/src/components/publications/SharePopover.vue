@@ -43,7 +43,7 @@ const disabled = computed(() => readOnly.value || store.busy || store.reading)
 const passwordOk = computed(() => store.visibility !== 'password' || passwordFits(store.password) ||
   (!store.password && publication.value?.visibility === 'password'))
 const canPublish = computed(() => includes(FEATURES.shareLinks) && !disabled.value && passwordOk.value)
-const pending = computed(() => store.behind || store.visibility !== publication.value?.visibility)
+const pending = computed(() => store.behind || store.visibility !== publication.value?.visibility || store.passwordChanged)
 const envLabel = computed(() => store.environments.find(choice => choice.id === store.environment)?.name ??
   env.activeEnvironment?.name ?? t('publications.envNone'))
 const lede = computed(() => t(store.visibility === 'public' ? 'publications.draftPublic' :
@@ -85,7 +85,7 @@ function selectAddress(event: FocusEvent) {
         <span class="cap-line">{{ label }}</span>
       </button>
     </PopoverTrigger>
-    <PopoverContent class="share-pop" align="start" :side-offset="8" @open-auto-focus.prevent>
+    <PopoverContent v-if="open" class="share-pop" align="start" :side-offset="8" @open-auto-focus.prevent>
       <template v-if="!publication">
         <div class="pop-head">
           <span class="pop-title">{{ t('publications.headline') }}</span>
@@ -134,7 +134,8 @@ function selectAddress(event: FocusEvent) {
             :environments="store.environments" :disabled="disabled" access-only @visibility="pickVisibility" @environment="store.choose" />
           <div v-if="store.visibility === 'password'" class="quick-password">
             <PublicationPassword :key="store.collection" v-model="store.password" tools save :disabled="disabled"
-              :placeholder="t('publications.newPassword')" :save-disabled="!canPublish || !passwordFits(store.password)" @save="publish" />
+              :placeholder="t(publication.visibility === 'password' ? 'publications.passwordUnavailable' : 'publications.newPassword')"
+              :save-disabled="!canPublish || !store.passwordChanged || !passwordFits(store.password)" @save="publish" />
             <span v-if="store.password && !passwordOk" class="pass-note">{{ t('publications.passwordLength', passwordRange) }}</span>
           </div>
         </div>

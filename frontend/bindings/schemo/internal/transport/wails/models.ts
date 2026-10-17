@@ -50,8 +50,12 @@ export interface PublishChoice {
     "confirmed": boolean;
 
     /**
-     * Password is held here for as long as a publish takes and is written down nowhere: it is what a
-     * locked page answers to, and the row keeps a hash of it rather than the text.
+     * Password is sent to the server and saved locally in the OS credential store.
      */
     "password": string;
+}
+
+export interface PublishResult {
+    "page": domain$0.Publication;
+    "passwordSaved": boolean;
 }

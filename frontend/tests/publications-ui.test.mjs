@@ -186,13 +186,38 @@ test('a live popover offers quick access and links to settings without duplicati
 test('an existing password page can update without retyping its password and offers a separate password save', async () => {
   setup({...live, visibility: 'password'}, [{sign: '~', method: 'GET', name: 'Changed'}])
   const html = await render()
-  assert.match(html, /placeholder="publications.newPassword"/)
+  assert.match(html, /placeholder="publications.passwordUnavailable"/)
   const button = html.match(/<button[^>]*class="action-row update"[^>]*>/)?.[0]
   assert.ok(button)
   assert.doesNotMatch(button, /disabled/)
   assert.match(html, /class="save-password" disabled/)
   assert.match(html, /publications.generatePassword/)
   assert.match(html, /publications.showPassword/)
+})
+
+test('saved passwords are masked and offer copy controls in both publication editors', async () => {
+  const page = {...live, collectionId: 'collection', visibility: 'password'}
+  setup(page)
+  globalThis.publicationUi.pages = [page]
+  globalThis.publicationUi.password = 'locally-saved-password'
+  globalThis.publicationUi.passwordChanged = false
+  for (const html of [await render(), await renderToString(createSSRApp(PublicationsPage))]) {
+    const field = html.match(/<input[^>]*value="locally-saved-password"[^>]*>/)?.[0]
+    assert.ok(field)
+    assert.match(field, /type="password"/)
+    assert.match(html, /publications.copyPassword/)
+    assert.match(html, /class="save-password" disabled/)
+  }
+})
+
+test('a closed share popover cannot render the reset initial publication form', async () => {
+  setup(live)
+  globalThis.publicationUi.open = false
+  globalThis.publicationUi.collection = ''
+  globalThis.publicationUi.publication = null
+  const html = await render()
+  assert.match(html, /class="share-btn/)
+  assert.doesNotMatch(html, /class="share-pop|publications.headline|draft-fields|quick-fields/)
 })
 
 test('the takedown dialog retains the page URL after the share popover closes', async () => {

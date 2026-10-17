@@ -60,10 +60,10 @@ export const usePublicationsStore = defineStore('publications', () => {
   const visibility = ref<Visibility>('unlisted')
   const options = ref<PublicationOptions | null>(null)
 
-  // The password a page is about to stand behind. It lives in the window and nowhere else: Go hands
-  // it to the server once and keeps no copy, so the only moment it exists is between the field and
-  // the publish, and closing the popover is the end of it.
+  // Passwords are read explicitly from the OS credential store and cleared when the editor closes.
   const password = ref('')
+  const savedPassword = ref('')
+  const passwordChanged = computed(() => password.value !== savedPassword.value)
   const previewSnapshot = useWorkspaceSnapshot<PublishPreview | null>(null)
   const preview = previewSnapshot.state
   const reading = previewSnapshot.loading
@@ -170,6 +170,17 @@ export const usePublicationsStore = defineStore('publications', () => {
     // is not silently asking for something else.
     const held = answer.publication?.visibility
     if (adopt && isVisibility(held)) visibility.value = held
+    if (adopt && answer.publication?.visibility === 'password' && answer.publication.canManage) {
+      const saved = await callOrToast(
+        PublicationsService.Password(collection.value).cancelOn(signal),
+        'publications.passwordReadFailed'
+      )
+      if (saved !== undefined && !signal.aborted && preview.value === answer) {
+        savedPassword.value = saved
+        if (!password.value) password.value = saved
+      }
+    }
+    if (signal.aborted || preview.value !== answer) return
     // An environment this device no longer holds cannot be named, and a field with nothing in it
     // would say the addresses are read against nothing while the page was built against the first.
     // The page's own environment is named first: it is the one the field is being asked about.
@@ -189,12 +200,12 @@ export const usePublicationsStore = defineStore('publications', () => {
     environment.value = ''
     // The access the mark holds is the one the page has, and reading it here is what keeps the
     // popover from offering «По ссылке» for a moment to a page that is public.
-    const known = marks.value[collectionID]?.page?.visibility
+    const known = marks.value[collectionID]?.page?.visibility ?? pages.value.find(page => page.collectionId === collectionID)?.visibility
     visibility.value = isVisibility(known) ? known : 'unlisted'
     password.value = ''
+    savedPassword.value = ''
     options.value = null
-    void readPreview(true)
-    void mark(collectionID)
+    return Promise.all([readPreview(true), mark(collectionID)])
   }
 
   function openShare(collectionID: string) {
@@ -212,6 +223,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     previewSnapshot.reset()
     busy.value = false
     password.value = ''
+    savedPassword.value = ''
     options.value = null
   }
 
@@ -233,7 +245,8 @@ export const usePublicationsStore = defineStore('publications', () => {
     const signal = AbortSignal.any([pageSnapshot.signal(), previewSnapshot.signal()])
     busy.value = true
     try {
-      const held = await callOrToast(
+      const submittedPassword = visibility.value === 'password' && passwordChanged.value ? password.value : ''
+      const result = await callOrToast(
         PublicationsService.Publish({
           workspace: space(),
           collection: collection.value,
@@ -242,12 +255,19 @@ export const usePublicationsStore = defineStore('publications', () => {
           locale: locale.value,
           confirmed,
           options: options.value,
-          password: visibility.value === 'password' ? password.value : '',
+          password: submittedPassword,
         }).cancelOn(signal),
         'publications.publishFailed'
       )
-      if (!held || signal.aborted) return false
-      password.value = ''
+      if (!result || signal.aborted) return false
+      const held = result.page
+      if (!result.passwordSaved) toast.show(t('publications.passwordSaveFailed'), 'error')
+      if (visibility.value !== 'password') {
+        password.value = ''
+        savedPassword.value = ''
+      } else if (submittedPassword && result.passwordSaved) {
+        savedPassword.value = submittedPassword
+      }
       await readPreview()
       if (signal.aborted) return false
       await markAll([...new Set([...Object.keys(marks.value), collection.value, held.collectionId])])
@@ -329,6 +349,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     visibility,
     options,
     password,
+    passwordChanged,
     preview,
     publication,
     behind,

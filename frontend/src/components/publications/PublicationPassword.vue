@@ -2,12 +2,19 @@
 import { ref } from 'vue'
 import { useMessages } from '../../i18n'
 import Icon from '../ui/Icon.vue'
+import { copyToClipboard } from '../../lib/clipboard'
+import { useToast } from '../../composables/useToast'
 
 const password = defineModel<string>({ required: true })
 defineProps<{ disabled?: boolean; placeholder: string; tools?: boolean; save?: boolean; saveDisabled?: boolean }>()
 defineEmits<{ save: [] }>()
 const { t } = useMessages()
 const visible = ref(false)
+const toast = useToast()
+
+async function copy() {
+  if (password.value && await copyToClipboard(password.value)) toast.show(t('common.copied'))
+}
 
 function generate() {
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -22,6 +29,8 @@ function generate() {
       <input v-model="password" :type="visible ? 'text' : 'password'" autocomplete="new-password"
         :disabled="disabled" :aria-label="t('publications.password')" :placeholder="placeholder" />
       <template v-if="tools">
+        <button type="button" :disabled="disabled || !password" :title="t('publications.copyPassword')"
+          :aria-label="t('publications.copyPassword')" @click="copy"><Icon name="Copy" :size="14" /></button>
         <button type="button" :disabled="disabled" :title="t('publications.generatePassword')"
           :aria-label="t('publications.generatePassword')" @click="generate"><Icon name="RefreshCw" :size="14" /></button>
         <button type="button" :disabled="disabled" :title="t(visible ? 'publications.hidePassword' : 'publications.showPassword')"

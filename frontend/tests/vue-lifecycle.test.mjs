@@ -9,18 +9,18 @@ import { createServer, transformWithEsbuild } from 'vite'
 globalThis.window = new EventTarget()
 globalThis.document = Object.assign(new EventTarget(), { createElement: () => ({}) })
 globalThis.vuePorts = {
-  services: Object.fromEntries(['Collections', 'Draft', 'Records', 'Command', 'Scripting', 'Inspect'].map(name => [name, {}])),
+  services: Object.fromEntries(['Collections', 'Draft', 'Records', 'Command', 'Scripting', 'Inspect', 'Publications'].map(name => [name, {}])),
   notices: [],
 }
 const ports = globalThis.vuePorts
 const runtimePath = resolve('node_modules/@wailsio/runtime/dist').replaceAll('\\', '/')
 const runtime = `export { CancellablePromise, CancelError } from '${runtimePath}/cancellable.js';
-  export * as Create from '${runtimePath}/create.js';`
+  export * as Create from '${runtimePath}/create.js'; export const Browser = {OpenURL() {}};`
 const stub = `import { defineComponent, h } from 'vue';
   const stub = name => defineComponent({ inheritAttrs: false,
     setup(_, { attrs, slots }) { return () => h('stub', { ...attrs, 'data-component': name }, slots.default?.()) }
   });`
-const componentNames = ['TabStrip', 'Workspace', 'CollectionPage']
+const componentNames = ['TabStrip', 'Workspace', 'CollectionPage', 'PublicationsPage']
 const vite = await createServer({
   configFile: false,
   ssr: { noExternal: ['@wailsio/runtime'] },
@@ -44,12 +44,13 @@ const vite = await createServer({
       for (const name of ['tabs', 'records', 'collections', 'publications', 'transfer', 'workspaces']) {
         if (path.endsWith(`/src/stores/${name}.ts`)) {
           const title = name[0].toUpperCase() + name.slice(1)
-          return `export const use${title}Store = () => globalThis.vuePorts.${name};`
+          return `export const use${title}Store = () => globalThis.vuePorts.${name};` +
+            (name === 'publications' ? 'export const hostOf = () => "share.example.com";' : '')
         }
       }
       if (path.endsWith('/src/i18n.ts')) {
         return `export const t = key => key; export const useMessages = () => ({ t });
-          export const describeFailure = String; export const formatMicros = String;`
+          export const describeFailure = String; export const formatMicros = String; export const formatAgo = String;`
       }
       if (path.endsWith('/src/composables/useToast.ts')) {
         return 'export const useToast = () => ({ show: message => globalThis.vuePorts.notices.push(message) })'
@@ -73,6 +74,10 @@ const vite = await createServer({
       if (path.endsWith('/components/ui/tabs/index.ts')) {
         return stub + ['Tabs', 'TabsList', 'TabsTrigger'].map(name => `export const ${name} = stub('${name}');`).join('\n')
       }
+      if (path.endsWith('/components/ui/dropdown-menu/index.ts')) {
+        return stub + ['DropdownMenu', 'DropdownMenuTrigger', 'DropdownMenuContent', 'DropdownMenuItem', 'DropdownMenuSeparator']
+          .map(name => `export const ${name} = stub('${name}');`).join('\n')
+      }
       if (path.endsWith('.vue')) {
         const name = path.split('/').at(-1).slice(0, -4)
         if (componentNames.includes(name)) {
@@ -91,7 +96,7 @@ const { RecordSource, TabKind } = await vite.ssrLoadModule('/bindings/schemo/int
 const content = await vite.ssrLoadModule('/src/stores/content.ts')
 const { useInspection } = await vite.ssrLoadModule('/src/composables/response/useInspection.ts')
 const components = Object.fromEntries(await Promise.all(componentNames.map(async name => [
-  name, (await vite.ssrLoadModule(`/src/components/${name === 'CollectionPage' ? 'collections' : 'layout'}/${name}.vue`)).default,
+  name, (await vite.ssrLoadModule(`/src/components/${name === 'CollectionPage' ? 'collections' : name === 'PublicationsPage' ? 'publications' : 'layout'}/${name}.vue`)).default,
 ])))
 afterEach(() => {
   content.keepOnly([])
@@ -110,7 +115,7 @@ async function settle() {
   await nextTick()
 }
 
-function node(type, text = '') { return { type, text, props: {}, children: [], parent: null } }
+function node(type, text = '') { return { type, text, props: {}, style: {}, children: [], parent: null } }
 function remove(child) {
   if (child.parent) child.parent.children.splice(child.parent.children.indexOf(child), 1)
   child.parent = null
@@ -138,6 +143,76 @@ function mount(context, component) {
 }
 function all(root) { return [root, ...root.children.flatMap(all)] }
 function rendered(root, name) { return all(root).find(child => child.props['data-component'] === name) }
+
+function withClass(root, name) {
+  return all(root).find(child => typeof child.props.class === 'string' && child.props.class.split(' ').includes(name))
+}
+
+test('opening publications waits for its editor and details and keeps content visible during refresh', async (context) => {
+  const listing = deferred()
+  const editor = deferred()
+  const details = deferred()
+  const page = {collectionId: 'collection', status: 'active', visibility: 'password', revision: 1, canManage: true}
+  let edits = 0
+  ports.collections = {tree: [{id: 'collection', name: 'Collection'}]}
+  ports.workspaces = {activeId: 'workspace', canWrite: true}
+  ports.tabs = {}
+  ports.publications = reactive({
+    pages: [], selectedCollection: '', collection: '', loading: false, reading: false,
+    visibility: 'unlisted', password: '', environments: [], changes: [], options: null,
+    async load() { await listing.promise; this.pages = [page] },
+    async refresh() {}, async markAll() {}, markOf() { return null }, closeShare() {},
+    async edit(id) {
+      edits++
+      this.collection = id
+      await editor.promise
+      this.visibility = 'password'
+      this.password = 'saved-password'
+      this.options = {docs: true, examples: true}
+    },
+  })
+  ports.services.Publications.Details = () => details.promise
+  const root = mount(context, components.PublicationsPage)
+  assert.equal(withClass(root, 'empty-card'), undefined)
+  listing.resolve()
+  await settle()
+  const pane = withClass(root, 'pane-inner')
+  assert.equal(pane.style.display, 'none')
+  details.resolve({views: 17, imports: 3, versions: []})
+  await settle()
+  assert.equal(pane.style.display, 'none')
+  editor.resolve()
+  await settle()
+  assert.notEqual(pane.style.display, 'none')
+  assert.equal(rendered(root, 'PublicationPassword').props.modelValue, 'saved-password')
+  const newer = deferred()
+  ports.services.Publications.Details = () => newer.promise
+  ports.publications.pages = [{...page, revision: 2}]
+  await settle()
+  assert.equal(withClass(root, 'pane-inner'), pane)
+  assert.notEqual(pane.style.display, 'none')
+  assert.equal(edits, 1)
+  newer.resolve({views: 19, imports: 4, versions: []})
+  await settle()
+  assert.notEqual(pane.style.display, 'none')
+})
+
+test('an empty local publication list does not show the empty state while the server refresh is pending', async (context) => {
+  const refresh = deferred()
+  ports.collections = {tree: []}
+  ports.workspaces = {canWrite: true}
+  ports.tabs = {}
+  ports.publications = reactive({
+    pages: [], selectedCollection: '', loading: false,
+    async load() {}, refresh: () => refresh.promise, async markAll() {}, closeShare() {},
+  })
+  const root = mount(context, components.PublicationsPage)
+  await settle()
+  assert.equal(withClass(root, 'empty-card'), undefined)
+  refresh.resolve()
+  await settle()
+  assert.ok(withClass(root, 'empty-card'))
+})
 
 test('closing an inactive tab does not activate it on pointerdown', (context) => {
   const activated = []

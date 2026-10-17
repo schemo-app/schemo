@@ -280,6 +280,10 @@ func (e fakeEnvironments) Snapshot(context.Context) (domain.EnvState, error) {
 // fakeSession is the account: a caller, or the refusal of one when nobody is signed in.
 type fakeSession struct{ err error }
 
+func (s fakeSession) Me(context.Context) (domain.Account, error) {
+	return domain.Account{Server: "https://api.example.com", UserID: "user"}, s.err
+}
+
 func (s fakeSession) Caller(context.Context) (domain.Caller, error) {
 	if s.err != nil {
 		return domain.Caller{}, s.err
@@ -314,14 +318,13 @@ func production() domain.EnvState {
 
 func newTestUseCase(store Store, server Server, session Session) *UseCase {
 	uc := NewUseCase(store, fakeCollections{tree: published()}, fakeEnvironments{state: production()},
-		server, session)
+		server, session, nil)
 	uc.now = func() time.Time { return time.UnixMilli(1_700_000_000_000) }
 	return uc
 }
 
-// A page behind a password is published with the text that opens it, and the text is on its way and
-// nowhere else: the device writes down a page's address and never the thing a stranger would need.
-func TestAPageBehindAPasswordIsSentWithItAndKeptNowhere(t *testing.T) {
+// Passwords travel separately and never enter public documents or local publication rows.
+func TestPublicationPasswordStaysOutOfDocumentsAndDatabaseRows(t *testing.T) {
 	store := &fakeStore{}
 	server := &fakeServer{}
 	uc := newTestUseCase(store, server, fakeSession{})

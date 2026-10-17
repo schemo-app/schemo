@@ -38,6 +38,7 @@ export const useCollectionsStore = defineStore('collections', () => {
 
   const snapshot = useWorkspaceSnapshot<Collection[]>([])
   const tree = snapshot.state
+
   const expanded = ref<{ [id: string]: boolean }>({})
   const filter = ref('')
   // Where the next ⌘S puts the next request: the save sheet promises it in as many words.
@@ -113,14 +114,20 @@ export const useCollectionsStore = defineStore('collections', () => {
   }
 
   async function load() {
-    await callOrToast(snapshot.take(CollectionsService.Tree(), (tree) => tree ?? []), 'collections.readFailed')
+    const signal = snapshot.signal()
+    const loaded = await callOrToast(
+      snapshot.take(CollectionsService.Tree(), (tree) => tree ?? []),
+      'collections.readFailed'
+    )
+    if (loaded !== undefined && !signal.aborted) await tabs.load()
   }
 
   // Every change answers with the whole tree, so the mirror is replaced rather than patched: the
-  // order rows are drawn in is Go's. The selection is the strip's, and a tab whose node the tree no
-  // longer has keeps its tab: what it shows is the node's own empty state.
+  // order rows are drawn in is Go's. Reloading the strip closes tabs whose content was removed.
   async function changeTree(call: CancellablePromise<Collection[] | null>) {
-    await callOrToast(snapshot.take(call, (tree) => tree ?? []), 'collections.saveFailed')
+    const signal = snapshot.signal()
+    const saved = await callOrToast(snapshot.take(call, (tree) => tree ?? []), 'collections.saveFailed')
+    if (saved !== undefined && !signal.aborted) await tabs.load()
   }
 
   const takeTree = <T extends { tree: Collection[] | null }>(call: CancellablePromise<T>) =>

@@ -16,6 +16,7 @@ type UseCase struct {
 	environments Environments
 	server       Server
 	caller       Session
+	passwords    Passwords
 	now          func() time.Time
 }
 
@@ -25,6 +26,7 @@ func NewUseCase(
 	environments Environments,
 	server Server,
 	caller Session,
+	passwords Passwords,
 ) *UseCase {
 	return &UseCase{
 		store:        store,
@@ -32,6 +34,7 @@ func NewUseCase(
 		environments: environments,
 		server:       server,
 		caller:       caller,
+		passwords:    passwords,
 		now:          time.Now,
 	}
 }

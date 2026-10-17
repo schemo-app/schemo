@@ -30,6 +30,10 @@ const toast = useToast()
 const workspaces = useWorkspacesStore()
 const details = useWorkspaceSnapshot<PublicationDetails | null>(null)
 const restoring = ref(0)
+const initializing = ref(store.pages.length === 0)
+const opening = ref(true)
+let closed = false
+let editing: Promise<unknown> = Promise.resolve()
 
 const selected = computed({
   get: () => store.selectedCollection,
@@ -37,9 +41,15 @@ const selected = computed({
 })
 
 onMounted(async () => {
-  await store.load()
-  await store.refresh()
-  await store.markAll(store.pages.map((page) => page.collectionId))
+  try {
+    await store.load()
+    if (closed) return
+    await store.refresh()
+    if (closed) return
+    await store.markAll(store.pages.map((page) => page.collectionId))
+  } finally {
+    initializing.value = false
+  }
 })
 
 const live = computed(() => store.pages.filter((page) => page.status === 'active' && !page.pendingUnpublish))
@@ -73,17 +83,27 @@ const notes = computed(() => behind.value ? changeNotes(store.changes) : [])
 const editable = computed(() => !!current.value?.canManage && workspaces.canWrite)
 const disabled = computed(() => !editable.value || store.busy || store.reading || restoring.value !== 0)
 const passwordOk = computed(() => store.visibility !== 'password' || passwordFits(store.password) || (!store.password && current.value?.visibility === 'password'))
-const pending = computed(() => behind.value || store.visibility !== current.value?.visibility || !!store.password)
+const pending = computed(() => behind.value || store.visibility !== current.value?.visibility || store.passwordChanged)
 const environmentLabel = computed(() => store.environments.find(choice => choice.id === store.environment)?.name ?? current.value?.environmentName ?? t('publications.envNone'))
 
-watch([() => current.value?.collectionId, () => current.value?.revision], async () => {
-  details.reset()
+watch([() => current.value?.collectionId, () => current.value?.revision], async ([collectionId], [previousCollectionId]) => {
   const page = current.value
   if (!page) { store.closeShare(); return }
-  store.edit(page.collectionId)
-  await readDetails()
+  const changed = collectionId !== previousCollectionId
+  if (changed) {
+    opening.value = true
+    details.reset()
+    editing = store.edit(page.collectionId)
+  }
+  const signal = details.signal()
+  const revision = page.revision
+  await Promise.all([editing, readDetails()])
+  if (!signal.aborted && current.value?.collectionId === collectionId && current.value.revision === revision) opening.value = false
 }, { immediate: true })
-onUnmounted(() => store.closeShare())
+onUnmounted(() => {
+  closed = true
+  store.closeShare()
+})
 
 async function readDetails() {
   const page = current.value
@@ -148,7 +168,7 @@ async function update() {
       <span class="pubs-count">{{ head }}</span>
     </header>
 
-    <div v-if="store.loading && live.length === 0" class="pubs-empty">
+    <div v-if="(initializing || store.loading) && live.length === 0" class="pubs-empty">
       <span class="spinner spinner-lg"></span>
     </div>
 
@@ -188,7 +208,10 @@ async function update() {
       </div>
 
       <div v-if="current" class="pubs-pane">
-        <div class="pane-inner">
+        <div v-if="opening || initializing" class="pubs-empty">
+          <span class="spinner spinner-lg"></span>
+        </div>
+        <div v-show="!opening && !initializing" class="pane-inner">
           <div class="pane-top">
             <div class="pane-head">
               <div class="pane-title-row">
@@ -264,8 +287,9 @@ async function update() {
             <PublicationFields :visibility="store.visibility" :environment="store.environment"
               :environment-label="environmentLabel" :environments="store.environments" :disabled="disabled"
               @visibility="store.visibility = $event" @environment="store.choose" />
-            <PublicationPassword v-if="store.visibility === 'password'" v-model="store.password" class="password-row" save :disabled="disabled"
-              :placeholder="t('publications.newPassword')" :save-disabled="!passwordFits(store.password)" @save="update" />
+            <PublicationPassword v-if="store.visibility === 'password'" :key="current.collectionId" v-model="store.password" class="password-row" tools save :disabled="disabled"
+              :placeholder="t(current.visibility === 'password' ? 'publications.passwordUnavailable' : 'publications.newPassword')"
+              :save-disabled="!store.passwordChanged || !passwordFits(store.password)" @save="update" />
             <span v-if="store.password && !passwordOk" class="password-note">{{ t('publications.passwordLength', { min: PASSWORD.min, max: PASSWORD.max }) }}</span>
             <PublicationOptions v-if="store.options" :options="store.options" :disabled="disabled" @choose="store.chooseOption" />
           </section>

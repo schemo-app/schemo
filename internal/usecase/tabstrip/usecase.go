@@ -53,6 +53,39 @@ func (u *UseCase) Strip(ctx context.Context) (Strip, error) {
 	return u.loadLocked(ctx, workspace)
 }
 
+// Reconcile closes tabs whose saved request or collection no longer exists.
+func (u *UseCase) Reconcile(ctx context.Context, tree []domain.Collection) (Strip, error) {
+	refs := make(map[string]domain.TabKind)
+	var visit func([]domain.Collection)
+	visit = func(levels []domain.Collection) {
+		for _, level := range levels {
+			refs[level.ID] = domain.TabKindCollections
+			for _, node := range level.Items {
+				refs[node.ID] = domain.TabKindRequest
+			}
+			visit(level.Children)
+		}
+	}
+	visit(tree)
+	return u.mutate(ctx, func(s *strip) ([]domain.DraftID, error) {
+		oldActive := indexOf(s.tabs, s.active)
+		var discarded []domain.DraftID
+		s.tabs = slices.DeleteFunc(s.tabs, func(tab domain.Tab) bool {
+			if tab.Ref == "" || refs[tab.Ref] == tab.Kind {
+				return false
+			}
+			discarded = append(discarded, draftOf(tab)...)
+			return true
+		})
+		if len(s.tabs) == 0 {
+			s.active = ""
+		} else if indexOf(s.tabs, s.active) < 0 {
+			s.active = s.tabs[max(0, min(oldActive, len(s.tabs)-1))].ID
+		}
+		return discarded, nil
+	})
+}
+
 // MintDraftID names the draft a request tab about to open will edit: the command line's while it is
 // free — an upgrade keeps the request the older build left half composed — and a minted one after.
 func (u *UseCase) MintDraftID(ctx context.Context) (domain.DraftID, error) {
@@ -364,7 +397,8 @@ func (u *UseCase) mutate(
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if _, err := u.loadLocked(ctx, workspace); err != nil {
+	loaded, err := u.loadLocked(ctx, workspace)
+	if err != nil {
 		return Strip{}, err
 	}
 	s := u.strips[workspace]
@@ -373,6 +407,7 @@ func (u *UseCase) mutate(
 	if err != nil {
 		return Strip{}, err
 	}
+	discarded = append(loaded.Discarded, discarded...)
 	sortPinnedFirst(s.tabs)
 	restore, err := u.policy.RestoreTabs(ctx)
 	if err != nil {

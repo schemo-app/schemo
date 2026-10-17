@@ -14,6 +14,11 @@ Database files use restrictive filesystem permissions where supported, but a cop
 
 Account refresh tokens are not stored in SQLite.
 
+Publication passwords saved on this device also use the operating system credential store.
+They are scoped to the installation, server, account and publication, and are not synchronized.
+The server keeps only password hashes; passwords created elsewhere or before local saving cannot be recovered.
+There is no plaintext fallback if the credential store is unavailable.
+
 They are stored through the operating system credential store:
 
 - macOS Keychain;

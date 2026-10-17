@@ -171,7 +171,7 @@ var Module = fx.Module("wails",
 
 		// Network & Clients
 		channel.New,
-		fx.Annotate(credentials.New, fx.As(new(account.Credentials))),
+		fx.Annotate(credentials.New, fx.As(new(account.Credentials)), fx.As(new(publication.Passwords))),
 		func(dialer *channel.Dialer) account.Server {
 			return oidc.New(oidc.HTTPClient(), dialer)
 		},

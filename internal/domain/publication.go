@@ -112,8 +112,7 @@ type PublicationDraft struct {
 	ContentHash string
 	// Confirmed is the author saying they have been told the page answers to whoever holds the link.
 	Confirmed bool
-	// Password is the text a locked page answers to. It is on its way to the server and kept nowhere:
-	// this device writes no copy of it, and the draft is the only place it stands.
+	// Password is sent separately from the public document; local copies belong in the OS keyring.
 	Password string
 }
 

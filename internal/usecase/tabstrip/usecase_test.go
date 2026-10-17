@@ -159,6 +159,73 @@ func ids(tabs []domain.Tab) []string {
 	return out
 }
 
+func TestReconcileRemovesMissingTargetsBeforeRestoringContent(t *testing.T) {
+	uc, store := newUseCase(true)
+	store.tabs = []domain.Tab{
+		{ID: "gone-folder", Kind: domain.TabKindCollections, Ref: "gone-folder", Pinned: true},
+		{ID: "gone-request", Kind: domain.TabKindRequest, Ref: "gone-request", DraftID: "gone-request"},
+		{ID: "folder", Kind: domain.TabKindCollections, Ref: "nested"},
+		{ID: "saved", Kind: domain.TabKindRequest, Ref: "saved", DraftID: "saved"},
+		{ID: "draft", Kind: domain.TabKindRequest, DraftID: domain.DraftCommandLine},
+		{ID: "history", Kind: domain.TabKindRequest, Record: "record", DraftID: "tab:history"},
+	}
+	store.active = "draft"
+	tree := []domain.Collection{{ID: "root", Children: []domain.Collection{
+		{ID: "nested", Items: []domain.CollectionNode{{ID: "saved"}}},
+	}}}
+	for range 2 {
+		strip, err := uc.Reconcile(t.Context(), tree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(strip.Tabs), []string{"folder", "saved", "draft", "history"}) || strip.Active != "draft" {
+			t.Fatalf("reconciled strip = %+v", strip)
+		}
+		if len(strip.Discarded) != 0 {
+			t.Fatalf("reconciliation discarded an independent draft: %v", strip.Discarded)
+		}
+	}
+	if !slices.Equal(ids(store.tabs), []string{"folder", "saved", "draft", "history"}) {
+		t.Fatalf("removed tabs remain persisted: %+v", store.tabs)
+	}
+}
+
+func TestReconcileSelectsSurvivingTabWhenActiveTargetIsRemoved(t *testing.T) {
+	uc, store := newUseCase(true)
+	store.tabs = []domain.Tab{
+		{ID: "gone", Kind: domain.TabKindCollections, Ref: "gone"},
+		{ID: "draft", Kind: domain.TabKindRequest, DraftID: domain.DraftCommandLine},
+	}
+	store.active = "gone"
+	strip, err := uc.Reconcile(t.Context(), nil)
+	if err != nil || strip.Active != "draft" || len(strip.Tabs) != 1 {
+		t.Fatalf("reconciled strip = %+v, %v", strip, err)
+	}
+}
+
+func TestFailedReconcilePreservesTabs(t *testing.T) {
+	uc, store := newUseCase(true)
+	store.tabs = []domain.Tab{{ID: "folder", Kind: domain.TabKindCollections, Ref: "folder"}}
+	store.active = "folder"
+	store.saveErr = errors.New("write failed")
+	if _, err := uc.Reconcile(t.Context(), nil); !errors.Is(err, store.saveErr) {
+		t.Fatalf("Reconcile error = %v", err)
+	}
+	strip, err := uc.Strip(t.Context())
+	if err != nil || strip.Active != "folder" || len(strip.Tabs) != 1 {
+		t.Fatalf("failed reconciliation changed strip: %+v, %v", strip, err)
+	}
+}
+
+func TestReconcileReturnsDraftsDiscardedDuringRestoration(t *testing.T) {
+	uc, store := newUseCase(true)
+	store.tabs = []domain.Tab{{ID: "obsolete", Kind: domain.TabKind("obsolete"), DraftID: domain.DraftCommandLine}}
+	strip, err := uc.Reconcile(t.Context(), nil)
+	if err != nil || !slices.Equal(strip.Discarded, []domain.DraftID{domain.DraftCommandLine}) {
+		t.Fatalf("restoration discarded = %v, %v", strip.Discarded, err)
+	}
+}
+
 // openRequest opens a permanent request tab seeded from a record — the shape most of these tests
 // need, and the one the ⌘-click produces.
 func openRequest(t *testing.T, uc *UseCase, ref string) Strip {

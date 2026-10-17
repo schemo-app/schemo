@@ -14,10 +14,11 @@ import (
 // already there — which is answered without a network, so the popover opens offline.
 type PublicationsService struct {
 	publications *publication.UseCase
+	principal    domain.Principal
 }
 
-func NewPublicationsService(uc *publication.UseCase) *PublicationsService {
-	return &PublicationsService{publications: uc}
+func NewPublicationsService(uc *publication.UseCase, principal domain.Principal) *PublicationsService {
+	return &PublicationsService{publications: uc, principal: principal}
 }
 
 // PublishChoice is what the popover is holding when the button is pressed. It is one value rather
@@ -31,9 +32,18 @@ type PublishChoice struct {
 	Visibility    string                     `json:"visibility"`
 	Locale        string                     `json:"locale"`
 	Confirmed     bool                       `json:"confirmed"`
-	// Password is held here for as long as a publish takes and is written down nowhere: it is what a
-	// locked page answers to, and the row keeps a hash of it rather than the text.
+	// Password is sent to the server and saved locally in the OS credential store.
 	Password string `json:"password"`
+}
+
+type PublishResult struct {
+	Page          domain.Publication `json:"page"`
+	PasswordSaved bool               `json:"passwordSaved"`
+}
+
+// Password reads a publication password saved on this device.
+func (s *PublicationsService) Password(ctx context.Context, collection string) (string, error) {
+	return s.publications.Password(ctx, collection)
 }
 
 // Preview is what publishing this collection would do, and what is already there.
@@ -51,9 +61,24 @@ func (s *PublicationsService) Preview(
 func (s *PublicationsService) Publish(
 	ctx context.Context,
 	choice PublishChoice,
-) (domain.Publication, error) {
-	return s.publications.Publish(ctx, choice.Workspace, choice.Collection, choice.EnvironmentID,
+) (PublishResult, error) {
+	account, err := s.principal.Me(ctx)
+	if err != nil {
+		return PublishResult{}, err
+	}
+	page, err := s.publications.Publish(ctx, choice.Workspace, choice.Collection, choice.EnvironmentID,
 		choice.Visibility, choice.Locale, choice.Password, choice.Confirmed, choice.Options)
+	if err != nil {
+		return PublishResult{}, err
+	}
+	// Keyring failure must not turn a completed remote publication into a failed publish.
+	saved := true
+	if page.Visibility == domain.VisibilityPassword && choice.Password != "" {
+		saved = s.publications.RememberPassword(ctx, page.CollectionID, choice.Password, account.SessionID) == nil
+	} else if page.Visibility != domain.VisibilityPassword {
+		_ = s.publications.RememberPassword(ctx, page.CollectionID, "", account.SessionID)
+	}
+	return PublishResult{Page: page, PasswordSaved: saved}, nil
 }
 
 // Unpublish takes a page down. A takedown the network did not carry is kept and played back later,

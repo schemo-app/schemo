@@ -18,6 +18,8 @@ const vite = await createServer({ configFile: false,
     const path = id.replaceAll('\\', '/')
     if (path.endsWith('/src/i18n.ts')) return 'export const useMessages=()=>({t:globalThis.passwordMessages});'
     if (path.endsWith('/ui/Icon.vue')) return 'export default {render(){return null}}'
+    if (path.endsWith('/lib/clipboard.ts')) return 'export const copyToClipboard = async value => { globalThis.copiedPassword = value; return true }'
+    if (path.endsWith('/composables/useToast.ts')) return 'export const useToast = () => ({show() {}})'
     if (path.endsWith('/publications/PublicationPassword.vue')) {
       const { descriptor } = parse(readFileSync(path, 'utf8'), { filename: path })
       const compiled = compileScript(descriptor, { id: path, inlineTemplate: true })
@@ -55,6 +57,9 @@ test('generated passwords update the form and can be hidden', async () => {
   toggle.props.onClick()
   await nextTick()
   assert.equal(input.props.type, 'password')
+  const copy = nodes.find(node => node.props['aria-label'] === messages.publications.copyPassword)
+  await copy.props.onClick()
+  assert.equal(globalThis.copiedPassword, form.password)
   const first = form.password
   generate.props.onClick()
   await nextTick()

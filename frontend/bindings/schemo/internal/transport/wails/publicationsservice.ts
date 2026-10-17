@@ -44,6 +44,13 @@ export function List(workspace: string): $CancellablePromise<domain$0.Publicatio
 }
 
 /**
+ * Password reads a publication password saved on this device.
+ */
+export function Password(collection: string): $CancellablePromise<string> {
+    return $Call.ByID(2654242870, collection);
+}
+
+/**
  * Preview is what publishing this collection would do, and what is already there.
  */
 export function Preview(workspace: string, collection: string, environmentID: string, options: domain$0.PublicationOptions | null): $CancellablePromise<publication$0.PublishPreview> {
@@ -53,7 +60,7 @@ export function Preview(workspace: string, collection: string, environmentID: st
 /**
  * Publish puts the page at an address, or replaces what that address already carries.
  */
-export function Publish(choice: $models.PublishChoice): $CancellablePromise<domain$0.Publication> {
+export function Publish(choice: $models.PublishChoice): $CancellablePromise<$models.PublishResult> {
     return $Call.ByID(995093766, choice);
 }
 

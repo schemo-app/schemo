@@ -8,6 +8,7 @@ import (
 	"schemo/internal/infra/authflow"
 	"schemo/internal/platform"
 	"schemo/internal/transport/desktop"
+	"schemo/internal/usecase/collection"
 	"schemo/internal/usecase/cookiejar"
 	"schemo/internal/usecase/draft"
 	"schemo/internal/usecase/environment"
@@ -15,6 +16,49 @@ import (
 	"schemo/internal/usecase/settings"
 	"schemo/internal/usecase/tabstrip"
 )
+
+func TestStripDropsDeletedCollectionTabsAndPersistsTheSurvivors(t *testing.T) {
+	ctx := t.Context()
+	dir := platform.DataDir(t.TempDir())
+	store := storeOn(t, dir)
+	if err := desktop.OpenStorage(store, desktop.NewStatus(), dir)(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ids := platform.NewIDGen()
+	preferences := settings.NewUseCase(store, &heard{}, nil)
+	nodes := collection.NewUseCase(store, store, nil, nil, nil, &heard{}, ids)
+	for _, id := range []string{"removed", "kept"} {
+		if err := store.SaveCollection(ctx, domain.WorkspacePersonalID, domain.Collection{ID: id, Name: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveNode(ctx, domain.CollectionNode{ID: "node", CollectionID: "removed", Name: "Request", Method: "GET"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveTabs(ctx, domain.WorkspacePersonalID, []domain.Tab{
+		{ID: "folder", Kind: domain.TabKindCollections, Ref: "removed"},
+		{ID: "request", Kind: domain.TabKindRequest, Ref: "node", DraftID: "node"},
+		{ID: "kept", Kind: domain.TabKindCollections, Ref: "kept"},
+	}, "kept"); err != nil {
+		t.Fatal(err)
+	}
+	service := NewTabsService(tabstrip.NewUseCase(store, preferences, store, ids), nil, nil, nodes)
+	if _, err := service.Strip(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteCollection(ctx, domain.WorkspacePersonalID, "removed"); err != nil {
+		t.Fatal(err)
+	}
+	strip, err := service.Strip(ctx)
+	if err != nil || len(strip.Tabs) != 1 || strip.Active != "kept" {
+		t.Fatalf("strip after deletion = %+v, %v", strip, err)
+	}
+	restored := NewTabsService(tabstrip.NewUseCase(store, preferences, store, ids), nil, nil, nodes)
+	strip, err = restored.Strip(ctx)
+	if err != nil || len(strip.Tabs) != 1 || strip.Active != "kept" {
+		t.Fatalf("restored strip = %+v, %v", strip, err)
+	}
+}
 
 func TestEditCapturedRecordOpensIndependentRequest(t *testing.T) {
 	ctx := t.Context()

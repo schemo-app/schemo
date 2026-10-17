@@ -52,5 +52,6 @@ export type {
     CreatedCollection,
     CreatedNode,
     NodeEditor,
-    PublishChoice
+    PublishChoice,
+    PublishResult
 } from "./models.js";

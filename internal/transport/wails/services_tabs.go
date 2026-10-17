@@ -20,10 +20,10 @@ type TabsService struct {
 	nodes   nodeSource
 }
 
-// nodeSource is the collections feature as the strip's copies need it: a tab editing a saved
-// request is duplicated from the node, which the window does not hold.
+// nodeSource supplies saved requests for duplication and the current tree for tab reconciliation.
 type nodeSource interface {
 	Node(ctx context.Context, id string) (domain.CollectionNode, error)
+	Tree(ctx context.Context) ([]domain.Collection, error)
 }
 
 func NewTabsService(
@@ -38,7 +38,11 @@ func NewTabsService(
 // Strip is what is open, which tab is on screen, and the drafts that fell out of the strip since
 // the last answer.
 func (s *TabsService) Strip(ctx context.Context) (tabstrip.Strip, error) {
-	stripped, err := s.tabs.Strip(ctx)
+	tree, err := s.nodes.Tree(ctx)
+	if err != nil {
+		return tabstrip.Strip{}, err
+	}
+	stripped, err := s.tabs.Reconcile(ctx, tree)
 	return s.settled(ctx, stripped, err)
 }
 

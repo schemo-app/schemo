@@ -54,4 +54,12 @@ type Server interface {
 
 type Session interface {
 	Caller(ctx context.Context) (domain.Caller, error)
+	Me(ctx context.Context) (domain.Account, error)
+}
+
+// Passwords stores local publication passwords in the operating system credential store.
+type Passwords interface {
+	PublicationPassword(account domain.Account, id string) (string, error)
+	SetPublicationPassword(account domain.Account, id, password string) error
+	DeletePublicationPassword(account domain.Account, id string) error
 }

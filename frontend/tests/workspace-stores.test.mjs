@@ -201,6 +201,44 @@ test('collection snapshots ignore older reads after a rename and clear on nil', 
   assert.deepEqual(store.tree, [])
 })
 
+test('collection refresh removes inactive stale tabs before warming their content', async () => {
+  setupCollections()
+  const tabs = useTabsStore()
+  globalThis.tabServices.Strip = () => CancellablePromise.resolve({
+    tabs: [{ id: 'active', kind: 'request' }, { id: 'removed', kind: 'request', ref: 'removed-node' }],
+    active: 'active',
+  })
+  await tabs.load()
+  globalThis.tabContent.calls.length = 0
+  globalThis.collectionServices.Tree = () => CancellablePromise.resolve([collection('remaining')])
+  globalThis.tabServices.Strip = () => CancellablePromise.resolve({
+    tabs: [{ id: 'active', kind: 'request' }], active: 'active',
+  })
+  await store.load()
+  assert.deepEqual(tabs.tabs.map(tab => tab.id), ['active'])
+  assert.deepEqual(globalThis.tabContent.calls, [['keep', ['active']], ['warm', 'active'], ['ensure', 'active']])
+  assert.deepEqual(globalThis.notices, [])
+})
+
+test('a failed collection refresh preserves tabs and a reset cannot reload the strip', async () => {
+  setupCollections()
+  let reads = 0
+  globalThis.tabServices.Strip = () => {
+    reads++
+    return CancellablePromise.resolve(strip())
+  }
+  globalThis.collectionServices.Tree = () => CancellablePromise.reject(new Error('unavailable'))
+  await store.load()
+  assert.equal(reads, 0)
+  const old = deferred()
+  globalThis.collectionServices.Tree = () => old.promise
+  const loading = store.load()
+  store.reset()
+  old.resolve([])
+  await loading
+  assert.equal(reads, 0)
+})
+
 test('workspace reset cancels collection creation and clears pending UI intentions', async () => {
   setupCollections()
   const old = deferred()
@@ -302,6 +340,77 @@ test('closing a publication popover cancels its preview and clears its password'
   assert.equal(store.password, '')
   assert.equal(store.reading, false)
   assert.deepEqual(globalThis.notices, [])
+})
+
+test('saved publication passwords load in both editors without becoming pending changes', async () => {
+  setupPublications()
+  const page = {collectionId: 'collection', status: 'active', visibility: 'password', canManage: true}
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({publication: page, environments: []})
+  globalThis.publicationServices.Password = () => CancellablePromise.resolve('saved-password')
+  for (const edit of [() => store.openShare('collection'), () => store.edit('collection')]) {
+    edit()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(store.password, 'saved-password')
+    assert.equal(store.passwordChanged, false)
+    store.password = 'replacement-password'
+    assert.equal(store.passwordChanged, true)
+    store.closeShare()
+    assert.equal(store.password, '')
+    assert.equal(store.passwordChanged, false)
+  }
+})
+
+test('a password read finishing after the editor closes cannot restore the secret', async () => {
+  setupPublications()
+  const old = deferred()
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({
+    publication: {collectionId: 'collection', status: 'active', visibility: 'password', canManage: true}, environments: [],
+  })
+  globalThis.publicationServices.Password = () => old.promise
+  store.openShare('collection')
+  await new Promise(resolve => setImmediate(resolve))
+  store.closeShare()
+  old.resolve('late-secret')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(store.password, '')
+  assert.equal(store.passwordChanged, false)
+  assert.deepEqual(globalThis.notices, [])
+})
+
+test('updating documentation preserves a saved password without sending it again', async () => {
+  setupPublications()
+  const page = {collectionId: 'collection', status: 'active', visibility: 'password', canManage: true}
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({publication: page, environments: []})
+  globalThis.publicationServices.Password = () => CancellablePromise.resolve('saved-password')
+  globalThis.publicationServices.List = () => CancellablePromise.resolve([page])
+  const sent = []
+  globalThis.publicationServices.Publish = choice => {
+    sent.push(choice.password)
+    return CancellablePromise.resolve({page, passwordSaved: true})
+  }
+  store.edit('collection')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(await store.publish(true), true)
+  assert.deepEqual(sent, [''])
+  assert.equal(store.password, 'saved-password')
+  store.password = 'replacement-password'
+  assert.equal(await store.publish(true), true)
+  assert.deepEqual(sent, ['', 'replacement-password'])
+  assert.equal(store.passwordChanged, false)
+})
+
+test('a keyring save failure preserves the password and does not report a failed publication', async () => {
+  setupPublications()
+  const page = {collectionId: 'collection', status: 'active', visibility: 'password'}
+  store.collection = 'collection'
+  store.visibility = 'password'
+  store.password = 'replacement-password'
+  globalThis.publicationServices.Publish = () => CancellablePromise.resolve({page, passwordSaved: false})
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({publication: page, environments: []})
+  globalThis.publicationServices.List = () => CancellablePromise.resolve([page])
+  assert.equal(await store.publish(true), true)
+  assert.equal(store.password, 'replacement-password')
+  assert.deepEqual(globalThis.notices, ['publications.passwordSaveFailed'])
 })
 
 test('publication reset cancels old lists and marks without restoring another workspace', async () => {
@@ -1028,7 +1137,7 @@ test('publishing clears stale child marks while preserving changes in another pu
     other: {page: other, behind: true},
   }
   store.collection = 'parent'
-  globalThis.publicationServices.Publish = () => CancellablePromise.resolve(page)
+  globalThis.publicationServices.Publish = () => CancellablePromise.resolve({page, passwordSaved: true})
   globalThis.publicationServices.Preview = () => CancellablePromise.resolve({environments: []})
   globalThis.publicationServices.List = () => CancellablePromise.resolve([page, other])
   globalThis.publicationServices.Changes = (workspace, id) =>
