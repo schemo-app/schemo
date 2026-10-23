@@ -1,0 +1,1 @@
+curl --url 'https://a.example.com/x' 'https://b.example.com/y'

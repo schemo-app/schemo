@@ -1,0 +1,1 @@
+curl --json '{"a":1}' https://api.example.com/articles

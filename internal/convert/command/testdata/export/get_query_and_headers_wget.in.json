@@ -1,0 +1,16 @@
+{
+  "format": "wget",
+  "method": "GET",
+  "url": "https://api.example.com/articles?page[size]=10&include=author",
+  "headers": [
+    [
+      "Accept",
+      "application/vnd.api+json"
+    ],
+    [
+      "X-Request-Id",
+      "abc-123"
+    ]
+  ],
+  "body": ""
+}

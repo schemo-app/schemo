@@ -1,0 +1,1 @@
+curl --compressed https://api.example.com/articles

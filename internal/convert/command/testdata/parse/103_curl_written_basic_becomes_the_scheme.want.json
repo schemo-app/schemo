@@ -1,0 +1,15 @@
+{
+  "kind": "ok",
+  "format": "curl",
+  "method": "GET",
+  "url": "https://api.example.com/articles",
+  "headers": [],
+  "body": "",
+  "auth": {
+    "type": "basic",
+    "fields": {
+      "username": "123",
+      "password": "321"
+    }
+  }
+}

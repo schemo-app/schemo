@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ inputs.release && '0' || '1' }}
+      - uses: ./.github/actions/setup
+      - name: Validate release tag
+        if: inputs.release
+        run: |
+          [[ "$GITHUB_REF" == refs/tags/v* ]] || { echo 'Select a vX.Y.Z tag when dispatching a release.' >&2; exit 1; }
+          go run ./internal/tools/manifest -version "${GITHUB_REF_NAME#v}" -check
+          git merge-base --is-ancestor HEAD origin/main
+      - run: task ci
+      - run: task linux:build FRONTEND_PREBUILT=true
+        if: ${{ !inputs.release }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 3
+
+  native:
+    needs: test
+    if: ${{ !inputs.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            platform: windows
+          - os: macos-15
+            platform: darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          frontend: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Build native application
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: task "$PLATFORM:build" FRONTEND_PREBUILT=true
+      - name: Test native integration
+        env:
+          # The same minimum macOS the build uses (MACOS_MIN in Taskfile.yml), so cgo objects and the
+          # link agree and ld does not warn about every object file.
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.platform == 'darwin' && '12.0' || '' }}
+          CGO_CFLAGS: ${{ matrix.platform == 'darwin' && '-mmacosx-version-min=12.0' || '' }}
+          CGO_LDFLAGS: ${{ matrix.platform == 'darwin' && '-mmacosx-version-min=12.0 -Wl,-no_warn_duplicate_libraries' || '' }}
+        run: go test . ./internal/desktop ./internal/app

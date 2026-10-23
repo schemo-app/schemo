@@ -1,0 +1,1 @@
+curl -X POST -H 'Content-Type: application/json' --data-raw '{"data":{"type":"articles","attributes":{"title":"Hi"}}}' 'https://api.example.com/articles'

@@ -1,0 +1,113 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    {
+      "_id": "wrk_storefront",
+      "parentId": null,
+      "name": "Storefront",
+      "description": "The shop's own API.",
+      "_type": "workspace"
+    },
+    {
+      "_id": "fld_products",
+      "parentId": "wrk_storefront",
+      "name": "Products",
+      "description": "",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_list",
+      "parentId": "fld_products",
+      "name": "List products",
+      "description": "Everything on the shelf.",
+      "url": "{{ _.base_url }}/products",
+      "method": "GET",
+      "headers": [
+        { "name": "Accept", "value": "application/vnd.api+json" },
+        { "name": "X-Debug", "value": "1", "disabled": true }
+      ],
+      "parameters": [
+        { "name": "page[size]", "value": "25" },
+        { "name": "include", "value": "offers", "disabled": true }
+      ],
+      "body": {},
+      "authentication": {},
+      "_type": "request"
+    },
+    {
+      "_id": "req_create",
+      "parentId": "fld_products",
+      "name": "Create a product",
+      "url": "{{ _.base_url }}/products",
+      "method": "POST",
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"{{ _.product }}\"\n}"
+      },
+      "authentication": { "type": "bearer", "token": "{{ _.api_key }}" },
+      "_type": "request"
+    },
+    {
+      "_id": "fld_cart",
+      "parentId": "wrk_storefront",
+      "name": "Cart",
+      "description": "",
+      "environment": {},
+      "_type": "request_group"
+    },
+    {
+      "_id": "req_upload",
+      "parentId": "fld_cart",
+      "name": "Attach a receipt",
+      "url": "{{ _.base_url }}/cart/receipt",
+      "method": "POST",
+      "headers": [],
+      "parameters": [],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          { "name": "note", "value": "paid" },
+          { "name": "file", "value": "", "fileName": "/Users/shop/receipt.png", "type": "file" }
+        ]
+      },
+      "authentication": { "type": "oauth2", "accessTokenUrl": "https://auth.storefront.example/token" },
+      "_type": "request"
+    },
+    {
+      "_id": "req_item",
+      "parentId": "wrk_storefront",
+      "name": "One item",
+      "description": "",
+      "url": "{{ _.base_url }}/items/:item_id",
+      "method": "GET",
+      "pathParameters": [{ "name": "item_id", "value": "it_1" }],
+      "headers": [],
+      "parameters": [],
+      "body": {},
+      "authentication": {},
+      "_type": "request"
+    },
+    {
+      "_id": "env_base",
+      "parentId": "wrk_storefront",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "https://api.storefront.example/v1",
+        "api_key": "sk_live_1"
+      },
+      "_type": "environment"
+    },
+    {
+      "_id": "env_dev",
+      "parentId": "wrk_storefront",
+      "name": "Dev",
+      "data": { "dev_token": "tok_dev" },
+      "_type": "environment"
+    }
+  ]
+}

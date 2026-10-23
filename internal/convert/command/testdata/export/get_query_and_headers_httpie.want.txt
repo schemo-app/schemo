@@ -1,0 +1,1 @@
+http GET 'https://api.example.com/articles?page[size]=10&include=author' 'Accept:application/vnd.api+json' 'X-Request-Id:abc-123'

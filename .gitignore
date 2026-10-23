@@ -1,0 +1,19 @@
+bin/
+.task/
+dist/
+frontend/dist/
+frontend/node_modules/
+node_modules/
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+build/linux/*.desktop
+*.syso
+.DS_Store
+Thumbs.db
+go.work
+go.work.sum
+.idea/
+.vscode/
+*.log
+
+# Local build output
+/schemo

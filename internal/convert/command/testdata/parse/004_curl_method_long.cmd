@@ -1,0 +1,1 @@
+curl --request DELETE https://api.example.com/articles/1

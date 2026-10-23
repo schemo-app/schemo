@@ -1,0 +1,37 @@
+name: "schemo"
+arch: ${GOARCH}
+platform: "linux"
+version: "0.0.12"
+section: "devel"
+priority: "optional"
+maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+description: |-
+  A cross-platform API client for building, testing, and sharing HTTP requests.
+  Manage collections, environments, variables, and request scripts. Inspect
+  responses, search and replay history, and capture requests from your browser.
+
+  Collections and history are stored locally. Optional cloud sync shares your
+  work across devices and teams. Export requests as cURL, fetch, wget, HTTPie,
+  or PowerShell.
+vendor: "Yuri Gerassimov"
+homepage: "https://github.com/schemo-app/schemo"
+license: "MIT"
+release: "1"
+
+contents:
+  - src: "./bin/schemo"
+    dst: "/usr/local/bin/schemo"
+  - src: "./frontend/src/assets/logo.svg"
+    dst: "/usr/share/icons/hicolor/scalable/apps/schemo.svg"
+  - src: "./build/linux/schemo.desktop"
+    dst: "/usr/share/applications/schemo.desktop"
+  - src: "./LICENSE.md"
+    dst: "/usr/share/doc/schemo/copyright"
+
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0
+  - packagekit
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

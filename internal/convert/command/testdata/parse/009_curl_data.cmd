@@ -1,0 +1,1 @@
+curl -X POST -d 'a=1&b=2' https://api.example.com/articles

@@ -1,0 +1,1 @@
+wget --method=POST --header='Authorization: Bearer {{token}}' --body-data='{"title":"it'\''s a '\''quoted'\'' one"}' '{{base_url}}/articles'

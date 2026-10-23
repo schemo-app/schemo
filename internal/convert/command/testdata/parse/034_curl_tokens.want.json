@@ -1,0 +1,14 @@
+{
+  "kind": "ok",
+  "format": "curl",
+  "method": "GET",
+  "url": "{{base_url}}/articles",
+  "headers": [],
+  "body": "",
+  "auth": {
+    "type": "bearer",
+    "fields": {
+      "token": "{{token}}"
+    }
+  }
+}

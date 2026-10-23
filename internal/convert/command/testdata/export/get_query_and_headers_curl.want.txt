@@ -1,0 +1,1 @@
+curl -H 'Accept: application/vnd.api+json' -H 'X-Request-Id: abc-123' 'https://api.example.com/articles?page[size]=10&include=author'

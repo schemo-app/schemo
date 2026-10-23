@@ -1,0 +1,1 @@
+curl -H 'X-Q: it'\''s' https://api.example.com/articles

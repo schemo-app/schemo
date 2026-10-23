@@ -1,0 +1,17 @@
+{
+	"fixed": {
+		"file_version": "0.0.12",
+		"product_version": "0.0.12"
+	},
+	"info": {
+		"0409": {
+			"FileVersion": "0.0.12",
+			"ProductVersion": "0.0.12",
+			"CompanyName": "Yuri Gerassimov",
+			"FileDescription": "A cross-platform API client for building, testing, and sharing HTTP requests.",
+			"LegalCopyright": "© 2026, Yuri Gerassimov",
+			"ProductName": "Schemo",
+			"Comments": "Schemo"
+		}
+	}
+}

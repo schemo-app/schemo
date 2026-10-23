@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+
+    <title>Update</title>
+
+    <script>
+        (() => {
+            const root = document.documentElement
+
+            try {
+                const params = new URLSearchParams(location.search)
+                const theme = params.get('theme') || localStorage.getItem('schemo-theme')
+                const language = params.get('lang') || localStorage.getItem('schemo-lang')
+
+                const resolvedTheme =
+                    theme === 'dark' || theme === 'light'
+                        ? theme
+                        : window.matchMedia?.('(prefers-color-scheme: dark)').matches
+                            ? 'dark'
+                            : 'light'
+
+                const resolvedLanguage = language && language !== 'system'
+                    ? language
+                    : (navigator.language || 'en')
+
+                root.classList.add(resolvedTheme)
+                root.lang = resolvedLanguage
+            } catch {
+                root.classList.add('light')
+                root.lang = 'en'
+            }
+        })()
+    </script>
+</head>
+
+<body>
+<div id="app"></div>
+
+<script type="module" src="./src/windows/update.ts"></script>
+</body>
+</html>

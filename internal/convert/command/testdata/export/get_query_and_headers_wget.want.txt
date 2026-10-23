@@ -1,0 +1,1 @@
+wget --header='Accept: application/vnd.api+json' --header='X-Request-Id: abc-123' 'https://api.example.com/articles?page[size]=10&include=author'

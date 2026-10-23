@@ -1,0 +1,1 @@
+fetch('https://api.example.com/articles?page[size]=10&include=author', {"method":"GET","headers":{"Accept":"application/vnd.api+json","X-Request-Id":"abc-123"}})

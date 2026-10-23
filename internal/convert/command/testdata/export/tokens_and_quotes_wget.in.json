@@ -1,0 +1,12 @@
+{
+  "format": "wget",
+  "method": "POST",
+  "url": "{{base_url}}/articles",
+  "headers": [
+    [
+      "Authorization",
+      "Bearer {{token}}"
+    ]
+  ],
+  "body": "{\"title\":\"it's a 'quoted' one\"}"
+}

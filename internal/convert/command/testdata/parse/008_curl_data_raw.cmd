@@ -1,0 +1,1 @@
+curl -X POST --data-raw '{"a":1}' https://api.example.com/articles

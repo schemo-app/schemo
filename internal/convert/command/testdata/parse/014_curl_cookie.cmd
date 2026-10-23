@@ -1,0 +1,1 @@
+curl -b 'session=abc' https://api.example.com/articles

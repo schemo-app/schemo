@@ -1,0 +1,1 @@
+curl -H 'A: 1' --data-raw '{}' https://api.example.com/articles

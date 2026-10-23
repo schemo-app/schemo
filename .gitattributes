@@ -1,0 +1,8 @@
+frontend/bindings/** text eol=lf
+frontend/src/lib/layout.ts text eol=lf
+internal/convert/command/testdata/** -text
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+.github/** text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,491 @@
+version: '3'
+vars:
+  GO_BUILD_FLAGS: '{{if eq OS "linux"}}-tags=gtk3{{end}}'
+  MACOS_MIN: '12.0'
+  PRODUCT_NAME:
+    sh: go run ./internal/tools/manifest -print name
+  PRODUCT_DESCRIPTION:
+    sh: go run ./internal/tools/manifest -print description
+  APP_NAME:
+    sh: go run ./internal/tools/manifest -print slug
+  APP_SCHEME:
+    sh: go run ./internal/tools/manifest -print scheme
+  BIN_DIR: bin
+  DIST_DIR: dist
+  APP_PATH: '{{.BIN_DIR}}/{{.APP_NAME}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  VERSION: '{{.VERSION | default "dev"}}'
+  BUILD: '{{.BUILD | default ""}}'
+  LDFLAGS: >-
+    -w -s -X schemo/internal/platform.version={{.VERSION}} -X
+    schemo/internal/platform.build={{.BUILD}}
+  STATICCHECK_VER: v0.8.2
+  ACTIONLINT_VER: v1.7.12
+  WAILS_VERSION:
+    sh: go list -m -f '{{"{{.Version}}"}}' github.com/wailsapp/wails/v3
+  WAILS: 'go run {{.GO_BUILD_FLAGS}} github.com/wailsapp/wails/v3/cmd/wails3@{{.WAILS_VERSION}}'
+tasks:
+  build:
+    desc: Build the app for the current OS
+    cmds:
+      - task: 'darwin:build'
+      - task: 'linux:build'
+      - task: 'windows:build'
+  run:
+    desc: Run the built app
+    cmds:
+      - task: 'darwin:run'
+      - task: 'linux:run'
+      - task: 'windows:run'
+  dev:
+    desc: 'Run the app in dev mode, rebuilding on every change'
+    deps:
+      - verify
+    cmds:
+      - '{{.WAILS}} dev -config ./build/config.yml -port {{.VITE_PORT}}'
+  package:
+    desc: Package a release build for the current OS
+    cmds:
+      - task: 'darwin:package'
+      - task: 'linux:package'
+      - task: 'windows:package'
+  verify:
+    desc: Check frontend runtime against the runtime shipped with the Go Wails module
+    cmds:
+      - node frontend/scripts/check-wails.mjs
+  lint:
+    desc: >-
+      Run staticcheck linter, the style checks (comments, doc forms) included —
+      they are off by default
+    deps:
+      - 'fmt:check'
+    cmds:
+      - 'go run {{.GO_BUILD_FLAGS}} honnef.co/go/tools/cmd/staticcheck@{{.STATICCHECK_VER}} {{.GO_BUILD_FLAGS}} -checks=inherit,ST1020,ST1021,ST1022 ./...'
+  'bindings:check':
+    desc: Regenerate bindings and enforce clean git diff
+    cmds:
+      - task: 'generate:bindings'
+      - git diff --exit-code -- frontend/bindings
+  'ci:lint':
+    desc: Validate GitHub Actions workflows
+    cmds:
+      - 'go run github.com/rhysd/actionlint/cmd/actionlint@{{.ACTIONLINT_VER}}'
+  ci:
+    desc: Build frontend assets for embedding and run all CI checks
+    cmds:
+      - task: 'ci:lint'
+      - task: 'linux:dotdesktop'
+      - task: 'install:frontend:deps'
+      - task: 'generate:layout'
+      - git diff --exit-code -- frontend/src/lib/layout.ts
+      - cd frontend && npm exec -- vite build --mode production
+      - task: test
+      - go mod tidy -diff
+  test:
+    desc: 'Vet, lint, check bindings, and run unit tests'
+    deps:
+      - verify
+      - lint
+      - 'bindings:check'
+      - 'web:test'
+      - 'web:typecheck'
+    cmds:
+      - go vet {{.GO_BUILD_FLAGS}} ./...
+      - go test {{.GO_BUILD_FLAGS}} ./...
+    env:
+      CGO_CFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min={{.MACOS_MIN}}{{end}}'
+      CGO_LDFLAGS: '{{if eq OS "darwin"}}-mmacosx-version-min={{.MACOS_MIN}} -Wl,-no_warn_duplicate_libraries{{end}}'
+  'fmt:check':
+    desc: Check standard Go formatting
+    cmds:
+      - |
+        files=$(gofmt -l main.go internal pkg)
+        if [ -n "$files" ]; then
+          printf '%s\n' "$files"
+          exit 1
+        fi
+  'web:test':
+    desc: Run frontend regressions
+    dir: frontend
+    deps:
+      - 'install:frontend:deps'
+    cmds:
+      - npm test
+  'translations:check':
+    desc: Check translation keys, placeholders and message syntax
+    dir: frontend
+    cmds:
+      - npm run translations:check
+  'web:typecheck':
+    desc: Check frontend types
+    dir: frontend
+    deps:
+      - 'install:frontend:deps'
+    cmds:
+      - npm run typecheck
+  'set:version':
+    desc: Stamp the release version into manifest files
+    cmds:
+      - 'go run ./internal/tools/manifest -version {{.VERSION}} -platform "{{.PLATFORM | default ""}}"'
+  clean:
+    desc: Remove all build output and temporary files
+    cmds:
+      - cmd: >-
+          powershell -Command "Remove-Item -Recurse -Force -ErrorAction
+          SilentlyContinue {{.DIST_DIR}}, {{.BIN_DIR}}, .task,
+          wails_windows_*.syso"
+        platforms:
+          - windows
+      - cmd: >-
+          rm -rf {{.DIST_DIR}} {{.BIN_DIR}} .task build/linux/*.desktop
+          wails_windows_*.syso
+        platforms:
+          - linux
+          - darwin
+  'install:frontend:deps':
+    desc: Install frontend dependencies
+    run: once
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+      - node_modules/vite/bin/vite.js
+      - node_modules/vue-tsc/bin/vue-tsc.js
+    preconditions:
+      - sh: npm --version
+        msg: npm is required to install frontend dependencies
+    cmds:
+      - npm ci
+  'build:frontend':
+    desc: Build the frontend SPA
+    run: once
+    dir: frontend
+    sources:
+      - '**/*'
+      - exclude: node_modules/**/*
+    generates:
+      - dist/**/*
+    deps:
+      - verify
+      - 'install:frontend:deps'
+      - 'generate:bindings'
+      - 'generate:layout'
+    cmds:
+      - 'npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q'
+    env:
+      PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
+  'frontend:artifact':
+    internal: true
+    preconditions:
+      - sh: test -s frontend/dist/index.html && test -s frontend/dist/settings.html && test -s frontend/dist/about.html && test -s frontend/dist/update.html
+        msg: Download the verified frontend-dist artifact before using FRONTEND_PREBUILT=true
+  'dev:frontend':
+    desc: Run the Vite dev server
+    dir: frontend
+    deps:
+      - verify
+      - 'install:frontend:deps'
+    cmds:
+      - npm run dev
+  'go:mod:tidy':
+    desc: Run `go mod tidy`
+    run: once
+    cmds:
+      - go mod tidy
+  'updater:genkey':
+    desc: Generate release signing keys and print the private key backup location
+    status:
+      - test -s internal/desktop/updater.key.pub
+    cmds:
+      - |
+        set -e
+        dir=$(mktemp -d -p "${TMPDIR:-${TEMP:-${TMP:-/tmp}}}" schemo-updater.XXXXXXXX)
+        {{.WAILS}} updater genkey -out "$dir/updater.key"
+        echo "Back up $dir/updater.key in a password manager before deleting this directory."
+        mv "$dir/updater.key.pub" internal/desktop/updater.key.pub
+        echo "Set the repository Actions secret UPDATER_KEY to the contents of the private key."
+  'generate:bindings':
+    desc: Generate TypeScript bindings from Go backend
+    run: once
+    sources:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+    generates:
+      - frontend/bindings/**/*
+    cmds:
+      - '{{.WAILS}} generate bindings -clean=true -ts -i {{if .GO_BUILD_FLAGS}}-f "{{.GO_BUILD_FLAGS}}"{{end}}'
+  'generate:layout':
+    desc: Write the numbers the window draws with into the frontend
+    run: once
+    sources:
+      - 'internal/domain/*.go'
+    generates:
+      - frontend/src/lib/layout.ts
+    cmds:
+      - go run ./internal/tools/layout
+  'generate:icons':
+    desc: Generate OS-specific icons from PNG source
+    run: once
+    dir: build
+    sources:
+      - appicon.png
+    generates:
+      - darwin/icons.icns
+      - windows/icon.ico
+    cmds:
+      - >-
+        {{.WAILS}} generate icons -input appicon.png -macfilename darwin/icons.icns
+        -windowsfilename windows/icon.ico
+  'darwin:build':
+    desc: Build the macOS binary
+    platforms:
+      - darwin
+    deps:
+      - '{{if eq .FRONTEND_PREBUILT "true"}}frontend:artifact{{else}}build:frontend{{end}}'
+      - 'generate:icons'
+    cmds:
+      - 'go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"'
+    vars:
+      OUTPUT: '{{.OUTPUT | default .APP_PATH}}'
+      BUILD_FLAGS: >-
+        {{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" -tags
+        private_mac_apis{{else}}-tags production,private_mac_apis -trimpath
+        -buildvcs=false -ldflags="{{.LDFLAGS}}"{{end}}
+    env:
+      GOOS: darwin
+      CGO_ENABLED: 1
+      GOARCH: '{{.ARCH | default ARCH}}'
+      CGO_CFLAGS: '-mmacosx-version-min={{.MACOS_MIN}}'
+      CGO_LDFLAGS: '-mmacosx-version-min={{.MACOS_MIN}} -Wl,-no_warn_duplicate_libraries'
+      MACOSX_DEPLOYMENT_TARGET: '{{.MACOS_MIN}}'
+  'darwin:build:universal':
+    desc: Build universal macOS binary (arm64 + amd64 via lipo)
+    platforms:
+      - darwin
+    deps:
+      - task: 'darwin:build'
+        vars:
+          ARCH: amd64
+          OUTPUT: '{{.APP_PATH}}-amd64'
+      - task: 'darwin:build'
+        vars:
+          ARCH: arm64
+          OUTPUT: '{{.APP_PATH}}-arm64'
+    cmds:
+      - >-
+        lipo -create -output "{{.APP_PATH}}" "{{.APP_PATH}}-amd64"
+        "{{.APP_PATH}}-arm64"
+      - 'rm -f "{{.APP_PATH}}-amd64" "{{.APP_PATH}}-arm64"'
+  'darwin:bundle':
+    desc: Assemble .app bundle structure
+    internal: true
+    platforms:
+      - darwin
+    vars:
+      APP_DIR: '{{.BIN_DIR}}/{{.PRODUCT_NAME}}{{.SUFFIX}}.app'
+    cmds:
+      - 'mkdir -p "{{.APP_DIR}}/Contents/MacOS" "{{.APP_DIR}}/Contents/Resources"'
+      - 'cp build/darwin/icons.icns "{{.APP_DIR}}/Contents/Resources/"'
+      - 'cp "{{.APP_PATH}}" "{{.APP_DIR}}/Contents/MacOS/"'
+      - 'cp "{{.INFO_PLIST}}" "{{.APP_DIR}}/Contents/Info.plist"'
+  'darwin:package':
+    desc: Package macOS release (.zip and .dmg artifacts)
+    platforms:
+      - darwin
+    deps:
+      - 'darwin:build:universal'
+    cmds:
+      - task: 'darwin:bundle'
+        vars:
+          SUFFIX: ''
+          INFO_PLIST: build/darwin/Info.plist
+      - >-
+        codesign --force --deep --sign "{{.CODE_SIGN_IDENTITY}}"
+        "{{.BIN_DIR}}/{{.PRODUCT_NAME}}.app"
+      - 'mkdir -p {{.DIST_DIR}}'
+      - >-
+        cd {{.BIN_DIR}} && ditto -c -k --keepParent "{{.PRODUCT_NAME}}.app"
+        "../{{.DIST_DIR}}/{{.APP_NAME}}-darwin-arm64.app.zip"
+      - >-
+        cp "{{.DIST_DIR}}/{{.APP_NAME}}-darwin-arm64.app.zip"
+        "{{.DIST_DIR}}/{{.APP_NAME}}-darwin-amd64.app.zip"
+      - task: 'darwin:dmg'
+      - >-
+        cp "{{.BIN_DIR}}/{{.PRODUCT_NAME}}.dmg"
+        "{{.DIST_DIR}}/{{.APP_NAME}}-darwin-universal.dmg"
+      - 'ls -la {{.DIST_DIR}}'
+    vars:
+      CODE_SIGN_IDENTITY: '{{.CODE_SIGN_IDENTITY | default "-"}}'
+  'darwin:dmg':
+    desc: Generate .dmg installer
+    internal: true
+    platforms:
+      - darwin
+    cmds:
+      - >-
+        {{.WAILS}} tool package --format dmg --name "{{.PRODUCT_NAME}}" --out
+        "{{.BIN_DIR}}" --volume-icon "build/darwin/icons.icns" --window-width
+        680 --window-height 410 --background "build/darwin/dmg-background.png"
+        --files ".background@2x.png=build/darwin/dmg-background@2x.png"
+  'darwin:run':
+    desc: Wrap the binary in a .dev.app bundle and launch it
+    platforms:
+      - darwin
+    deps:
+      - task: 'darwin:bundle'
+        vars:
+          SUFFIX: .dev
+          INFO_PLIST: build/darwin/Info.dev.plist
+    cmds:
+      - 'codesign --force --deep --sign - "{{.BIN_DIR}}/{{.PRODUCT_NAME}}.dev.app"'
+      - '"{{.BIN_DIR}}/{{.PRODUCT_NAME}}.dev.app/Contents/MacOS/{{.APP_NAME}}"'
+  'linux:build':
+    desc: Build the Linux executable
+    platforms:
+      - linux
+    run: once
+    deps:
+      - '{{if eq .FRONTEND_PREBUILT "true"}}frontend:artifact{{else}}build:frontend{{end}}'
+    cmds:
+      - 'go build {{.BUILD_FLAGS}} -o "{{.APP_PATH}}"'
+    vars:
+      BUILD_FLAGS: >-
+        {{if eq .DEV "true"}}-tags gtk3 -buildvcs=false -gcflags=all="-l"{{else}}-tags
+        production,gtk3 -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}}"{{end}}
+    env:
+      GOOS: linux
+      CGO_ENABLED: 1
+      GOARCH: '{{.ARCH | default ARCH}}'
+  'linux:dotdesktop':
+    desc: Generate .desktop integration file
+    internal: true
+    platforms:
+      - linux
+    run: once
+    dir: build
+    cmds:
+      - >-
+        {{.WAILS}} generate .desktop -name "{{.PRODUCT_NAME}}" -comment
+        "{{.PRODUCT_DESCRIPTION}}" -exec "{{.APP_NAME}} %u" -icon
+        "{{.APP_NAME}}" -keywords "" -categories "Development;" -mimetype
+        "x-scheme-handler/{{.APP_SCHEME}};" -outputfile
+        "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop"
+      - 'desktop-file-validate "linux/{{.APP_NAME}}.desktop"'
+  'linux:package':
+    desc: Package Linux release (.tar.gz and .deb)
+    platforms:
+      - linux
+    deps:
+      - 'linux:build'
+      - 'linux:dotdesktop'
+    cmds:
+      - 'mkdir -p {{.DIST_DIR}}'
+      - >-
+        cd {{.BIN_DIR}} && tar -czf
+        "../{{.DIST_DIR}}/{{.APP_NAME}}-linux-{{.ARCH | default ARCH}}.tar.gz"
+        "{{.APP_NAME}}"
+      - task: 'linux:deb'
+      - 'cp "{{.BIN_DIR}}/{{.APP_NAME}}.deb" "{{.DIST_DIR}}/{{.APP_NAME}}-linux-{{.ARCH | default ARCH}}.deb"'
+      - 'ls -la {{.DIST_DIR}}'
+  'linux:deb':
+    desc: Create .deb package via nfpm
+    internal: true
+    platforms:
+      - linux
+    env:
+      GOARCH: '{{.ARCH | default ARCH}}'
+      GIT_COMMITTER_NAME:
+        sh: git log -1 --format=%cn
+      GIT_COMMITTER_EMAIL:
+        sh: git log -1 --format=%ce
+    deps:
+      - 'linux:build'
+      - 'linux:dotdesktop'
+    cmds:
+      - >-
+        {{.WAILS}} tool package -name "{{.APP_NAME}}" -format deb -config
+        ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/{{.BIN_DIR}}
+  'linux:run':
+    desc: Run the built binary
+    platforms:
+      - linux
+    cmds:
+      - '{{.APP_PATH}}'
+  'windows:build':
+    desc: Build the Windows .exe binary
+    platforms:
+      - windows
+    deps:
+      - '{{if eq .FRONTEND_PREBUILT "true"}}frontend:artifact{{else}}build:frontend{{end}}'
+      - 'generate:icons'
+    cmds:
+      - task: 'windows:syso'
+      - 'go build {{.BUILD_FLAGS}} -o "{{.APP_PATH}}.exe"'
+      - >-
+        powershell -Command "Remove-Item -Force -ErrorAction SilentlyContinue
+        wails_windows_*.syso"
+    vars:
+      BUILD_FLAGS: >-
+        {{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags
+        production -trimpath -buildvcs=false -ldflags="{{.LDFLAGS}} -H
+        windowsgui"{{end}}
+    env:
+      GOOS: windows
+      CGO_ENABLED: 0
+      GOARCH: '{{.ARCH | default ARCH}}'
+  'windows:syso':
+    desc: Generate Windows resource object file (.syso)
+    internal: true
+    platforms:
+      - windows
+    dir: build
+    cmds:
+      - >-
+        {{.WAILS}} generate syso -arch {{.ARCH | default ARCH}} -icon
+        windows/icon.ico -manifest windows/wails.exe.manifest -info
+        windows/info.json -out ../wails_windows_{{.ARCH | default ARCH}}.syso
+  'windows:package':
+    desc: Package Windows release (.zip and NSIS installer)
+    platforms:
+      - windows
+    deps:
+      - 'windows:build'
+    cmds:
+      - task: 'windows:nsis'
+      - 'mkdir -p {{.DIST_DIR}}'
+      - >-
+        powershell -Command "Compress-Archive -Force -Path
+        '{{.BIN_DIR}}/{{.APP_NAME}}.exe' -DestinationPath
+        '{{.DIST_DIR}}/{{.APP_NAME}}-windows-{{.ARCH | default ARCH}}.exe.zip'"
+      - >-
+        cp "{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH | default ARCH}}-installer.exe"
+        "{{.DIST_DIR}}/{{.APP_NAME}}-windows-{{.ARCH | default
+        ARCH}}-installer.exe"
+      - 'powershell -Command "Get-ChildItem ''{{.DIST_DIR}}''"'
+  'windows:nsis':
+    desc: Create NSIS setup executable
+    internal: true
+    platforms:
+      - windows
+    dir: build/windows/nsis
+    preconditions:
+      - sh: makensis -VERSION
+        msg: makensis is required to build the Windows installer
+    cmds:
+      - >-
+        {{.WAILS}} generate webview2bootstrapper -dir
+        "{{.ROOT_DIR}}/build/windows/nsis"
+      - >-
+        makensis -DWAILS_INSTALL_SCOPE=user -DREQUEST_EXECUTION_LEVEL=user
+        -DARG_WAILS_{{if eq (.ARCH | default ARCH)
+        "amd64"}}AMD64{{else}}ARM64{{end}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe"
+        project.nsi
+  'windows:run':
+    desc: Run the built executable
+    platforms:
+      - windows
+    cmds:
+      - '{{.APP_PATH}}.exe'

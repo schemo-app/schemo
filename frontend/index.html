@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+
+    <title>Schemo</title>
+
+    <script>
+        (() => {
+            const root = document.documentElement
+            const params = new URLSearchParams(location.search)
+
+            const resolveTheme = () => {
+                const theme = params.get('theme') || localStorage.getItem('schemo-theme')
+
+                if (theme === 'dark' || theme === 'light') {
+                    return theme
+                }
+
+                return window.matchMedia?.('(prefers-color-scheme: dark)').matches
+                    ? 'dark'
+                    : 'light'
+            }
+
+            const resolveLanguage = () => {
+                const language = params.get('lang') || localStorage.getItem('schemo-lang')
+                return language && language !== 'system' ? language : (navigator.language || 'en')
+            }
+
+            try {
+                root.classList.add(resolveTheme())
+                root.lang = resolveLanguage()
+
+                if (params.get('translucent') === '1') {
+                    root.classList.add('window-translucent')
+                }
+            } catch {
+                root.classList.add('light')
+                root.lang = 'en'
+            }
+        })()
+    </script>
+</head>
+
+<body class="bg-background text-foreground selection:bg-primary/20">
+    <div id="app"></div>
+    <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

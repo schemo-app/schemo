@@ -1,0 +1,1 @@
+curl -H 'A: 1' -H 'B: 2' https://api.example.com/articles

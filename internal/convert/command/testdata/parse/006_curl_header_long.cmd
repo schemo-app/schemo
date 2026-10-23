@@ -1,0 +1,1 @@
+curl --header "X-Request-Id: abc-123" https://api.example.com/articles

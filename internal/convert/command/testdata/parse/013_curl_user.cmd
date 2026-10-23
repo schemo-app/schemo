@@ -1,0 +1,1 @@
+curl -u user:secret https://api.example.com/articles

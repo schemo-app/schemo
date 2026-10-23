@@ -1,0 +1,8 @@
+{
+  "kind": "ok",
+  "format": "curl",
+  "method": "GET",
+  "url": "https://api.example.com/articles?page[size]=10",
+  "headers": [],
+  "body": ""
+}

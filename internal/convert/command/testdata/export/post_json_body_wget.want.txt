@@ -1,0 +1,1 @@
+wget --method=POST --header='Content-Type: application/json' --body-data='{"data":{"type":"articles","attributes":{"title":"Hi"}}}' 'https://api.example.com/articles'
