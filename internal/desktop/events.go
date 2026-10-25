@@ -7,6 +7,7 @@ package desktop
 const (
 	EventOpenTab       = "open-tab"
 	EventImportLink    = "import-link"
+	EventFilesDropped  = "files-dropped"
 	EventSettingsTab   = "settings-tab"
 	EventUpdateChanged = "update-changed"
 	EventUpdateCheck   = "update-check"

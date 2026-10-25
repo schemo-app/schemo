@@ -7,6 +7,7 @@ export {
 };
 
 export type {
+    FileDrop,
     MenuGroup,
     MenuLabels,
     MenuRow,

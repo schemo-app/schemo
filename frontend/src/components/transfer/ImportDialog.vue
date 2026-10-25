@@ -11,6 +11,7 @@ import TransferRow from './TransferRow.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { useTransferStore, type TransferFormat } from '../../stores/transfer'
 import { requestCount } from '../../lib/collectionTree'
+import { useWailsEvent } from '../../composables/useWailsEvent'
 import { formatBytes, t } from '../../i18n'
 import type { Collection } from '../../../bindings/schemo/internal/domain'
 import type { Preview } from '../../../bindings/schemo/internal/convert'
@@ -43,7 +44,6 @@ let latestRead = 0
 const url = ref('')
 const curl = ref('')
 const target = ref('')
-const drag = ref(false)
 const workspaceId = ref('')
 const picked = ref<Record<string, boolean>>({})
 // The address and the paste are the one thing to type on their screen: the caret is in it.
@@ -161,10 +161,10 @@ watch(
   () => transfer.importOpen,
   (open) => {
     pause.stop()
+    forgetPreview()
     if (!open) return
     source.value = null
     via.value = 'file'
-    forgetPreview()
     url.value = ''
     curl.value = ''
     // The id the dialog was opened for may name a collection that is not in the tree any more (a
@@ -173,7 +173,6 @@ watch(
     target.value = places.value.some((place) => place.id === transfer.importParent)
       ? transfer.importParent
       : ''
-    drag.value = false
     workspaceId.value = ''
     picked.value = {}
     void transfer.loadWorkspaces()
@@ -211,7 +210,6 @@ function openLinked(page: string) {
   source.value = 'page'
   via.value = 'url'
   forgetPreview()
-  drag.value = false
   url.value = page
   void readUrl()
 }
@@ -220,7 +218,6 @@ function open(row: { id: Source; vias: Via[] }) {
   source.value = row.id
   via.value = row.vias[0] ?? 'file'
   forgetPreview()
-  drag.value = false
   if (row.id !== 'ws') return
   picked.value = {}
   void transfer.loadWorkspaces()
@@ -269,17 +266,13 @@ async function previewCurl() {
   await showPreview(transfer.previewText(id, text, '', true))
 }
 
-function onDrop(event: DragEvent) {
-  drag.value = false
-  const file = event.dataTransfer?.files?.[0]
+useWailsEvent('files-dropped', (event) => {
+  const { files, target } = event.data
   const id = format.value
-  if (!file || !id) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    void showPreview(transfer.previewText(id, String(reader.result ?? ''), file.name))
-  }
-  reader.readAsText(file)
-}
+  const path = files?.[0]
+  if (!transfer.importOpen || via.value !== 'file' || !id || !path || target !== 'collection-import-drop') return
+  void showPreview(transfer.previewPath(id, path))
+})
 
 async function commit() {
   if (!ready.value) return
@@ -360,12 +353,10 @@ async function commit() {
       <template v-if="via === 'file'">
         <div
           v-if="!preview"
+          id="collection-import-drop"
           class="drop"
-          :class="{ drag }"
+          data-file-drop-target
           @click="pickFile"
-          @dragover.prevent="drag = true"
-          @dragleave="drag = false"
-          @drop.prevent="onDrop"
         >
           <span>
             {{ t('transfer.drop') }} <span class="drop-pick">{{ t('transfer.choose') }}</span>
@@ -465,7 +456,7 @@ async function commit() {
   cursor: default;
 }
 
-.drop.drag {
+.drop.file-drop-target-active {
   border-color: var(--accent);
   background: var(--accent-soft);
 }

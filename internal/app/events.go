@@ -20,6 +20,7 @@ func init() {
 	application.RegisterEvent[agent.ConfirmRequest](agent.TopicConfirm)
 	application.RegisterEvent[int](desktop.EventOpenTab)
 	application.RegisterEvent[application.Void](desktop.EventImportLink)
+	application.RegisterEvent[desktop.FileDrop](desktop.EventFilesDropped)
 	application.RegisterEvent[string](desktop.EventSettingsTab)
 	application.RegisterEvent[*desktop.UpdateStatus](desktop.EventUpdateChanged)
 	application.RegisterEvent[application.Void](desktop.EventUpdateCheck)

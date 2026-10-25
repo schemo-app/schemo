@@ -67,8 +67,15 @@ export function PreviewFile(title: string, format: string): $CancellablePromise<
 }
 
 /**
- * PreviewText reads a text the window already holds — a dropped file's contents, or a paste of
- * commands — and names it the way the card will draw it.
+ * PreviewPath reads a dropped file with the same limits and preview as a picked file.
+ */
+export function PreviewPath(format: string, path: string): $CancellablePromise<$models.Preview> {
+    return $Call.ByID(2623847340, format, path);
+}
+
+/**
+ * PreviewText reads a text the window already holds, such as pasted commands, and names it the way
+ * the card will draw it.
  */
 export function PreviewText(format: string, text: string, fileName: string): $CancellablePromise<$models.Preview> {
     return $Call.ByID(1660039916, format, text, fileName);

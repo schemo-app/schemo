@@ -39,8 +39,22 @@ func (s *Transfer) PreviewFile(
 	return &preview, nil
 }
 
-// PreviewText reads a text the window already holds — a dropped file's contents, or a paste of
-// commands — and names it the way the card will draw it.
+// PreviewPath reads a dropped file with the same limits and preview as a picked file.
+func (s *Transfer) PreviewPath(ctx context.Context, format string, path string) (Preview, error) {
+	parsed, err := FormatOf(format)
+	if err != nil {
+		return Preview{}, err
+	}
+	preview, err := s.previewFile(ctx, parsed, path)
+	if err != nil {
+		return Preview{}, err
+	}
+	preview.File = filepath.Base(path)
+	return preview, nil
+}
+
+// PreviewText reads a text the window already holds, such as pasted commands, and names it the way
+// the card will draw it.
 func (s *Transfer) PreviewText(
 	ctx context.Context,
 	format string,

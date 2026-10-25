@@ -46,3 +46,22 @@ test('a quiet read that fails answers nothing and says nothing', async () => {
   assert.equal(await transfer.previewText('curl', 'cur', '', true), null)
   assert.equal(transfer.busy, false)
 })
+
+test('a dropped path uses the file preview and releases busy after a failed read', async () => {
+    setActivePinia(createPinia())
+    const transfer = useTransferStore()
+    const calls = []
+    globalThis.transferService.PreviewPath = async (...args) => {
+        calls.push(args)
+        return { token: 'dropped', file: 'collection.json' }
+    }
+
+    assert.deepEqual(await transfer.previewPath('postman', '/tmp/collection.json'), {
+        token: 'dropped', file: 'collection.json',
+    })
+    assert.deepEqual(calls, [['postman', '/tmp/collection.json']])
+
+    globalThis.transferService.PreviewPath = async () => { throw new Error('unreadable file') }
+    assert.equal(await transfer.previewPath('postman', '/tmp/missing.json'), null)
+    assert.equal(transfer.busy, false)
+})

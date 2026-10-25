@@ -1840,7 +1840,7 @@
       "shortcuts": "",
       "requests": "Sending and history",
       "proxy": "How the application connects to the network",
-      "extension": "",
+      "extension": "Capture browser requests",
       "mcp": "",
       "updates": "Channel and version"
     },

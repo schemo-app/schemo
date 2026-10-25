@@ -31,6 +31,7 @@ declare module "@wailsio/runtime" {
             "capture-disconnected": void;
             "capture-state": agent$0.CaptureState;
             "changed": domain$0.Changed;
+            "files-dropped": desktop$0.FileDrop;
             "history:cleared": request$0.HistoryCleared;
             "import-link": void;
             "mcp:changed": agent$0.MCPStatus;

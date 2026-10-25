@@ -108,6 +108,10 @@ export const useTransferStore = defineStore('transfer', () => {
     return whileBusy(() => readPreview(Transfer.PreviewFile(title, format)))
   }
 
+  function previewPath(format: TransferFormat, path: string): Promise<Preview | null> {
+    return whileBusy(() => readPreview(Transfer.PreviewPath(format, path)))
+  }
+
   function previewText(
     format: TransferFormat,
     text: string,
@@ -235,6 +239,7 @@ export const useTransferStore = defineStore('transfer', () => {
     askExport,
     closeTransfer,
     previewFile,
+    previewPath,
     previewText,
     previewUrl,
     apply,

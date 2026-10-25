@@ -19,6 +19,12 @@ type Assets struct {
 	Icon []byte
 }
 
+// FileDrop identifies the files and the designated element they were dropped onto.
+type FileDrop struct {
+	Files  []string `json:"files"`
+	Target string   `json:"target"`
+}
+
 // NewApp is the application itself: its name, its assets, how a rejected call crosses to the
 // window, and what a second launch does instead of starting another copy.
 //
@@ -89,6 +95,7 @@ func NewMainWindow(
 		MinWidth:         mainMinWidth,
 		MinHeight:        mainMinHeight,
 		Frameless:        UseCustomTitlebar(),
+		EnableFileDrop:   true,
 		BackgroundType:   glassBackgroundType(),
 		BackgroundColour: application.NewRGBA(0, 0, 0, 0),
 		URL:              "/" + host.windowQuery(glassShows()),
@@ -103,6 +110,16 @@ func NewMainWindow(
 		},
 	})
 	host.SetMainWindow(mainWin)
+	mainWin.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		details := event.Context().DropTargetDetails()
+		if details == nil {
+			return
+		}
+		mainWin.EmitEvent(EventFilesDropped, FileDrop{
+			Files:  event.Context().DroppedFiles(),
+			Target: details.ElementID,
+		})
+	})
 	hideToolbarInFullscreen(mainWin)
 	if !UseCustomTitlebar() {
 		// WKWebView consumes these accelerators before JavaScript receives keydown.
