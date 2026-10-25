@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import IconButton from '../ui/IconButton.vue'
 import Icon from '../ui/Icon.vue'
+import FileDrop from '../ui/FileDrop.vue'
 import TokenField from '../ui/TokenField.vue'
 import KvRow from './KvRow.vue'
 import PaneSelect, { type PaneOption } from './PaneSelect.vue'
@@ -231,10 +232,17 @@ function baseName(path: string): string {
         @remove="source.removeRow(RowKind.RowForm, row.id)"
         @grab="press($event, row.id, index)"
       >
-        <button v-if="row.file" type="button" class="file" @click="pickFile(row)">
+        <FileDrop
+          v-if="row.file"
+          as="button"
+          type="button"
+          class="file"
+          @files="([path]) => patch(row.id, { src: path, file: true })"
+          @click="pickFile(row)"
+        >
           <Icon name="Download" :size="12" :stroke-width="2" />
           <span>{{ row.src ? baseName(row.src) : t('request.body.chooseFile') }}</span>
-        </button>
+        </FileDrop>
         <TokenField
           v-else
           variant="cell"
@@ -266,11 +274,11 @@ function baseName(path: string): string {
       </button>
     </div>
 
-    <div v-else class="drop">
+    <FileDrop v-else class="drop" @files="([path]) => source.setBodyFile(path)">
       <Icon name="Download" :size="24" :stroke-width="1.5" />
       <span class="drop-name">{{ source.bodyFile ? baseName(source.bodyFile) : t('request.body.noFileChosen') }}</span>
       <button type="button" class="drop-btn" @click="pickBody">{{ t('request.body.chooseFile') }}</button>
-    </div>
+    </FileDrop>
   </div>
 </template>
 

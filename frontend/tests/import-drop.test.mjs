@@ -18,7 +18,7 @@ const load = await vite({
 }, {
     other(path) {
         if (!path.endsWith('.vue')) return
-        if (path.endsWith('/ImportDialog.vue')) return clientComponent(path)
+        if (path.endsWith('/ImportDialog.vue') || path.endsWith('/FileDrop.vue')) return clientComponent(path)
         const name = path.split('/').at(-1).slice(0, -4)
         return `import { h } from 'vue'; export default { inheritAttrs: false,
             setup(_, { attrs, slots }) {
@@ -81,19 +81,23 @@ async function mount() {
     app.mount(root)
     find(root, element => element.props.name === 'transfer.source.postman').props.onClick()
     await nextTick()
+    ports.root = root
     return root
 }
 
-async function drop(files = ['/tmp/collection.json'], target = 'collection-import-drop') {
-    ports.listeners.get('files-dropped')({ data: { files, target } })
+function zone(root) {
+    return find(root, element => element.props['data-file-drop-target'] !== undefined)
+}
+
+async function drop(files = ['/tmp/collection.json'], target = zone(ports.root)?.props.id ?? 'removed-zone') {
+    ports.listeners.get('files-dropped')?.({ data: { files, target } })
     await Promise.resolve()
     await nextTick()
 }
 
 test('the native drop zone previews the first file and shows its name', async () => {
     const root = await mount()
-    const zone = find(root, element => element.props.id === 'collection-import-drop')
-    assert.equal(zone.props['data-file-drop-target'], '')
+    assert.equal(zone(root).props['data-file-drop-target'], '')
 
     await drop(['/tmp/collection.json', '/tmp/other.json'])
     assert.deepEqual(ports.calls, [['postman', '/tmp/collection.json']])
@@ -137,7 +141,7 @@ test('a pending drop cannot populate another input mode or a reopened dialog', a
     find(root, element => element.props.name === 'transfer.source.postman').props.onClick()
     answers.shift()({ file: 'stale.json', token: 'stale' })
     await nextTick()
-    assert.ok(find(root, element => element.props.id === 'collection-import-drop'))
+    assert.ok(zone(root))
     assert.equal(find(root, element => element.text === 'stale.json'), undefined)
 })
 

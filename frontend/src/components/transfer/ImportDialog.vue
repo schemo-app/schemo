@@ -2,6 +2,7 @@
 import { computed, ref, useTemplateRef, watch } from 'vue'
 import { useFocus, useTimeoutFn } from '@vueuse/core'
 import Icon from '../ui/Icon.vue'
+import FileDrop from '../ui/FileDrop.vue'
 import Segment from '../ui/Segment.vue'
 import DialogButton from '../ui/DialogButton.vue'
 import TransferCheck from './TransferCheck.vue'
@@ -11,7 +12,6 @@ import TransferRow from './TransferRow.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { useTransferStore, type TransferFormat } from '../../stores/transfer'
 import { requestCount } from '../../lib/collectionTree'
-import { useWailsEvent } from '../../composables/useWailsEvent'
 import { formatBytes, t } from '../../i18n'
 import type { Collection } from '../../../bindings/schemo/internal/domain'
 import type { Preview } from '../../../bindings/schemo/internal/convert'
@@ -266,13 +266,11 @@ async function previewCurl() {
   await showPreview(transfer.previewText(id, text, '', true))
 }
 
-useWailsEvent('files-dropped', (event) => {
-  const { files, target } = event.data
+function readFile([path]: string[]) {
   const id = format.value
-  const path = files?.[0]
-  if (!transfer.importOpen || via.value !== 'file' || !id || !path || target !== 'collection-import-drop') return
+  if (!transfer.importOpen || via.value !== 'file' || !id || !path) return
   void showPreview(transfer.previewPath(id, path))
-})
+}
 
 async function commit() {
   if (!ready.value) return
@@ -351,18 +349,20 @@ async function commit() {
       />
 
       <template v-if="via === 'file'">
-        <div
+        <FileDrop
           v-if="!preview"
-          id="collection-import-drop"
+          as="button"
+          type="button"
           class="drop"
-          data-file-drop-target
+          :disabled="!transfer.importOpen"
+          @files="readFile"
           @click="pickFile"
         >
           <span>
             {{ t('transfer.drop') }} <span class="drop-pick">{{ t('transfer.choose') }}</span>
           </span>
           <span class="drop-hint">{{ accept }}</span>
-        </div>
+        </FileDrop>
         <div v-else class="file">
           <Icon name="FileText" :size="16" :stroke-width="1.7" class="file-icon" />
           <div class="file-text">
@@ -454,11 +454,6 @@ async function commit() {
   border: 1.5px dashed var(--border);
   background: var(--bg-panel);
   cursor: default;
-}
-
-.drop.file-drop-target-active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .drop-pick {
