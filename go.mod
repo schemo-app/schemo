@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/icholy/digest v1.2.0
 	github.com/jinzhu/inflection v1.0.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.34
+	github.com/wailsapp/wails/v3 v3.0.0
 	github.com/yuin/goldmark v1.7.17
 	github.com/zalando/go-keyring v0.2.8
 	go.yaml.in/yaml/v3 v3.0.4

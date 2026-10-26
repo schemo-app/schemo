@@ -37,7 +37,7 @@ func newRuns(t *testing.T) *runs {
 	r := &runs{
 		Runs: NewRuns(store, collections, envs, nil, nil, nil, events, ids),
 		t:    t, store: store, collections: collections, events: events,
-		sender: &runSender{store: store, answers: map[string]runAnswer{}, tests: map[string][]domain.TestResult{}},
+		sender: &runSender{store: store, ids: ids, answers: map[string]runAnswer{}, tests: map[string][]domain.TestResult{}},
 	}
 	r.send = r.sender.send
 	return r
@@ -417,6 +417,7 @@ type runAnswer struct {
 // runSender answers by URL and writes a real record, so assertion counts can hang off it.
 type runSender struct {
 	store   *db.Store
+	ids     platform.IDGen
 	mu      sync.Mutex
 	sent    []runRequest
 	answers map[string]runAnswer
@@ -450,7 +451,7 @@ func (f *runSender) send(ctx context.Context, req runRequest) (domain.Record, er
 		return domain.Record{}, answer.refusal
 	}
 	rec := domain.Record{RecordSummary: domain.RecordSummary{
-		ID: fmt.Sprintf("rec-%d", time.Now().UnixNano()), Method: req.Method, URL: req.URL,
+		ID: f.ids(), Method: req.Method, URL: req.URL,
 		Status: answer.status, Error: answer.transport, StartedAt: time.Now().UnixMilli(),
 		Source: domain.SourceManual,
 	}}
