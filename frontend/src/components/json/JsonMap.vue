@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import JsonRows from './JsonRows.vue'
 import { buildJsonTree, isContainer, jsonOrder, type JsonKind, type JsonNode } from '../../lib/jsonTree'
 import { textOf, t } from '../../i18n'
 
@@ -70,21 +71,21 @@ const TYPE_INK: Record<JsonKind, string> = {
       <span>{{ t('response.map.type') }}</span>
       <span class="map-size-head">{{ t('response.map.size') }}</span>
     </div>
-    <div
-      v-for="node in rows"
-      :key="node.path"
-      class="map-row"
-      :class="{ selected: node.path === selected, hit: matchesSearch(node) }"
-      @click="emit('select', node.path)"
-    >
-      <span class="map-addr mono">
-        <span class="map-parent">{{ stepOf(node).parent }}</span>{{ stepOf(node).last }}
-      </span>
-      <span>
-        <span class="map-type mono" :class="TYPE_INK[node.kind]">{{ textOf(`inspector.kinds.${node.kind}`) }}</span>
-      </span>
-      <span class="map-size">{{ sizeOf(node) }}</span>
-    </div>
+    <JsonRows :rows :row-height="2" :aria-label="t('response.views.map')" v-slot="{ node }">
+      <div
+        class="map-row"
+        :class="{ selected: node.path === selected, hit: matchesSearch(node) }"
+        @click="emit('select', node.path)"
+      >
+        <span class="map-addr mono">
+          <span class="map-parent">{{ stepOf(node).parent }}</span>{{ stepOf(node).last }}
+        </span>
+        <span>
+          <span class="map-type mono" :class="TYPE_INK[node.kind]">{{ textOf(`inspector.kinds.${node.kind}`) }}</span>
+        </span>
+        <span class="map-size">{{ sizeOf(node) }}</span>
+      </div>
+    </JsonRows>
   </div>
 </template>
 
@@ -92,11 +93,12 @@ const TYPE_INK: Record<JsonKind, string> = {
 @reference "../../style.css";
 
 .json-map {
+  @apply flex flex-col flex-1 min-h-0;
   padding: 0 1.25rem 1.25rem;
 }
 
 .map-head {
-  @apply grid items-center text-text-tertiary;
+  @apply grid flex-none items-center text-text-tertiary;
   grid-template-columns: minmax(0, 1fr) 5.25rem 6rem;
   height: 1.75rem;
   font-size: var(--text-11-5);

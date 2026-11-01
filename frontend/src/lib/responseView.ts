@@ -36,8 +36,8 @@ export function tabBadge(
   }
 }
 
-/** The three ways a body is read: as a tree, as the text it is, and as the shape of it. */
-export type BodyView = 'tree' | 'raw' | 'map'
+/** The ways a body is read: text, tree, shape, or an array as a table. */
+export type BodyView = 'tree' | 'raw' | 'map' | 'table'
 
 /** What the viewer remembers per tab: which reading is on screen, and how far the tree is opened. */
 export interface ResponseViewState {

@@ -45,6 +45,7 @@ export function useResponseView(
   // Every node of the body, keyed by its address: what the tree walks, the map lists and the counts
   // are read from. One build per body, however many of the three ask.
   const nodes = computed(() => (isJson.value ? buildJsonTree(jsonValue.value) : new Map()))
+  const arrays = computed(() => [...nodes.value.values()].filter(node => node.kind === 'array'))
 
   // Which reading is on screen outlives the component: it is the tab's, like the chip a request pane
   // is open on, so switching tabs and coming back shows what was left.
@@ -60,7 +61,7 @@ export function useResponseView(
 
   // What draws the body: the reading that was picked, and what the body is. A body that is not JSON
   // is read as the text it is, whichever reading was left selected.
-  const reader = computed<'tree' | 'map' | 'text'>(() =>
+  const reader = computed<'tree' | 'map' | 'table' | 'text'>(() =>
     isJson.value && bodyView.value !== 'raw' ? bodyView.value : 'text'
   )
 
@@ -95,10 +96,14 @@ export function useResponseView(
     tree: t('response.views.tree'),
     raw: t('response.views.raw'),
     map: t('response.views.map'),
+    table: t('response.views.table'),
   }))
 
-  /** The three readings a JSON leaves; a body that is not JSON has only its text. */
-  const views = computed<BodyView[]>(() => (isJson.value ? ['raw', 'tree', 'map'] : ['raw']))
+  /** JSON arrays also have a table; a body that is not JSON has only its text. */
+  const views = computed<BodyView[]>(() => {
+    if (!isJson.value) return ['raw']
+    return arrays.value.length ? ['raw', 'tree', 'map', 'table'] : ['raw', 'tree', 'map']
+  })
 
   // The tab being read is kept between records; only a reading the record has no room for moves —
   // and a body that is not JSON is read as text, whatever was on screen before it.
@@ -175,6 +180,7 @@ export function useResponseView(
     selected,
     collapsed,
     nodes,
+    arrays,
     jsonValue,
     bodyInfo,
     toggleNode,

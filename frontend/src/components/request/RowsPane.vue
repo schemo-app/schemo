@@ -2,9 +2,11 @@
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import Icon from '../ui/Icon.vue'
 import KvRow from './KvRow.vue'
+import BulkRowsEditor from './BulkRowsEditor.vue'
+import IconButton from '../ui/IconButton.vue'
 import TokenField from '../ui/TokenField.vue'
 import type { RequestSource } from '../../lib/requestSource'
-import { RowKind, type ProjectedRow } from '../../../bindings/schemo/internal/domain'
+import { RowKind, type ProjectedRow, type Row } from '../../../bindings/schemo/internal/domain'
 import { useSetting } from '../../composables/useSettings'
 import { useRowOrder } from '../../composables/useRowOrder'
 import { t } from '../../i18n'
@@ -35,6 +37,12 @@ const summary = computed(() =>
 )
 
 const autoOpen = ref(false)
+const bulkEditing = ref(false)
+
+function applyBulk(rows: Row[]) {
+  source.replaceRows(rowKind.value, rows)
+  bulkEditing.value = false
+}
 
 const table = useTemplateRef<HTMLElement>('table')
 
@@ -69,8 +77,18 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
 
 <template>
   <div class="rows-pane" :class="kind">
-    <div v-if="kind === 'headers'" class="rows-head">
-      <span class="rows-summary mono" :title="summary">{{ summary }}</span>
+    <div class="rows-head">
+      <span class="rows-summary mono">{{ kind === 'headers' ? summary : t('request.pane.queryTitle') }}</span>
+      <IconButton
+        v-if="!bulkEditing"
+        variant="bare"
+        size="bar"
+        :hint="t('request.pane.bulkEdit')"
+        :aria-label="t('request.pane.bulkEdit')"
+        @click="bulkEditing = true"
+      >
+        <Icon name="SquareCode" :size="16" :stroke-width="1.8" />
+      </IconButton>
     </div>
 
     <template v-if="pathRows.length">
@@ -107,7 +125,8 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
       <div class="kv-group section-label">{{ t('request.pane.queryTitle') }}</div>
     </template>
 
-    <div ref="table" class="kv">
+    <BulkRowsEditor v-if="bulkEditing" :rows @apply="applyBulk" @cancel="bulkEditing = false" />
+    <div v-else ref="table" class="kv">
       <KvRow
         v-for="(row, index) in rows"
         :key="row.id"
@@ -187,10 +206,6 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
 .rows-pane {
   @apply flex flex-col;
   padding: 0.125rem 1.25rem 0.875rem;
-}
-
-.rows-pane.params {
-  padding-top: 0.625rem;
 }
 
 .rows-head {

@@ -371,7 +371,10 @@
       "skipped": "Skipped — click to send",
       "remove": "Remove",
       "scriptsTitle": "Request scripts",
-      "reorder": "Drag to reorder"
+      "reorder": "Drag to reorder",
+      "bulkEdit": "Bulk edit",
+      "bulkHint": "Enter name: value on each line.",
+      "bulkError": "Line {line}: use name: value or name=value. Check quoted strings."
     },
     "docs": {
       "markdown": "Markdown",
@@ -515,7 +518,8 @@
     "views": {
       "tree": "Tree",
       "raw": "Text",
-      "map": "Map"
+      "map": "Map",
+      "table": "Table"
     },
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
@@ -599,6 +603,17 @@
     "raw": {
       "foldedLines": "{n} line | {n} lines",
       "expand": "Expand"
+    },
+    "table": {
+      "array": "Array",
+      "value": "Value",
+      "filter": "Filter rows…",
+      "columns": "Columns",
+      "export": "Export table as CSV",
+      "exportFailed": "Could not export the table: {error}",
+      "open": "Inspect {path}",
+      "empty": "No rows to display",
+      "count": "{shown} of {total} rows"
     }
   },
   "cookies": {
@@ -960,7 +975,7 @@
   },
   "inspector": {
     "title": "Inspector",
-    "empty": "Click a value in the response to see what it is.",
+    "empty": "Click a value in the response.",
     "notDocument": "This response is not a document the inspector can read.",
     "root": "the whole document",
     "item": "item",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Icon from '../ui/Icon.vue'
+import JsonRows from './JsonRows.vue'
 import {
   buildJsonTree,
   isContainer,
@@ -97,26 +98,26 @@ const INK: Record<string, string> = {
 
 <template>
   <div class="json-tree">
-    <div
-      v-for="node in rows"
-      :key="node.path"
-      class="tree-row"
-      :class="{ selected: node.path === selected, hit: matchesSearch(node) }"
-      :style="{ paddingLeft: `${0.75 + (node.depth - 1) * 1.125}rem` }"
-      @click="pick(node, $event)"
-      @dblclick="wantToggle(node)"
-    >
-      <span
-        class="tree-caret"
-        :class="{ open: !collapsed[node.path], leaf: !isContainer(node.kind) }"
-        @click.stop="wantToggle(node)"
+    <JsonRows :rows :row-height="1.625" :aria-label="textOf('response.views.tree')" v-slot="{ node }">
+      <div
+        class="tree-row"
+        :class="{ selected: node.path === selected, hit: matchesSearch(node) }"
+        :style="{ paddingLeft: `${0.75 + (node.depth - 1) * 1.125}rem` }"
+        @click="pick(node, $event)"
+        @dblclick="wantToggle(node)"
       >
-        <Icon name="ChevronRight" :size="8" :stroke-width="3" />
-      </span>
-      <span class="tree-key" :class="{ index: typeof node.key === 'number' }">{{ node.key }}</span>
-      <span class="tree-colon">:</span>
-      <span class="tree-val" :class="INK[view(node).ink]">{{ view(node).text }}</span>
-    </div>
+        <span
+          class="tree-caret"
+          :class="{ open: !collapsed[node.path], leaf: !isContainer(node.kind) }"
+          @click.stop="wantToggle(node)"
+        >
+          <Icon name="ChevronRight" :size="8" :stroke-width="3" />
+        </span>
+        <span class="tree-key" :class="{ index: typeof node.key === 'number' }">{{ node.key }}</span>
+        <span class="tree-colon">:</span>
+        <span class="tree-val" :class="INK[view(node).ink]">{{ view(node).text }}</span>
+      </div>
+    </JsonRows>
   </div>
 </template>
 
@@ -124,7 +125,7 @@ const INK: Record<string, string> = {
 @reference "../../style.css";
 
 .json-tree {
-  @apply flex flex-col;
+  @apply flex flex-col flex-1 min-h-0;
   padding: 0.125rem 0 1.25rem;
   font-family: var(--mono);
   font-size: var(--text-12-5);

@@ -14,7 +14,8 @@ A fast, native API client for building, testing and sharing HTTP requests.
 - **Authorization**: Bearer, Basic, API key, JWT, AWS SigV4, Digest, OAuth 2.0
 - **Scripts** before and after a request, in a sandbox, with assertions
 - **History** that is searchable and keeps every response
-- **JSON:API** navigation, JSON tree, map and type views
+- **JSON:API** navigation, JSON tree, map and type views; array tables with filtering, sorting and CSV export
+- **Bulk editing** of query parameters and headers as text
 - **Import** Postman, Insomnia, OpenAPI, HAR and cURL; **copy** as cURL, fetch, wget, HTTPie or PowerShell
 - **Team workspaces** with sync, roles and published documentation
 - **Browser capture** through the [extension](https://github.com/schemo-app/extension)

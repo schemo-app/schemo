@@ -56,7 +56,7 @@ const load = await vite({
   '/src/composables/useToast.ts': 'export const useToast = () => ({ show: text => globalThis.notices.push(text) })',
 })
 const { CancellablePromise, CancelError } = await load('@wailsio/runtime')
-const { VariableKind } = await load('/bindings/schemo/internal/domain/models.ts')
+const { VariableKind, RowKind } = await load('/bindings/schemo/internal/domain/models.ts')
 const { useEnvironmentsStore } = await load('/src/stores/environments.ts')
 const { useCookiesStore } = await load('/src/stores/cookies.ts')
 const { useTabsStore } = await load('/src/stores/tabs.ts')
@@ -735,6 +735,25 @@ function draftForTest(persisted = true) {
   draft.load({ id: 'tab:draft', method: 'GET', url: '', body: '', params: [], headers: [], pathParams: [], form: [] })
   return draft
 }
+
+test('bulk row replacement updates the query atomically and leaves header edits out of the URL', () => {
+  const draft = draftForTest(false)
+  draft.setUrl('https://api.example.test/users?old=1#results')
+  const rows = [
+    { id: 'one', name: 'tag', value: 'one two', enabled: true, description: 'A note' },
+    { id: 'two', name: 'tag', value: '{{next}}', enabled: true },
+    { id: 'off', name: 'parked', value: '3', enabled: false },
+  ]
+  draft.replaceRows(RowKind.RowParams, rows)
+  assert.equal(draft.url.value, 'https://api.example.test/users?tag=one+two&tag={{next}}#results')
+  assert.deepEqual(draft.params.value, rows)
+  draft.replaceRows(RowKind.RowHeaders, rows)
+  assert.equal(draft.url.value, 'https://api.example.test/users?tag=one+two&tag={{next}}#results')
+  assert.deepEqual(draft.headers.value, rows)
+  draft.replaceRows(RowKind.RowParams, [])
+  assert.equal(draft.url.value, 'https://api.example.test/users#results')
+  draft.abandon()
+})
 
 test('an edit stands at once and the whole draft is written a pause later', async (context) => {
   context.mock.timers.enable({ apis: ['setTimeout'] })

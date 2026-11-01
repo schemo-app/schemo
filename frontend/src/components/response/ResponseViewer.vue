@@ -20,6 +20,7 @@ import type { RecordView } from '../../lib/requestRecord'
 import JsonApiTree from '../json/JsonApiTree.vue'
 import JsonTree from '../json/JsonTree.vue'
 import JsonMap from '../json/JsonMap.vue'
+import JsonTable from '../json/JsonTable.vue'
 import TextViewerTab from './TextViewerTab.vue'
 import SchemaMap from '../json/SchemaMap.vue'
 import NodeInspector from '../inspector/NodeInspector.vue'
@@ -92,6 +93,7 @@ const {
   doc,
   isJson,
   jsonValue,
+  arrays,
   prettyRaw,
   language,
   follow,
@@ -181,6 +183,7 @@ const bodyTextViewer = useTemplateRef<TextViewer>('bodyTextViewer')
 const schemaMap = useTemplateRef<MapExport>('schemaMap')
 const jsonMap = useTemplateRef<{ matches: number }>('jsonMap')
 const jsonTree = useTemplateRef<{ matches: number }>('jsonTree')
+const jsonTable = useTemplateRef<{ matches: number }>('jsonTable')
 const headerTable = useTemplateRef<{ matches: number }>('headerTable')
 const cookiesTab = useTemplateRef<{ matches: number }>('cookiesTab')
 
@@ -194,6 +197,7 @@ function jsonApiMatches(query: string): number {
 // What the search on screen walks: a JSON:API document is counted by its own readers, and any other
 // JSON by the tree or the map that is drawn.
 function bodyMatches(query: string): number {
+  if (bodyView.value === 'table') return jsonTable.value?.matches ?? 0
   if (bodyView.value === 'tree') return doc.value ? jsonApiMatches(query) : (jsonTree.value?.matches ?? 0)
   if (bodyView.value === 'map') return doc.value ? (schemaMap.value?.matchCount ?? 0) : (jsonMap.value?.matches ?? 0)
   return 0
@@ -205,6 +209,7 @@ const searchKind = computed<SearchKind | null>(() => {
   if (activeTab.value === 'headers' || activeTab.value === 'cookies') return 'list'
   if (activeTab.value !== 'body') return null
   if (bodyView.value === 'map') return 'map'
+  if (bodyView.value === 'table') return 'list'
   if (bodyView.value === 'raw') return 'text'
   return 'tree'
 })
@@ -218,6 +223,7 @@ function searchMatches(query: string): number {
 // What the field says about itself: a JSON:API document is searched by its own words, and any other
 // reader by a key or a value.
 const searchPlaceholder = computed(() => {
+  if (activeTab.value === 'body' && bodyView.value === 'table') return t('response.table.filter')
   if (activeTab.value === 'headers') return t('response.searchHeaders')
   if (activeTab.value === 'cookies') return t('response.searchCookies')
   if (searchKind.value === 'text') return t('response.text.searchPlaceholder')
@@ -287,6 +293,12 @@ function onWindowKeydown(e: KeyboardEvent) {
   } else if (e.key === 'Escape' && searching.value && document.activeElement !== searchField.value) {
     closeSearch()
   }
+}
+
+function inspectTableRow(path: string) {
+  if (!isInspectorOpen.value) toggleInspector()
+  selectPath(path)
+  void inspectPath(path)
 }
 
 useEventListener(window, 'keydown', onWindowKeydown)
@@ -435,7 +447,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 
       <div class="resp-main">
         <TabsContent class="resp-tab" value="body">
-          <!-- A JSON body is read three ways; a body that is not JSON is read as the text it is. -->
+          <!-- JSON arrays also have a table; other formats are read as text. -->
           <div v-if="isJson" class="body-bar">
             <Segment
               class="flex-none"
@@ -466,8 +478,16 @@ useEventListener(window, 'keydown', onWindowKeydown)
             </template>
           </div>
 
-          <div class="resp-content">
-            <template v-if="reader === 'tree'">
+          <div class="resp-content" :class="{ 'resp-viewport': reader === 'table' || (!doc && reader !== 'text') }">
+            <JsonTable
+              v-if="reader === 'table'"
+              ref="jsonTable"
+              :arrays
+              :selected
+              :query
+              @inspect="inspectTableRow"
+            />
+            <template v-else-if="reader === 'tree'">
               <!-- A JSON:API answer keeps the steps through its pages over the tree: they are where
                    the reader goes next, not something done to the reading. -->
               <template v-if="doc">
@@ -771,6 +791,10 @@ useEventListener(window, 'keydown', onWindowKeydown)
 
 .resp-content {
   @apply flex-1 min-h-0 overflow-auto;
+}
+
+.resp-viewport {
+  @apply flex flex-col overflow-hidden;
 }
 
 .resp-inner {

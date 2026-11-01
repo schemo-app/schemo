@@ -89,6 +89,14 @@ export function PreviewUrl(format: string, url: string): $CancellablePromise<$mo
 }
 
 /**
+ * SaveCSV writes the table selection from the window, including its column order and filters.
+ * A cancelled save dialog returns false without writing a file.
+ */
+export function SaveCSV(title: string, columns: string[] | null, rows: (string[] | null)[] | null): $CancellablePromise<boolean> {
+    return $Call.ByID(776175052, title, columns, rows);
+}
+
+/**
  * TakeImportLink reports and clears the page a followed link named. Destructive on purpose: the
  * window's mount and its event handler both call it and only the first may open the dialog; the
  * link is usually what started this app, so the mount usually finds it.

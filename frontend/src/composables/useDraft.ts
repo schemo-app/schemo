@@ -256,6 +256,11 @@ export function useDraft(target: DraftTarget) {
 
   const toggleRow = (kind: RowKind, row: string, enabled: boolean) => patchRow(kind, row, { enabled })
 
+  function replaceRows(kind: RowKind, rows: Row[]) {
+    if (kind !== RowKind.RowParams && kind !== RowKind.RowHeaders) return
+    edit((draft) => withList(draft, kind, rows))
+  }
+
   async function moveRow(kind: RowKind, row: string, position: number) {
     if (kind === RowKind.RowPathParams) return
     edit((d) => {
@@ -451,6 +456,7 @@ export function useDraft(target: DraftTarget) {
     pickBodyFile,
     addRow,
     removeRow,
+    replaceRows,
     patchRow,
     toggleRow,
     moveRow,

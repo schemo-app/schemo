@@ -6,7 +6,9 @@ package convert
 // tells whoever is handed the file which tool it is for before it is opened.
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +17,29 @@ import (
 
 	"schemo/internal/desktop"
 )
+
+// SaveCSV writes the table selection from the window, including its column order and filters.
+// A cancelled save dialog returns false without writing a file.
+func (s *Transfer) SaveCSV(title string, columns []string, rows [][]string) (bool, error) {
+	var data bytes.Buffer
+	writer := csv.NewWriter(&data)
+	writer.UseCRLF = true
+	if err := writer.Write(columns); err != nil {
+		return false, err
+	}
+	if err := writer.WriteAll(rows); err != nil {
+		return false, err
+	}
+	path, err := s.host.SaveFile(title, "response.csv",
+		application.FileFilter{DisplayName: "CSV", Pattern: "*.csv"})
+	if err != nil || path == "" {
+		return false, err
+	}
+	if err := os.WriteFile(path, data.Bytes(), 0o644); err != nil {
+		return false, fmt.Errorf("file %s: %w", path, err)
+	}
+	return true, nil
+}
 
 // PreviewFile asks for a file and reads it without writing anything: the dialog shows what the file
 // holds before the person commits. A nil preview is a cancelled dialog, not a failure.
