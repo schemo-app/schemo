@@ -34,6 +34,7 @@ export {
   ExternalLink,
   Eye,
   EyeOff,
+  FileCode,
   FileText,
   Folder,
   FolderInput,

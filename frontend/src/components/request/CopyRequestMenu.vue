@@ -56,19 +56,22 @@ async function copyAs(format: Format) {
 <template>
   <DropdownMenu>
     <DropdownMenuTrigger as-child>
-      <button
-        type="button"
-        class="copy-request"
-        :disabled="!source.url.trim()"
-        :title="t('request.copyRequest')"
-        :aria-label="t('request.copyRequest')"
-      >
-        <!-- A tick where the sheet was is the whole answer a button with no word can give. -->
-        <Icon :name="copied ? 'Check' : 'Copy'" :size="16" />
-        <Icon class="caret" name="ChevronDown" :size="10" :stroke-width="2.6" />
-      </button>
+      <slot name="trigger" :copied>
+        <button
+          type="button"
+          class="copy-request"
+          :disabled="!source.url.trim()"
+          :title="t('request.copyRequest')"
+          :aria-label="t('request.copyRequest')"
+        >
+          <!-- A tick where the sheet was is the whole answer a button with no word can give. -->
+          <Icon :name="copied ? 'Check' : 'Copy'" :size="16" />
+          <Icon class="caret" name="ChevronDown" :size="10" :stroke-width="2.6" />
+        </button>
+      </slot>
     </DropdownMenuTrigger>
     <DropdownMenuContent class="copy-menu" :side-offset="6">
+      <slot name="actions" />
       <!-- The link first, then the shapes the request can be written in: they are read for
            different reasons. -->
       <DropdownMenuItem @select="copyAs(Format.FormatURL)">
@@ -109,4 +112,5 @@ async function copyAs(format: Format) {
 .caret {
   @apply flex-none text-text-tertiary;
 }
+
 </style>

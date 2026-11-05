@@ -10,11 +10,12 @@ import DocEditor from '../ui/DocEditor.vue'
 // What a collection or a request says about itself. The description is the tree row's own: the
 // store keeps it, and the chip's dot, the overview's preview and the reader read it from there. The
 // caller keys it by the row, so a pending write is flushed to the row it was typed for.
-const { id, emptyKey, startEditing = false, suggestSections = false } = defineProps<{
+const { id, emptyKey, startEditing = false, suggestSections = false, toolbar = null } = defineProps<{
   id: string
   emptyKey: MessageKey
   startEditing?: boolean
   suggestSections?: boolean
+  toolbar?: HTMLElement | null
 }>()
 
 const collections = useCollectionsStore()
@@ -61,6 +62,7 @@ function discard() {
     :hint="t('request.docs.hintSaved')"
     :start-editing="startEditing"
     :suggestions="suggestions"
+    :toolbar
     @update:model-value="touch()"
     @commit="commit"
     @cancel="discard"

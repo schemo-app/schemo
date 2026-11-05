@@ -5,7 +5,6 @@ import EmptyState from './EmptyState.vue'
 import Icon from './Icon.vue'
 import IconButton from './IconButton.vue'
 import MarkdownText from './MarkdownText.vue'
-import Segment from './Segment.vue'
 import TextEditor from './TextEditor.vue'
 import { isCombo } from '../../lib/commands'
 import { markdownHeadings } from '../../lib/markdown'
@@ -17,12 +16,13 @@ import { t } from '../../i18n'
 // combination, so it works on any keyboard layout.
 const LINK_COMBO = 'mod+K'
 
-const { modelValue, emptyText, hint = '', startEditing = false, suggestions = [] } = defineProps<{
+const { modelValue, emptyText, hint = '', startEditing = false, suggestions = [], toolbar = null } = defineProps<{
   modelValue: string
   emptyText: string
   hint?: string
   startEditing?: boolean
   suggestions?: { title: string; text: string }[]
+  toolbar?: HTMLElement | null
 }>()
 
 const emit = defineEmits<{
@@ -39,11 +39,6 @@ const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
 
 const editing = ref(false)
 const mode = ref<'visual' | 'markdown'>('visual')
-
-const modeOptions = computed(() => [
-  { value: 'visual', label: t('request.docs.visual') },
-  { value: 'markdown', label: t('request.docs.markdown') },
-])
 
 const empty = computed(() => modelValue.trim() === '')
 
@@ -185,11 +180,17 @@ function finishEditing() {
   isLinkBarOpen.value = false
 }
 
-function pickMode(value: string) {
-  if (value === mode.value) return
+function toggleEditing() {
+  if (editing.value) finishEditing()
+  else start()
+}
+
+function toggleMarkdown() {
   flushVisualText()
-  mode.value = value === 'markdown' ? 'markdown' : 'visual'
+  mode.value = mode.value === 'markdown' ? 'visual' : 'markdown'
   isLinkBarOpen.value = false
+  isBlockMenuOpen.value = false
+  isMoreMenuOpen.value = false
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -251,9 +252,34 @@ defineExpose({
 
 <template>
   <div ref="rootEl" class="doc">
-    <!-- Nothing is written and nothing is being written: the empty state below says it all, and a
-         bar whose only word is the format has nothing to hold. -->
-    <div v-if="editing || !empty" class="doc-head">
+    <Teleport :to="toolbar" :disabled="!toolbar">
+      <div class="doc-actions">
+        <button
+          type="button"
+          class="pane-toggle doc-mode"
+          :class="{ active: editing }"
+          :aria-pressed="editing"
+          :title="t(editing ? 'request.docs.finishEditing' : 'request.docs.editDescription')"
+          :aria-label="t(editing ? 'request.docs.finishEditing' : 'request.docs.editDescription')"
+          @click="toggleEditing"
+        >
+          <Icon name="Pencil" :size="15" :stroke-width="1.9" />
+        </button>
+        <button
+          v-if="editing"
+          type="button"
+          class="pane-toggle doc-source"
+          :class="{ active: mode === 'markdown' }"
+          :aria-pressed="mode === 'markdown'"
+          :aria-label="t('request.docs.source')"
+          :title="hint ? `${t('request.docs.source')} · ${hint}` : t('request.docs.source')"
+          @click="toggleMarkdown"
+        >
+          <Icon name="FileCode" :size="15" :stroke-width="1.9" />
+        </button>
+      </div>
+    </Teleport>
+    <div v-if="editing && mode === 'visual'" class="doc-head">
       <template v-if="editing">
         <div v-if="mode === 'visual'" class="doc-tools">
           <div class="doc-blk">
@@ -386,35 +412,6 @@ defineExpose({
           </div>
         </div>
 
-        <span class="doc-gap"></span>
-
-        <Segment
-          class="flex-none ml-1.5 mx-2"
-          size="xs"
-          :grow="false"
-          :options="modeOptions"
-          :value="mode"
-          @pick="pickMode"
-        />
-
-        <button type="button" class="doc-done" :title="hint" @click="finishEditing">
-          {{ t('request.docs.done') }}
-        </button>
-      </template>
-
-      <template v-else>
-        <span class="doc-tagline">{{ t('request.docs.markdown') }}</span>
-        <span class="doc-gap"></span>
-        <button
-          v-if="!empty"
-          type="button"
-          class="doc-edit"
-          :title="t('request.docs.editHint')"
-          @click="start"
-        >
-          <Icon name="Pencil" :size="14" :stroke-width="1.8" />
-          <span class="cap-line">{{ t('request.docs.edit') }}</span>
-        </button>
       </template>
     </div>
 
@@ -438,7 +435,7 @@ defineExpose({
 
     <template v-if="editing">
       <div v-if="mode === 'visual'" ref="scrollEl" class="doc-scroll doc-scroll-visual">
-        <div class="doc-center">
+        <div class="doc-content">
           <div ref="visualEl" class="doc-body" @keydown="onKeydown"></div>
         </div>
       </div>
@@ -459,7 +456,7 @@ defineExpose({
         </button>
       </EmptyState>
       <div v-else ref="scrollEl" class="doc-scroll">
-        <div class="doc-center">
+        <div class="doc-content">
           <div class="doc-body" @dblclick="start">
             <MarkdownText :text="modelValue" />
           </div>
@@ -503,23 +500,34 @@ defineExpose({
   @apply flex flex-col flex-1 min-h-0;
 }
 
+.doc-actions {
+  @apply inline-flex flex-none items-center self-end;
+  gap: 0.25rem;
+}
+
 .doc-head {
   @apply flex flex-none items-center;
   box-sizing: border-box;
   min-height: 2.75rem;
-  gap: 0.125rem;
-  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.5rem 0.875rem;
   border-bottom: 1px solid var(--line2);
 }
 
 .doc-tools {
-  @apply flex items-center min-w-0;
+  @apply flex flex-none items-center min-w-0;
   gap: 0.0625rem;
 }
 
 .doc-tools :deep(.doc-tb.on) {
   @apply text-text;
   background: var(--bg-hover);
+}
+
+.doc-tools :deep(.doc-tb) {
+  min-width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
 }
 
 .doc-letter {
@@ -610,42 +618,6 @@ defineExpose({
   font-size: inherit;
 }
 
-.doc-gap {
-  @apply flex-1;
-  min-width: 0.5rem;
-}
-
-.doc-done {
-  @apply flex-none cursor-pointer border-0 font-semibold;
-  height: 1.75rem;
-  padding: 0 0.75rem;
-  border-radius: 0.4375rem;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-family: inherit;
-  font-size: var(--text-13);
-}
-
-.doc-tagline {
-  @apply text-text-tertiary;
-  font-size: var(--text-12);
-}
-
-.doc-edit {
-  @apply flex items-center flex-none cursor-pointer border-0 text-text;
-  height: 1.75rem;
-  padding: 0 0.625rem 0 0.5rem;
-  gap: 0.3rem;
-  border-radius: 0.4375rem;
-  background: var(--chip);
-  font-family: inherit;
-  font-size: var(--text-13);
-}
-
-.doc-edit:hover {
-  background: var(--bg-hover);
-}
-
 .doc-link-bar {
   @apply flex flex-none items-center;
   height: 2.5rem;
@@ -710,20 +682,19 @@ defineExpose({
   cursor: text;
 }
 
-.doc-center {
+.doc-content {
   container-type: inline-size;
   display: flex;
-  justify-content: center;
   gap: 2.5rem;
   padding: 1.5rem 2rem 4rem;
 }
 
-.doc-scroll-visual .doc-center {
+.doc-scroll-visual .doc-content {
   padding: 1.5rem 2rem 0;
 }
 
 .doc-body {
-  flex: 0 1 45rem;
+  flex: 1;
   min-width: 0;
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import Icon from '../ui/Icon.vue'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
@@ -31,6 +31,7 @@ import { useWorkspaceSnapshot } from '../../composables/useWorkspaceSnapshot'
 // A collection's page: what it holds, what it authorizes with, what it keeps between requests, what
 // it runs around them, and how its last run went — one section at a time, under its own name.
 const collections = useCollectionsStore()
+const docsToolbar = useTemplateRef<HTMLElement>('docsToolbar')
 const publications = usePublicationsStore()
 const tabs = useTabsStore()
 const transfer = useTransferStore()
@@ -211,6 +212,7 @@ function addRequest() {
           </TabText>
         </TabsTrigger>
       </TabsList>
+      <div ref="docsToolbar" class="col-doc-toolbar"></div>
       <button
         v-if="inheritedPublication"
         type="button"
@@ -237,6 +239,7 @@ function addRequest() {
         :id="levelId"
         empty-key="request.docs.emptyCollection"
         :start-editing="docsEdit"
+        :toolbar="docsToolbar"
         suggest-sections
       />
       <CollectionAuth v-else-if="section === 'auth'" :level-id="levelId" />
@@ -338,6 +341,11 @@ function addRequest() {
 .col-strip {
   @apply flex-1 items-end min-w-0;
   gap: 1.25rem;
+}
+
+.col-doc-toolbar {
+  @apply flex flex-none items-center;
+  margin-left: auto;
 }
 
 .col-strip :deep(.reading-tab) {

@@ -39,7 +39,8 @@ export function useVariableCells(
   }
 
   async function start(v: Variable, field: 'name' | 'value', scope: string | null = opts.scope()) {
-    if (opts.locked()) return
+    // Input clicks bubble to the cell; reopening it would replace its draft with the stored value.
+    if (opts.locked() || isEditingCell(v, field, scope)) return
     const myTurn = ++opening
 
     let seed: string

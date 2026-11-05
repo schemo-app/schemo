@@ -43,6 +43,12 @@ const capturedRecord = computed(() =>
   responseSource.value === 'browser' ? (tabs.pane?.record ?? null) : null
 )
 
+const requestExpanded = computed(() => {
+  const pane = tabs.pane
+  return !capturedRecord.value && !!pane?.nodeId && !pane.blank &&
+    (pane.openChip === 'docs' || pane.openChip === 'examples')
+})
+
 async function openCapturedInRequest() {
   const record = capturedRecord.value
   if (!record) return
@@ -69,18 +75,21 @@ async function openCapturedInRequest() {
         v-else-if="tabs.pane && (!awaiting || tabs.pane.draftId)"
         :key="tabs.activeTab?.draftId || tabs.activeId"
         :source="tabs.pane"
+        :expanded="requestExpanded"
       />
-      <BlankRequest v-if="tabs.pane?.blank && !awaiting" :source="tabs.pane" />
-      <template v-else-if="tabs.pane?.record">
-        <ResponseViewer :record="tabs.pane.record" :source="responseSource" :pane="tabs.pane" />
+      <template v-if="!requestExpanded">
+        <BlankRequest v-if="tabs.pane?.blank && !awaiting" :source="tabs.pane" />
+        <template v-else-if="tabs.pane?.record">
+          <ResponseViewer :record="tabs.pane.record" :source="responseSource" :pane="tabs.pane" />
+        </template>
+        <div
+          v-else-if="!tabs.pane || tabs.pane.blank || tabs.pane.loading || awaiting"
+          class="empty"
+        >
+          <Spinner class="text-accent" />
+        </div>
+        <div v-else class="resp-hint">{{ t('response.hintSend') }}</div>
       </template>
-      <div
-        v-else-if="!tabs.pane || tabs.pane.blank || tabs.pane.loading || awaiting"
-        class="empty"
-      >
-        <Spinner class="text-accent" />
-      </div>
-      <div v-else class="resp-hint">{{ t('response.hintSend') }}</div>
     </template>
     <div v-else class="work-empty">
       <span>{{ t('tabs.empty.title') }}</span>
@@ -110,7 +119,7 @@ async function openCapturedInRequest() {
   @apply flex-1 min-h-0;
 }
 
-.work-area > .request-block:has(.req-pane-wrap) {
+.work-area > .request-block:not(.request-block-expanded):has(.req-pane-wrap) {
   border-bottom: 1px solid var(--border);
 }
 

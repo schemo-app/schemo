@@ -588,7 +588,7 @@ watch(filtered, (rows) => {
 .hist-addr {
   @apply min-w-0 truncate;
   font-family: var(--mono);
-  font-size: var(--text-12);
+  font-size: var(--text-13);
 }
 
 .hist-host {
@@ -597,7 +597,7 @@ watch(filtered, (rows) => {
 
 .hist-chip-status {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-12);
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 0.3125rem;

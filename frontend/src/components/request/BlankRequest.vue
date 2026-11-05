@@ -326,7 +326,7 @@ async function fill(row: RequestRecord) {
 .blank-path {
   @apply min-w-0 truncate;
   font-family: var(--mono);
-  font-size: var(--text-12);
+  font-size: var(--text-13);
 }
 
 .blank-host-part {

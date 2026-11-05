@@ -1,5 +1,5 @@
 Unicode true
-!define INFO_FILEVERSION "0.0.12.0"
+!define INFO_FILEVERSION "0.1.3.0"
 
 # Defines set here win over wails_tools.nsh; anything left undefined is filled in by it.
 !include "wails_tools.nsh"

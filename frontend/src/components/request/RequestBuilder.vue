@@ -13,6 +13,7 @@ import VarToken from '../ui/VarToken.vue'
 import { vVarPeek } from '../../lib/varPeek'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
 import type { PaneSource } from '../../stores/content'
 import { METHODS, methodInkClass } from '../../lib/format'
 import { useRequestSave } from '../../composables/useRequestSave'
@@ -52,7 +53,7 @@ function looksLikeCommand(text: string): boolean {
 
 // The pane draws the tab that is on screen, and the tab hands it its source: what is being composed
 // is the strip's answer, not a store's.
-const { source } = defineProps<{ source: PaneSource }>()
+const { source, expanded = false } = defineProps<{ source: PaneSource; expanded?: boolean }>()
 
 const { matches } = useCommands()
 
@@ -231,9 +232,9 @@ function useMissingVars(source: RequestSource) {
 </script>
 
 <template>
-  <div class="request-block">
+  <div class="request-block" :class="{ 'request-block-expanded': expanded }">
     <div class="bar-row">
-      <div class="url-field">
+      <div class="url-field" :class="{ 'has-environment': !source.blank }">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
             <button class="method-plate method-btn" :class="methodInkClass(source.method)">
@@ -332,13 +333,8 @@ function useMissingVars(source: RequestSource) {
             </template>
           </PopoverContent>
         </Popover>
+        <RequestEnvironment v-if="!source.blank" :source="source" />
       </div>
-
-      <template v-if="!source.blank">
-        <RequestEnvironment :source="source" />
-
-        <CopyRequestMenu :source="source" />
-      </template>
 
       <span v-if="!source.blank" class="save-anchor">
         <button
@@ -361,26 +357,50 @@ function useMissingVars(source: RequestSource) {
         />
       </span>
 
-      <button
-        ref="sendBtn"
-        type="button"
-        class="send-btn"
-        :class="{ sending: source.loading }"
-        :disabled="sendDisabled"
-        @click="onSend"
-      >
-        <Spinner v-if="source.loading" />
-        <span>{{ sendLabel }}</span>
-        <span class="send-hint">{{ sendKey }}</span>
-      </button>
+      <div class="send-group" :class="{ sending: source.loading, disabled: sendDisabled }">
+        <button
+          ref="sendBtn"
+          type="button"
+          class="send-btn"
+          :disabled="sendDisabled"
+          :title="`${sendLabel} · ${sendKey}`"
+          @click="onSend"
+        >
+          <Spinner v-if="source.loading" />
+          <span>{{ sendLabel }}</span>
+          <span v-if="source.loading" class="send-hint">{{ sendKey }}</span>
+        </button>
+        <CopyRequestMenu :source="source">
+          <template #trigger="{ copied }">
+            <button type="button" class="send-more" :disabled="sendDisabled || source.loading" :title="t('request.moreActions')" :aria-label="t('request.moreActions')">
+              <Icon :name="copied ? 'Check' : 'ChevronDown'" :size="10" :stroke-width="2.8" />
+            </button>
+          </template>
+          <template #actions>
+            <DropdownMenuItem :disabled="sendDisabled || source.loading" @select="onSend">
+              <span class="menu-label-text">{{ t('request.send') }}</span>
+              <span class="menu-key">{{ sendKey }}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </template>
+        </CopyRequestMenu>
+      </div>
     </div>
 
-    <RequestPane v-if="!source.blank" :source="source" />
+    <RequestPane v-if="!source.blank" :source="source" :expanded="expanded" />
   </div>
 </template>
 
 <style scoped>
 @reference "../../style.css";
+
+.request-block-expanded {
+  @apply flex-1 min-h-0;
+}
+
+.request-block-expanded .bar-row {
+  @apply flex-none;
+}
 
 .method-btn {
   @apply border-0 cursor-pointer outline-none;
@@ -389,6 +409,10 @@ function useMissingVars(source: RequestSource) {
 
 .method-btn:hover {
   background: var(--bg-hover);
+}
+
+.url-field.has-environment {
+  padding-right: 0;
 }
 
 .url-text {
@@ -473,25 +497,64 @@ function useMissingVars(source: RequestSource) {
 
 .send-btn {
   @apply flex items-center justify-center flex-none cursor-pointer border-0;
-  min-width: max(8rem, var(--whole-width, 0px));
+  min-width: max(6.25rem, var(--whole-width, 0px));
   height: 2.375rem;
-  padding: 0 1rem;
-  border-radius: 0.5625rem;
+  padding: 0 0.875rem 0 1rem;
+  border-radius: 0.5625rem 0 0 0.5625rem;
   gap: 0.625rem;
-  background: var(--accent);
-  color: var(--accent-text);
+  background: transparent;
+  color: inherit;
   font: inherit;
   font-size: var(--text-13);
   font-weight: 600;
 }
 
-.send-btn:disabled {
+.send-btn:disabled,
+.send-more:disabled {
   cursor: default;
+}
+
+.send-group {
+  @apply inline-flex flex-none items-stretch;
+  height: 2.375rem;
+  border-radius: 0.5625rem;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.send-group.disabled {
   opacity: 0.4;
 }
 
-.send-btn.sending {
+.send-group.sending {
   background: var(--red);
+}
+
+.send-more {
+  @apply inline-flex items-center justify-center border-0 cursor-pointer;
+  position: relative;
+  width: 2rem;
+  padding: 0;
+  border-radius: 0 0.5625rem 0.5625rem 0;
+  background: transparent;
+  color: inherit;
+}
+
+.send-more::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5625rem;
+  bottom: 0.5625rem;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.28;
+}
+
+.send-btn:hover:not(:disabled),
+.send-more:hover:not(:disabled),
+.send-more[data-state='open'] {
+  background: rgb(255 255 255 / 0.08);
 }
 
 .send-hint {

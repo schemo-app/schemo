@@ -1,20 +1,28 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef } from 'vue'
+import { refAutoReset } from '@vueuse/core'
 import Icon from '../ui/Icon.vue'
 import KvRow from './KvRow.vue'
 import BulkRowsEditor from './BulkRowsEditor.vue'
-import IconButton from '../ui/IconButton.vue'
 import TokenField from '../ui/TokenField.vue'
 import type { RequestSource } from '../../lib/requestSource'
 import { RowKind, type ProjectedRow, type Row } from '../../../bindings/schemo/internal/domain'
 import { useSetting } from '../../composables/useSettings'
 import { useRowOrder } from '../../composables/useRowOrder'
 import { t } from '../../i18n'
+import { parsePastedRows, insertRows } from '../../lib/bulkRows'
+import { paramsFromUrl } from '../../lib/draftRows'
+import { Drafts } from '../../../bindings/schemo/internal/request'
+import { Kind } from '../../../bindings/schemo/internal/convert/command'
+import { useToast } from '../../composables/useToast'
+import { usePlatform } from '../../composables/usePlatform'
 
-// The parameters or the headers, as the pane draws them: a table with an empty row at the end and,
-// for the headers, the rows an authorization adds, folded under a line of their own. A request
-// whose address has `:name` segments draws their values above the query, in a group of their own.
-const { source, kind } = defineProps<{ source: RequestSource; kind: 'params' | 'headers' }>()
+// Headers share one table with their automatic rows. Parameters keep path values above the query.
+const { source, kind, toolbar = null } = defineProps<{
+  source: RequestSource
+  kind: 'params' | 'headers'
+  toolbar?: HTMLElement | null
+}>()
 
 const emit = defineEmits<{ openAuth: [] }>()
 
@@ -32,16 +40,64 @@ const shownAuto = computed(() =>
 
 const folded = computed<ProjectedRow[]>(() => [...derived.value, ...shownAuto.value])
 
-const summary = computed(() =>
-  t('request.pane.headersSummary', { n: source.enabledHeadersCount, auto: folded.value.length })
-)
-
 const autoOpen = ref(false)
-const bulkEditing = ref(false)
+const bulkEditing = defineModel<boolean>('textMode', { default: false })
+const editor = useTemplateRef<InstanceType<typeof BulkRowsEditor>>('editor')
+const toast = useToast()
+const { shortcut } = usePlatform()
+const pastedIds = refAutoReset<string[]>([], 2600)
+let pasteVersion = 0
+onBeforeUnmount(() => pasteVersion++)
+
+async function onPaste(event: ClipboardEvent) {
+  if (bulkEditing.value) return
+  const text = event.clipboardData?.getData('text/plain') ?? ''
+  if (!text.trim()) return
+  const command = /^curl(?:\.exe)?\b/i.test(text.trimStart())
+  const target = event.target as HTMLElement
+  if (target.closest?.('input, textarea, [contenteditable="true"]') && !command && !/[\r\n]/.test(text)) return
+  event.preventDefault()
+  const version = ++pasteVersion
+  const current = source
+  const section = kind
+  const before = rows.value
+
+  try {
+    let pasted: Row[]
+    if (command) {
+      const result = await Drafts.Paste(text)
+      if (version !== pasteVersion || source !== current || kind !== section || rows.value !== before) return
+      if (result.reading.kind !== Kind.KindOK || !result.draft) {
+        toast.show(t('request.pane.pasteFailed'), 'error')
+        return
+      }
+      pasted = section === 'headers' ? result.draft.headers ?? [] : paramsFromUrl(result.draft.url)
+    } else {
+      const result = parsePastedRows(text, section)
+      if (result.errorLine !== null) {
+        toast.show(t('request.pane.bulkError', {line: result.errorLine}), 'error')
+        return
+      }
+      pasted = result.rows
+    }
+    pasted = pasted.filter(row => row.name.trim())
+    if (!pasted.length) return
+    const updated = insertRows(rows.value, pasted, section)
+    pastedIds.value = updated.slice(-pasted.length).map(row => row.id)
+    source.replaceRows(rowKind.value, updated)
+    toast.show(t(section === 'headers' ? 'request.pane.pastedHeaders' : 'request.pane.pastedParams', pasted.length))
+  } catch {
+    toast.show(t('request.pane.pasteFailed'), 'error')
+  }
+}
+
+function pickMode(value: string) {
+  if (value === 'table' && editor.value && !editor.value.apply()) return
+  bulkEditing.value = value === 'text'
+}
 
 function applyBulk(rows: Row[]) {
   source.replaceRows(rowKind.value, rows)
-  bulkEditing.value = false
 }
 
 const table = useTemplateRef<HTMLElement>('table')
@@ -66,31 +122,21 @@ function patchValue(id: string, value: string) {
   void source.patchRow(rowKind.value, id, { value })
 }
 
-function patchDescription(id: string, description: string) {
-  void source.patchRow(rowKind.value, id, { description })
-}
-
-function patchPath(id: string, patch: { value?: string; description?: string }) {
-  void source.patchRow(RowKind.RowPathParams, id, patch)
-}
 </script>
 
 <template>
   <div class="rows-pane" :class="kind">
-    <div class="rows-head">
-      <span class="rows-summary mono">{{ kind === 'headers' ? summary : t('request.pane.queryTitle') }}</span>
-      <IconButton
-        v-if="!bulkEditing"
-        variant="bare"
-        size="bar"
-        :hint="t('request.pane.bulkEdit')"
-        :aria-label="t('request.pane.bulkEdit')"
-        @click="bulkEditing = true"
-      >
-        <Icon name="SquareCode" :size="16" :stroke-width="1.8" />
-      </IconButton>
-    </div>
-
+    <Teleport :to="toolbar" :disabled="!toolbar">
+      <button
+        type="button"
+        class="pane-toggle rows-mode"
+        :class="{ active: bulkEditing }"
+        :aria-pressed="bulkEditing"
+        :title="t(bulkEditing ? 'request.pane.backToTable' : 'request.pane.bulkEdit')"
+        :aria-label="t(bulkEditing ? 'request.pane.backToTable' : 'request.pane.bulkEdit')"
+        @click="pickMode(bulkEditing ? 'table' : 'text')"
+      ><Icon name="AlignLeft" :size="15" :stroke-width="1.9" /></button>
+    </Teleport>
     <template v-if="pathRows.length">
       <div class="kv-group section-label">{{ t('request.pane.pathTitle') }}</div>
       <div class="kv kv-path">
@@ -109,31 +155,21 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
             variant="cell"
             :value="row.value"
             :placeholder="t('request.placeholderValue')"
-            @change="patchPath(row.id, { value: $event })"
+            @change="source.patchRow(RowKind.RowPathParams, row.id, { value: $event })"
           />
-          <template #desc>
-            <input
-              :value="row.description ?? ''"
-              class="kv-input kv-desc"
-              :placeholder="t('request.placeholderDescription')"
-              spellcheck="false"
-              @input="patchPath(row.id, { description: ($event.target as HTMLInputElement).value })"
-            />
-          </template>
         </KvRow>
       </div>
-      <div class="kv-group section-label">{{ t('request.pane.queryTitle') }}</div>
     </template>
 
-    <BulkRowsEditor v-if="bulkEditing" :rows @apply="applyBulk" @cancel="bulkEditing = false" />
-    <div v-else ref="table" class="kv">
+    <BulkRowsEditor v-if="bulkEditing" ref="editor" :rows :env-id="source.environmentId" @apply="applyBulk" />
+    <div ref="table" class="kv" :class="{ 'kv-text-auto': bulkEditing }" :tabindex="bulkEditing ? undefined : 0" :aria-label="t(`request.chips.${kind}`)" @paste="onPaste">
       <KvRow
-        v-for="(row, index) in rows"
+        v-for="(row, index) in bulkEditing ? [] : rows"
         :key="row.id"
         :enabled="row.enabled"
         :name="row.name"
         :row-id="row.id"
-        :class="states[index].class"
+        :class="[states[index].class, { pasted: pastedIds.includes(row.id) }]"
         :style="states[index].style"
         grabbable
         :name-placeholder="kind === 'headers' ? t('request.pane.headerName') : t('request.placeholderKey')"
@@ -148,30 +184,47 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
           :placeholder="t('request.placeholderValue')"
           @change="patchValue(row.id, $event)"
         />
-        <template #desc>
-          <input
-            :value="row.description ?? ''"
-            class="kv-input kv-desc"
-            :placeholder="t('request.placeholderDescription')"
-            spellcheck="false"
-            @input="patchDescription(row.id, ($event.target as HTMLInputElement).value)"
-          />
-        </template>
       </KvRow>
 
-      <button type="button" class="kv-row kv-add" @click="addRow">
+      <button v-if="!bulkEditing" type="button" class="kv-row kv-add" @click="addRow">
         <span></span>
-        <span class="kv-check ghost"></span>
-        <span class="kv-ghost mono">
-          {{ kind === 'headers' ? t('request.pane.addHeader') : t('request.pane.addParameter') }}
+        <span class="kv-ghost mono">{{ t('request.placeholderKey') }}</span>
+        <span class="kv-add-value">
+          <span class="kv-ghost mono">{{ t('request.placeholderValue') }}</span>
+          <span class="paste-hint">{{ t('request.pane.pasteHint', {shortcut: shortcut('V')}) }}</span>
         </span>
-        <span class="kv-ghost mono">{{ t('request.placeholderValue') }}</span>
-        <span class="kv-ghost">{{ t('request.placeholderDescription') }}</span>
         <span></span>
       </button>
+
+      <template v-if="kind === 'headers'">
+        <div
+          v-for="(row, index) in folded"
+          :key="`auto-${row.name}-${index}`"
+          class="kv-row header-auto-row"
+          :title="t('request.pane.autoTitle')"
+        >
+          <span class="header-auto-check">
+            <Icon name="Check" :size="11" :stroke-width="3.2" />
+          </span>
+          <span class="header-auto-name mono">
+            <span class="truncate">{{ row.name }}</span>
+            <button
+              v-if="row.from"
+              type="button"
+              class="header-auto-badge"
+              :title="t('request.pane.fromAuth')"
+              @click="emit('openAuth')"
+            >{{ t('request.pane.autoBadge') }}</button>
+            <span v-else class="header-auto-badge">{{ t('request.pane.autoBadge') }}</span>
+          </span>
+          <span class="header-auto-value mono">{{ row.value || '—' }}</span>
+          <span></span>
+        </div>
+      </template>
+
     </div>
 
-    <div v-if="folded.length" class="auto">
+    <div v-if="kind === 'params' && folded.length" class="auto">
       <button type="button" class="auto-toggle" @click="autoOpen = !autoOpen">
         <Icon name="ChevronRight" :size="10" :stroke-width="2.8" class="auto-chevron" :class="{ open: autoOpen }" />
         <span class="cap-line">{{ t('request.pane.auto') }}</span>
@@ -184,7 +237,6 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
           class="kv-row auto-row"
           :title="t('request.pane.autoTitle')"
         >
-          <span></span>
           <Icon name="Lock" :size="12" :stroke-width="1.9" class="auto-lock" />
           <span class="auto-name mono">{{ row.name }}</span>
           <span class="auto-value">
@@ -204,26 +256,57 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
 @reference "../../style.css";
 
 .rows-pane {
-  @apply flex flex-col;
-  padding: 0.125rem 1.25rem 0.875rem;
+  @apply relative flex flex-col;
+  padding: 0.5rem 1.1rem 0.5rem 1.1rem;
 }
 
-.rows-head {
-  @apply flex items-center gap-3;
-  height: 2.375rem;
+.kv {
+  @apply relative;
+  outline: none;
 }
 
-.rows-summary {
-  @apply flex-1 min-w-0 truncate text-12 text-text-tertiary;
+.kv-add-value {
+  @apply flex items-center min-w-0;
+}
+
+.paste-hint {
+  @apply truncate text-text-tertiary;
+  margin-left: auto;
+  padding-left: 0.75rem;
+  font-family: inherit;
+  font-size: var(--text-12);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.kv:focus-within .paste-hint {
+  opacity: 1;
+}
+
+.kv-row.pasted {
+  border-radius: 0.375rem;
+  background: var(--accent-soft);
+  transition: background 0.6s ease;
+}
+
+.kv-text-auto {
+  margin-top: 0.5rem;
 }
 
 .kv-row {
-  grid-template-columns: 1rem 1.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+  grid-template-columns: 1.375rem minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+  gap: 0;
+  height: 2rem;
+  border-bottom: 0;
 }
 
 .kv-path .kv-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
-  padding-left: 3rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+  padding-left: 1.375rem;
+}
+
+.kv-path {
+  margin-bottom: 0.5rem;
 }
 
 .kv-group {
@@ -231,8 +314,52 @@ function patchPath(id: string, patch: { value?: string; description?: string }) 
   height: 1.75rem;
 }
 
-.kv-desc {
-  font-family: inherit;
+.rows-pane :deep(.kv-anchor) {
+  position: absolute;
+  left: -0.75rem;
+  width: 0.75rem;
+}
+
+.rows-pane :deep(.check) {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.header-auto-check {
+  @apply flex items-center justify-center justify-self-center text-text-tertiary;
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.header-auto-name {
+  @apply flex items-center min-w-0 text-text-secondary;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+  font-size: var(--text-12-5);
+}
+
+.header-auto-badge {
+  @apply flex-none border-0 text-text-tertiary;
+  padding: 0.125rem 0.3125rem;
+  border-radius: 0.25rem;
+  background: var(--chip);
+  font: inherit;
+  font-size: var(--text-11);
+  line-height: 1;
+}
+
+button.header-auto-badge {
+  cursor: pointer;
+}
+
+button.header-auto-badge:hover {
+  color: var(--text);
+}
+
+.header-auto-value {
+  @apply truncate text-text-tertiary;
+  padding: 0 0.5rem;
+  font-size: var(--text-12-5);
 }
 
 .auto {

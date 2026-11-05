@@ -2,13 +2,14 @@
 import { useTemplateRef } from 'vue'
 import { useSlidingPill } from '../../composables/useSlidingPill'
 
-const { value, options, size = 'md', grow = true, soonHint = '', disabled = false } = defineProps<{
-  options: { value: string; label: string; soon?: boolean; count?: string | number }[]
+const { value, options, size = 'md', grow = true, soonHint = '', disabled = false, variant = 'default' } = defineProps<{
+  options: { value: string; label: string; title?: string; soon?: boolean; count?: string | number }[]
   value: string
   size?: 'md' | 'sm' | 'xs'
   grow?: boolean
   soonHint?: string
   disabled?: boolean
+  variant?: 'default' | 'toolbar'
 }>()
 
 const emit = defineEmits<{ (e: 'pick', value: string): void }>()
@@ -21,7 +22,7 @@ const { style: pillStyle, ready: pillReady } = useSlidingPill(rootEl, '.seg.acti
 </script>
 
 <template>
-  <div ref="rootEl" class="segment" :class="[`segment--${size}`, { grow, disabled }]">
+  <div ref="rootEl" class="segment" :class="[`segment--${size}`, `segment--${variant}`, { grow, disabled }]">
     <span class="seg-pill slide-mark" :class="{ ready: pillReady }" :style="pillStyle"></span>
     <button
       v-for="option in options"
@@ -30,7 +31,8 @@ const { style: pillStyle, ready: pillReady } = useSlidingPill(rootEl, '.seg.acti
       class="seg"
       :class="{ active: option.value === value, soon: option.soon }"
       :disabled="disabled || option.soon"
-      :title="option.soon ? soonHint : undefined"
+      :title="option.soon ? soonHint : option.title"
+      :aria-pressed="option.value === value"
       @click="emit('pick', option.value)"
     >
       {{ option.label }}
@@ -99,5 +101,24 @@ const { style: pillStyle, ready: pillReady } = useSlidingPill(rootEl, '.seg.acti
 
 .seg.soon {
   @apply text-text-tertiary;
+}
+
+.segment--toolbar {
+  gap: 0;
+  background: var(--chip);
+}
+
+.segment--toolbar .seg-pill {
+  border-radius: 0.375rem;
+  background: var(--bg);
+}
+
+.segment--toolbar .seg {
+  padding: 0 0.625rem;
+  font-weight: 400;
+}
+
+.segment--toolbar .seg.active {
+  font-weight: 500;
 }
 </style>

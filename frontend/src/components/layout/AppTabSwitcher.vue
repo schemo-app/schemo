@@ -98,13 +98,13 @@ useEventListener(window, 'keyup', (event: KeyboardEvent) => {
 
 <template>
   <Popover v-model:open="open">
-    <PopoverTrigger as-child>
-      <button v-if="hiddenCount || open" type="button" class="tab-overflow" :title="`${t('tabs.allTabs')} · Ctrl+Tab`" :aria-label="t('tabs.allTabs')">
+    <PopoverTrigger v-if="hiddenCount || open" as-child>
+      <button type="button" class="tab-overflow" :title="`${t('tabs.allTabs')} · Ctrl+Tab`" :aria-label="t('tabs.allTabs')">
         <span>{{ hiddenCount ? `+${hiddenCount}` : entries.length }}</span>
         <Icon name="ChevronDown" :size="10" :stroke-width="2.6" />
       </button>
     </PopoverTrigger>
-    <PopoverContent class="tab-switcher" align="end" :side-offset="7" @keydown="onKey" @close-auto-focus.prevent>
+    <PopoverContent class="tab-switcher" align="end" :side-offset="7" @keydown="onKey" @open-auto-focus.prevent @close-auto-focus.prevent>
       <label class="navigation-popover-search">
         <Icon name="Search" :size="13" />
         <input ref="input" v-model="query" :placeholder="t('tabs.findOpen')" :aria-label="t('tabs.findOpen')" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="open-tab-list" :aria-activedescendant="selected ? `open-tab-${selected.id}` : undefined" />
@@ -167,7 +167,7 @@ useEventListener(window, 'keyup', (event: KeyboardEvent) => {
 
 .switcher-mark {
   @apply flex items-center flex-none;
-  width: 2.875rem;
+  min-width: 1.5rem;
   color: var(--text-secondary);
 }
 

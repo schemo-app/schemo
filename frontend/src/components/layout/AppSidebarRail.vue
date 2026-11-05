@@ -224,6 +224,7 @@ watch(() => collections.tree, (tree) => {
   gap: 0.1875rem;
   padding: 0.3rem 0 0.5rem;
   background: var(--chrome);
+  border-right: 1px solid var(--border);
   --wails-draggable: no-drag;
 }
 
