@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useDeferredWrite } from '../../composables/useDeferredWrite'
-import { useIndent } from '../../composables/useIndent'
 import { useScriptHalves } from '../../composables/useScriptHalves'
 import { t } from '../../i18n'
 import type { RequestSource } from '../../lib/requestSource'
 import CaptureList from './CaptureList.vue'
+import ScriptsEditor from '../scripts/ScriptsEditor.vue'
 
 // The two halves of code the level runs around its requests, as the request's own pane draws them:
 // both at once, and written down on a pause, the way the command line's address is.
 const { source, note } = defineProps<{ source: RequestSource; note: string }>()
-
-const { insert } = useIndent()
 
 // The two off flags travel with the code, so the level above cannot hand down a script it has
 // switched off.
@@ -53,31 +51,14 @@ watch(
 
 <template>
   <div class="fields">
-    <label class="field">
-      <span class="label">{{ t('collections.scriptPre') }}</span>
-      <textarea
-        v-model="pre"
-        class="code"
-        spellcheck="false"
-        :placeholder="inherited('pre') || t('request.body.prePlaceholder')"
-        @keydown.tab.prevent="insert"
-        @input="touch()"
-        @blur="commit"
-      />
-    </label>
-
-    <label class="field">
-      <span class="label">{{ t('collections.scriptPost') }}</span>
-      <textarea
-        v-model="post"
-        class="code"
-        spellcheck="false"
-        :placeholder="inherited('post') || t('request.body.postPlaceholder')"
-        @keydown.tab.prevent="insert"
-        @input="touch()"
-        @blur="commit"
-      />
-    </label>
+    <ScriptsEditor
+      v-model:pre="pre"
+      v-model:post="post"
+      :pre-placeholder="inherited('pre') || t('request.body.prePlaceholder')"
+      :post-placeholder="inherited('post') || t('request.body.postPlaceholder')"
+      @input="touch()"
+      @blur="commit"
+    />
 
     <CaptureList :source />
 
@@ -92,28 +73,6 @@ watch(
 
 .fields {
   @apply flex flex-col gap-3;
-}
-
-.field {
-  @apply flex flex-col;
-  gap: 0.3rem;
-}
-
-.label {
-  @apply text-12 font-medium text-text-secondary;
-}
-
-.code {
-  @apply h-26.5 resize-y rounded-[0.5rem] border border-border-strong bg-bg-inset
-         px-3 py-2.5 font-mono text-13 leading-[1.6] text-text;
-}
-
-.code::placeholder {
-  @apply text-text-tertiary;
-}
-
-.code:focus {
-  @apply outline-none border-accent;
 }
 
 .note {

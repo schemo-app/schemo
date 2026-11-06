@@ -163,7 +163,6 @@ function resetPaneHeight() {
         empty-key="request.docs.emptyRequest"
       />
       <div v-else class="scripts-pane">
-        <span class="scripts-title">{{ t('request.pane.scriptsTitle') }}</span>
         <ScriptsPane :source :note="scriptsNote" compact />
       </div>
     </div>
@@ -267,7 +266,4 @@ function resetPaneHeight() {
   padding: 0.875rem 1.25rem 1rem;
 }
 
-.scripts-title {
-  @apply text-14 font-semibold;
-}
 </style>
