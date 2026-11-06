@@ -22,7 +22,7 @@ func init() {
 	application.RegisterEvent[application.Void](desktop.EventImportLink)
 	application.RegisterEvent[desktop.FileDrop](desktop.EventFilesDropped)
 	application.RegisterEvent[string](desktop.EventSettingsTab)
-	application.RegisterEvent[*desktop.UpdateStatus](desktop.EventUpdateChanged)
+	application.RegisterEvent[desktop.UpdateStatus](desktop.EventUpdateChanged)
 	application.RegisterEvent[application.Void](desktop.EventUpdateCheck)
 	application.RegisterEvent[string](desktop.EventMenuCommand)
 	application.RegisterEvent[domain.Changed](domain.TopicChanged)

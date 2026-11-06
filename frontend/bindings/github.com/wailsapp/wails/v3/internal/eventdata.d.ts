@@ -46,7 +46,7 @@ declare module "@wailsio/runtime" {
             "run:progress": request$0.RunProgress;
             "settings-tab": string;
             "sync:changed": cloud$0.SyncStatus;
-            "update-changed": desktop$0.UpdateStatus | null;
+            "update-changed": desktop$0.UpdateStatus;
             "update-check": void;
             "workspace:changed": workspace$0.Changed;
         }
