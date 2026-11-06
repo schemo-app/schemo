@@ -201,7 +201,7 @@ function removeExample() {
 
 .ex-live-meta {
   @apply truncate text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .ex-head {
@@ -215,7 +215,7 @@ function removeExample() {
 
 .ex-head-label {
   @apply flex-1 text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .ex-row {

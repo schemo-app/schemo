@@ -158,7 +158,7 @@ const statusLine = computed(() =>
   height: 1.875rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-tertiary);
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .head-row span:first-child {

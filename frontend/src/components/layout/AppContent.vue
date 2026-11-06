@@ -92,7 +92,6 @@ async function openCapturedInRequest() {
       </template>
     </template>
     <div v-else class="work-empty">
-      <span>{{ t('tabs.empty.title') }}</span>
       <div class="work-empty-actions">
         <button type="button" class="work-empty-start" @click="tabs.newTab()">
           {{ t('tabs.empty.newTab') }} · {{ hint('newTab') }}

@@ -239,7 +239,7 @@ const people = [
   border-radius: 0.625rem;
   background: var(--raise);
   color: var(--text);
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   overflow: hidden;
 }
 

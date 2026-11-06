@@ -143,7 +143,7 @@ function whenOf(at: number): string {
 
 .head {
   height: 1.75rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
   border-bottom: 1px solid var(--border);
 }
@@ -181,9 +181,8 @@ function whenOf(at: number): string {
 
 .status {
   font-family: var(--mono);
-  font-size: var(--text-11);
-  font-weight: 600;
-  padding: 0.125rem 0.3rem;
+  font-size: var(--text-12);
+  padding: 0.2rem 0.4rem;
   border-radius: 0.3125rem;
   background: var(--bg-hover);
   color: var(--text-tertiary);

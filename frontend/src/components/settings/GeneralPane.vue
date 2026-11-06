@@ -142,7 +142,7 @@ onMounted(async () => {
       </SettingsRow>
     </SettingsSection>
 
-    <SettingsSection :label="t('settings.sec.certificates')" :note="t('settings.certificatesNote')">
+    <SettingsSection :label="t('settings.sec.certificates')">
       <SettingsRow
         :title="t('settings.certificates.verify')"
         :note="verifyNote"

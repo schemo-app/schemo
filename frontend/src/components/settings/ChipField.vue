@@ -36,7 +36,7 @@ function onKey(event: KeyboardEvent) {
     <span v-for="value in values" :key="value" class="chip">
       {{ value }}
       <button type="button" :title="t('settings.chipRemove')" @click="remove(value)">
-        <Icon name="X" :size="8" :stroke-width="3" />
+        <Icon name="X" :size="10" :stroke-width="3" />
       </button>
     </span>
     <input
@@ -62,7 +62,7 @@ function onKey(event: KeyboardEvent) {
 }
 
 .chip {
-  @apply inline-flex items-center gap-1 h-6 rounded-[0.25rem] text-12 flex-none;
+  @apply inline-flex items-center gap-1 h-6 rounded-[0.25rem] text-13 flex-none;
   padding: 0 0.25rem 0 0.5rem;
   background: var(--bg-hover);
   font-family: var(--mono);
@@ -83,7 +83,7 @@ function onKey(event: KeyboardEvent) {
 }
 
 .chips input {
-  @apply flex-1 border-0 outline-none bg-transparent text-12 text-text;
+  @apply flex-1 border-0 outline-none bg-transparent text-13 text-text;
   min-width: 7.5rem;
   height: 1.5rem;
   padding: 0 0.25rem;

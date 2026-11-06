@@ -122,7 +122,7 @@
 }
 
 :root.dark {
-  --bg: #1e1e1e;
+  --bg: #181818;
   --bg-sidebar: #2a2a2b;
   --raise: #262627;
   --bg-panel: #262627;
@@ -191,9 +191,7 @@ html.window-translucent {
 
 html.window-translucent.dark {
   --winblur: blur(36px) saturate(180%);
-  --winbg:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 38%),
-    rgba(34, 34, 36, 0.52);
+  --winbg: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgb(24 24 24 / 30%) 38%), rgb(26 28 29 / 50%);
   --bg-hover: rgba(255, 255, 255, 0.1);
 }
 
@@ -890,7 +888,7 @@ html.window-translucent.dark body {
 
 .env-row-count {
   @apply flex-none text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   font-variant-numeric: tabular-nums;
 }
 
@@ -901,7 +899,7 @@ html.window-translucent.dark body {
 
 .env-row-hint {
   @apply flex-none text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .env-divider {
@@ -918,7 +916,7 @@ html.window-translucent.dark body {
   @apply flex items-center flex-none text-text-tertiary;
   height: 1.625rem;
   padding: 0 0.5rem 0.125rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .dialog.search-palette {
@@ -956,7 +954,7 @@ html.window-translucent.dark body {
   @apply flex items-center flex-none gap-[0.4375rem] overflow-hidden;
   height: 1.625rem;
   padding: 0 0.5rem 0.125rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
 }
 
@@ -1004,7 +1002,7 @@ html.window-translucent.dark body {
 .tree-submenu .menu-key,
 .tab-menu .menu-key {
   @apply flex-none;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
 }
 
@@ -1475,7 +1473,7 @@ mark.search-match.current {
 }
 
 .panel-title {
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   font-weight: 600;
   color: var(--text-tertiary);
 }

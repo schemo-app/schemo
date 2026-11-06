@@ -352,7 +352,7 @@ async function update() {
 
 .empty-card {
   @apply flex items-start;
-  max-width: 40rem;
+  max-width: 50rem;
   gap: 1rem;
 }
 
@@ -366,7 +366,7 @@ async function update() {
 
 .empty-text {
   @apply flex flex-col min-w-0;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .empty-title {
@@ -547,7 +547,7 @@ async function update() {
 
 .changes-title {
   @apply text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   font-weight: 600;
 }
 

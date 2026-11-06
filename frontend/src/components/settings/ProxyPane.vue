@@ -13,8 +13,6 @@ import { useSetting, useSettings, type SettingsPatch } from '../../composables/u
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { t } from '../../i18n'
 
-// Where the app's requests leave it: through the proxy the environment names, through one written
-// here, or none at all. Every field is committed as it is left — there is no Save here to forget.
 const { loadSettings, save, revealProxyPassword } = useSettings()
 const { withNotice } = useSheetNotice()
 
@@ -54,12 +52,8 @@ const host = ref('')
 const port = ref('')
 const user = ref('')
 const password = ref('')
-// Whether the password was typed into at all. The window never holds the stored value, so a field
-// left alone is not an empty password — it is nobody having touched it.
 const passwordTouched = ref(false)
 const shown = ref(false)
-// Whether the two credential fields are drawn. It follows what is stored, and turning it off
-// takes the credentials away — a proxy that asks for nothing needs no fields.
 const authShown = ref(false)
 
 watch(proxy, syncFields, { immediate: true })
@@ -116,8 +110,6 @@ function commitPassword() {
   if (passwordTouched.value) void write({ password: password.value })
 }
 
-// The eye is the one call that hands the value over: the answers the window draws carry
-// `hasPassword` and never the password itself.
 async function toggleShown() {
   if (shown.value) {
     shown.value = false
@@ -198,9 +190,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- What the system mode amounts to: the variables as they stand, and the way to stop following
-    them. Read at launch, because that is when the engine reads them. The card is drawn by hand rather
-    than from a section: a section's note sits under the card with no room beside it for an action. -->
     <div v-if="mode === ProxyMode.ProxySystem" class="env">
       <span class="group-label">{{ t('settings.proxy.environment') }}</span>
       <div class="env-card">
@@ -219,9 +208,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- The server is a card of blocks rather than of rows: a host, a port and a pair of credentials
-    do not fit the right-hand slot a switch gets, so each takes the whole card and is named above
-    itself. -->
     <SettingsSection v-else-if="mode === ProxyMode.ProxyManual" :label="t('settings.proxy.server')">
       <div class="card-block">
         <span class="address">
@@ -314,8 +300,6 @@ onMounted(async () => {
         />
       </div>
 
-      <!-- The way to ask whether any of it works, on the card's own foot: the answer stands beside
-           the button that asked for it, and it is the last thing on the card. -->
       <div class="card-block foot">
         <Button size="field" :disabled="probing" @click="test">
           {{ probing ? t('settings.proxy.probeRunning') : probe ? t('settings.proxy.probeAgain') : t('settings.proxy.probeRun') }}

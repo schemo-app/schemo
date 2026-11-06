@@ -725,7 +725,7 @@ defineExpose({
 
 .doc-toc-title {
   @apply text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   padding: 0 0.5rem 0.3rem;
 }
 

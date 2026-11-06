@@ -447,7 +447,7 @@ watch(filtered, (rows) => {
   @apply flex items-center flex-none text-text-tertiary;
   height: 1.625rem;
   padding: 0 0.5rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .hist-menu-item {
@@ -552,7 +552,7 @@ watch(filtered, (rows) => {
 
 .hist-head {
   height: 1.875rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
   border-bottom: 1px solid var(--border);
 }
@@ -573,7 +573,7 @@ watch(filtered, (rows) => {
 }
 
 .hist-group {
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   font-weight: 600;
   color: var(--text-tertiary);
   padding: 0.875rem 0.5rem 0.25rem;

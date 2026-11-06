@@ -19,10 +19,6 @@ let appliedText = text.value
 const scrollLeft = ref(0)
 const parsed = computed(() => parseRows(text.value))
 const invalid = computed(() => parsed.value.errorLine !== null)
-const error = computed(() => {
-    const line = parsed.value.errorLine
-    return line === null ? '' : t('request.pane.bulkError', { line })
-})
 const lines = computed(() => text.value.split('\n').map(line => ({
     text: line,
     segments: tokenSegments(line),
@@ -107,14 +103,7 @@ defineExpose({ apply })
       </div>
     </div>
     <div class="bulk-footer">
-      <div
-        :id="hintId"
-        class="bulk-hint"
-        :class="{ error: invalid }"
-        :role="invalid ? 'alert' : undefined"
-      >
-        {{ invalid ? error : t('request.pane.bulkHint') }}
-      </div>
+      <div :id="hintId" class="bulk-hint">{{ t('request.pane.bulkHint') }}</div>
       <span class="bulk-shortcut"><kbd>{{ shortcut('/') }}</kbd>{{ t('request.pane.toggleRow') }}</span>
     </div>
   </div>
@@ -243,10 +232,6 @@ defineExpose({ apply })
 .bulk-hint {
   @apply text-12 text-text-tertiary;
   line-height: 1.5;
-}
-
-.bulk-hint.error {
-  color: var(--red-text);
 }
 
 .bulk-shortcut {

@@ -172,7 +172,7 @@ function open(result: CollectionRunResult) {
 
 .run-chip {
   @apply flex-none whitespace-nowrap font-semibold;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   padding: 0.125rem 0.4375rem;
   border-radius: 0.3125rem;
 }

@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import { type Record as RequestRecord } from '../../../bindings/schemo/internal/domain'
 import { useRecordsStore } from '../../stores/records'
-import { useTabsStore } from '../../stores/tabs'
 import type { PaneSource } from '../../stores/content'
 import { splitAddress } from '../../lib/address'
 import { capsOf } from '../../lib/commands'
@@ -18,7 +17,6 @@ import Segment from '../ui/Segment.vue'
 const { source } = defineProps<{ source: PaneSource }>()
 
 const records = useRecordsStore()
-const tabs = useTabsStore()
 const { caps } = useCommands()
 const { isMac } = usePlatform()
 
@@ -118,9 +116,6 @@ async function fill(row: RequestRecord) {
         @pick="view = $event as 'recent' | 'freq'"
       />
       <span class="blank-copy">{{ t('request.recentCopy') }}</span>
-      <button type="button" class="blank-link" @click="tabs.openHistory()">
-        {{ t('request.allHistory') }}
-      </button>
     </div>
 
     <template v-if="view === 'recent'">
@@ -224,7 +219,7 @@ async function fill(row: RequestRecord) {
   border-radius: 0.3125rem;
   background: var(--chip);
   box-shadow: inset 0 0 0 0.5px var(--border), 0 0.5px 0 var(--border);
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-secondary);
 }
 
@@ -302,7 +297,7 @@ async function fill(row: RequestRecord) {
   grid-template-columns: 4rem minmax(0, 1fr) 8.75rem 3.5rem;
   height: 1.75rem;
   padding: 0 0.6rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
   border-bottom: 1px solid var(--border);
 }
@@ -335,9 +330,8 @@ async function fill(row: RequestRecord) {
 
 .blank-status {
   font-family: var(--mono);
-  font-size: var(--text-11);
-  font-weight: 600;
-  padding: 2px 6px;
+  font-size: var(--text-12);
+  padding: 0.2rem 0.4rem;
   border-radius: 0.3125rem;
 }
 

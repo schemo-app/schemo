@@ -180,7 +180,7 @@ function addVariable() {
 
 .head {
   height: 1.875rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   color: var(--text-tertiary);
   border-bottom: 1px solid var(--border);
 }

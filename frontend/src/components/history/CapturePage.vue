@@ -183,7 +183,6 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <span class="intro-also">{{ t('capture.installAlso') }}</span>
         <span class="flex-1 min-w-0"></span>
         <span class="intro-wait">
           <Spinner />
@@ -498,7 +497,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 .cap-table-head {
   height: 1.75rem;
   color: var(--text-tertiary);
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .cap-group {
@@ -587,7 +586,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 .intro-text {
   @apply flex flex-col flex-1 min-w-0;
   max-width: 38.75rem;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .intro-title {
@@ -626,7 +625,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
   border-radius: 999px;
   box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-tertiary);
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   font-variant-numeric: tabular-nums;
 }
 

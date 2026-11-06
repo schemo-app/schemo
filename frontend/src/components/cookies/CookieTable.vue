@@ -87,7 +87,7 @@ const workspaces = useWorkspacesStore()
 .card-head {
   @apply items-center text-text-tertiary;
   height: 1.875rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   border-bottom: 1px solid var(--border);
 }
 

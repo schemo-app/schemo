@@ -101,7 +101,7 @@ const TYPE_INK: Record<JsonKind, string> = {
   @apply grid flex-none items-center text-text-tertiary;
   grid-template-columns: minmax(0, 1fr) 5.25rem 6rem;
   height: 1.75rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
   border-bottom: 1px solid var(--border);
 }
 

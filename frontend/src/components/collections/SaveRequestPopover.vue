@@ -221,7 +221,7 @@ async function save() {
   @apply flex items-center flex-none text-text-tertiary;
   height: 1.625rem;
   padding: 0 0 0.125rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .name-input {
@@ -295,7 +295,7 @@ async function save() {
 
 .place-meta {
   @apply text-text-tertiary truncate;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .foot {
@@ -307,7 +307,7 @@ async function save() {
 
 .target {
   @apply flex-1 min-w-0 text-text-tertiary overflow-hidden text-ellipsis whitespace-nowrap;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .save {

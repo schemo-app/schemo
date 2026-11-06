@@ -266,7 +266,7 @@ function openSettings() {
 
 .nav-kbd {
   @apply flex-none text-text-tertiary;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .nav-live-dot {

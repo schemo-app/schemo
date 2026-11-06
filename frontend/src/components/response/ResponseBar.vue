@@ -87,7 +87,7 @@ const statusLine = computed(() => formatStatus(record.status, record.statusText)
   padding: 0.125rem 0.4375rem;
   line-height: 1rem;
   border-radius: 0.3125rem;
-  font-size: var(--text-11-5);
+  font-size: var(--text-12);
 }
 
 .resp-div {
