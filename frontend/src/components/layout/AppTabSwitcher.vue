@@ -128,7 +128,6 @@ useEventListener(window, 'keyup', (event: KeyboardEvent) => {
       </div>
       <button type="button" class="navigation-popover-footer" @click="tabs.closeOthers(tabs.activeId); open = false">
         <span class="switcher-title">{{ t('tabs.closeOthers') }}</span>
-        <span class="switcher-footer-hint">{{ t('tabs.closeOthersHint') }}</span>
       </button>
     </PopoverContent>
   </Popover>

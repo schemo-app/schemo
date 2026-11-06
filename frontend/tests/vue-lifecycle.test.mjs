@@ -7,7 +7,7 @@ import { renderToString } from '@vue/server-renderer'
 import { clientComponent, vite } from './vite.mjs'
 
 globalThis.window = Object.assign(new EventTarget(), { setTimeout, clearTimeout })
-globalThis.document = Object.assign(new EventTarget(), { createElement: () => ({}) })
+globalThis.document = Object.assign(new EventTarget(), { createElement: () => ({}), body: {style: {}} })
 const resizeObservers = new Set()
 class ResizeObserverFake {
   constructor(callback) {
@@ -34,6 +34,7 @@ ports.injectPopper = (await import(pathToFileURL(resolve('node_modules/reka-ui/d
 const runtimePath = resolve('node_modules/@wailsio/runtime/dist').replaceAll('\\', '/')
 const runtime = `export { CancellablePromise, CancelError } from '${runtimePath}/cancellable.js';
   export * as Create from '${runtimePath}/create.js'; export const Browser = {OpenURL() {}};
+  export const Clipboard = {SetText: text => globalThis.vuePorts.clipboard(text)};
   export const Window = { async IsMaximised() { return false } }; export const Application = { Quit() {} };`
 const stub = `import { defineComponent, h } from 'vue';
   const stub = name => defineComponent({ inheritAttrs: false,
@@ -55,7 +56,7 @@ const stub = `import { defineComponent, h } from 'vue';
   });`
 const componentPaths = {
   AppTabStrip: 'layout', AppContent: 'layout', CollectionPage: 'collections', PublicationsPage: 'cloud',
-  AppHeader: 'layout', AppSidebarRail: 'layout',
+  AppHeader: 'layout', AppSidebarRail: 'layout', CollectionTree: 'collections',
 }
 const componentNames = Object.keys(componentPaths)
 const storeNames = ['tabs', 'records', 'collections', 'publications', 'transfer', 'workspaces', 'search', 'capture']
@@ -160,6 +161,7 @@ function mount(context, component) {
     setText: (child, text) => { child.text = text },
     setElementText: (child, text) => { child.children = []; child.text = text },
     patchProp: (child, key, _, value) => { child.props[key] = value },
+    querySelector: () => root,
   })
   const app = renderer.createApp(component)
   app.mount(root)
@@ -172,6 +174,78 @@ function rendered(root, name) { return all(root).find(child => child.props['data
 function withClass(root, name) {
   return all(root).find(child => typeof child.props.class === 'string' && child.props.class.split(' ').includes(name))
 }
+
+function requestMenu(context) {
+  ports.collections = reactive({
+    tree: [{id: 'collection', name: 'Collection', children: [], items: [
+      {id: 'saved', name: 'Saved request', method: 'GET', url: 'https://example.test', position: 0},
+    ]}],
+    expanded: {collection: true}, filter: '', selectedId: null,
+    select() { assert.fail('Copying must not change the tab strip') },
+  })
+  ports.workspaces = reactive({activeId: 'workspace', canWrite: true})
+  ports.publications = {markOf: () => null}
+  ports.transfer = {}
+  const root = mount(context, components.CollectionTree)
+  return all(root).find(child => child.props['data-component'] === 'TreeRowMenu' && child.props.row.kind === 'request')
+}
+
+for (const [action, format] of [['onCopyAddress', 'url'], ['onCopyCurl', 'curl']]) {
+  test(`${action} reads a closed request and copies its formatted text without opening a tab`, async context => {
+    const item = requestMenu(context)
+    const opened = deferred()
+    const draft = {id: 'saved', method: 'GET', url: 'https://example.test', body: ''}
+    const reads = []
+    const written = []
+    ports.services.Draft.OpenNode = id => { reads.push(id); return opened.promise }
+    ports.services.Draft.CopyAs = (value, choice) => {
+      assert.deepEqual(value, draft)
+      assert.equal(choice, format)
+      return CancellablePromise.resolve({text: `copied ${choice}`})
+    }
+    ports.clipboard = text => { written.push(text) }
+
+    const copying = item.props[action]()
+    await settle()
+    assert.deepEqual(written, [])
+    opened.resolve({draft})
+    await copying
+    assert.deepEqual(reads, ['saved'])
+    assert.deepEqual(written, [`copied ${format}`])
+    assert.deepEqual(ports.notices, ['common.copied'])
+  })
+}
+
+test('copying an open request uses its latest edits even when the tab ID differs from the request ID', async context => {
+  ports.services.Draft.OpenNode = () => CancellablePromise.resolve({
+    node: {id: 'saved', name: 'Saved'}, draft: {id: 'saved', method: 'GET', url: 'https://example.test', body: ''},
+  })
+  const instance = await content.warmContent({id: 'tab-id', kind: TabKind.TabKindRequest, ref: 'saved'})
+  instance.draft.setUrl('https://edited.test')
+  const item = requestMenu(context)
+  ports.services.Draft.OpenNode = () => assert.fail('An open draft must keep its unsaved edits')
+  ports.services.Draft.CopyAs = draft => {
+    assert.equal(draft.url, 'https://edited.test')
+    return CancellablePromise.resolve({text: draft.url})
+  }
+  const written = []
+  ports.clipboard = text => { written.push(text) }
+  await item.props.onCopyAddress()
+  assert.deepEqual(written, ['https://edited.test'])
+})
+
+test('a workspace switch during a copy leaves the clipboard unchanged', async context => {
+  const item = requestMenu(context)
+  const opened = deferred()
+  ports.services.Draft.OpenNode = () => opened.promise
+  ports.services.Draft.CopyAs = () => assert.fail('The old workspace must not be formatted')
+  ports.clipboard = () => assert.fail('The old workspace must not reach the clipboard')
+  const copying = item.props.onCopyCurl()
+  ports.workspaces.activeId = 'other'
+  opened.resolve({draft: {id: 'saved', url: 'https://example.test'}})
+  await copying
+  assert.deepEqual(ports.notices, [])
+})
 
 test('rail collection previews ignore hover and close for the context menu', async (context) => {
   const actions = []

@@ -1680,7 +1680,6 @@
     }
   },
   "tabs": {
-    "closeOthersHint": "except active and pinned",
     "allTabs": "All tabs",
     "findOpen": "Find an open tab",
     "keep": "Keep open",

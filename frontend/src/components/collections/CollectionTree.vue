@@ -26,8 +26,11 @@ import { t } from '../../i18n'
 import { useToast } from '../../composables/useToast'
 import { useCopyFeedback } from '../../composables/useCopyFeedback'
 import { sendRequest } from '../../lib/intents'
-import { contentOf } from '../../stores/content'
+import { draftById } from '../../stores/content'
 import { Format } from '../../../bindings/schemo/internal/convert/command'
+import type { DraftID } from '../../../bindings/schemo/internal/domain'
+import { Drafts } from '../../../bindings/schemo/internal/request'
+import { callOrToast } from '../../lib/calls'
 import type { CollectionSection } from '../../stores/collections'
 
 const collections = useCollectionsStore()
@@ -107,14 +110,14 @@ async function send(row: Row) {
   void sendRequest.trigger()
 }
 
-// A copy reads the node's draft, and a node that was never opened has none: it is staged in the
-// background so the work area stays where it was while the request is read out.
+// Open requests copy their current edits; a closed request is read without changing the tab strip.
 async function copyAs(row: Row, format: Format) {
-  await collections.select(row.id, false, true)
-  const instance = contentOf(row.id)
-  if (!instance || !('draft' in instance)) return
-  const answer = await instance.draft.copyAs(format)
-  if (!answer) return
+  const workspace = workspaces.activeId
+  const draft = draftById(row.id as DraftID) ??
+    (await callOrToast(Drafts.OpenNode(row.id), 'collections.readFailed'))?.draft
+  if (!draft || workspaces.activeId !== workspace) return
+  const answer = await callOrToast(Drafts.CopyAs(draft, format), 'response.copyFailed')
+  if (!answer || workspaces.activeId !== workspace) return
   if (!(await copy(answer.text))) return
   toast.show(t('common.copied'))
 }
