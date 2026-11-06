@@ -60,14 +60,12 @@ export function syncingOff(workspaces: SyncWorkspace[]): boolean {
 
 export function syncLine(workspaces: SyncWorkspace[], activeId: string, waiting = 0): string {
   const linked = workspaces.filter((one) => one.remoteId !== '')
-  const state = ((): string => {
-    if (!linked.length) return t('sync.local')
+  const held = linked.find((one) => one.id === activeId) ?? linked[0]
+  const pending = waiting ? t('sync.notSent', { n: waiting }) : ''
+  if (!held || (held.state !== SyncState.SyncPaused && !held.syncedAt)) return pending || t('sync.local')
 
-    const held = linked.find((one) => one.id === activeId) ?? linked[0]
-    if (held.state === SyncState.SyncPaused) return t('sync.paused')
-    return held.syncedAt ? t('sync.synced', { when: formatAgo(held.syncedAt) }) : t('sync.local')
-  })()
-
-  if (!waiting) return state
-  return [state, t('sync.notSent', { n: waiting })].join(' · ')
+  const state = held.state === SyncState.SyncPaused
+    ? t('sync.paused')
+    : t('sync.synced', { when: formatAgo(held.syncedAt) })
+  return [state, pending].filter(Boolean).join(' · ')
 }
