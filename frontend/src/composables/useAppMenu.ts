@@ -253,7 +253,7 @@ export function useAppMenu() {
   useEventListener(window, 'keydown', (event: KeyboardEvent) => {
     if (!customTitlebar.value || event.key !== 'F10') return
     event.preventDefault()
-    open.value = !open.value
+    if (!event.repeat) open.value = !open.value
   })
 
   return { open, groups }

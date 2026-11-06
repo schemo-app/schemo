@@ -123,12 +123,12 @@ function onWindowKeydown(e: KeyboardEvent) {
   if (matches('save', e)) {
     if (!saveBound.value && !canSaveNow.value) return
     e.preventDefault()
-    void saveShortcut()
+    if (!e.repeat) void saveShortcut()
     return
   }
   if (matches('send', e)) {
     e.preventDefault()
-    void send()
+    if (!e.repeat) void send()
   }
 }
 

@@ -286,10 +286,10 @@ function onWindowKeydown(e: KeyboardEvent) {
   // What searching the answer and the inspector are bound to comes from the registry.
   if (matches('inspector', e)) {
     e.preventDefault()
-    if (activeTab.value === 'body') toggleInspector()
+    if (!e.repeat && activeTab.value === 'body') toggleInspector()
   } else if (matches('find', e) && searchable.value) {
     e.preventDefault()
-    openSearch()
+    if (!e.repeat) openSearch()
   } else if (e.key === 'Escape' && searching.value && document.activeElement !== searchField.value) {
     closeSearch()
   }

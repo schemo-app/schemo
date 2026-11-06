@@ -169,7 +169,7 @@ function useGlobalShortcuts(environments: ReturnType<typeof useEnvironmentsStore
     const action = actions.find(([command]) => matches(command, event))
     if (!action) return
     event.preventDefault()
-    action[1]()
+    if (!event.repeat) action[1]()
   })
 }
 
@@ -192,27 +192,27 @@ function useCollectionKeys(): void {
 
     if (matches('newRequest', e)) {
       e.preventDefault()
-      collections.pendingCreate = collections.selectedLevel
+      if (!e.repeat) collections.pendingCreate = collections.selectedLevel
       return
     }
     if (matches('duplicate', e)) {
       e.preventDefault()
-      void collections.duplicate(collections.selectedId)
+      if (!e.repeat) void collections.duplicate(collections.selectedId)
       return
     }
     if (offered('run') && matches('run', e)) {
       e.preventDefault()
-      void collections.run(collections.runNodeId, collections.levelName)
+      if (!e.repeat) void collections.run(collections.runNodeId, collections.levelName)
       return
     }
     if (isRenameEvent(e)) {
       e.preventDefault()
-      collections.pendingRename = collections.selectedId
+      if (!e.repeat) collections.pendingRename = collections.selectedId
       return
     }
     if (isRemoveEvent(e, isMac.value)) {
       e.preventDefault()
-      collections.pendingRemove = collections.selectedId
+      if (!e.repeat) collections.pendingRemove = collections.selectedId
     }
   }
 
