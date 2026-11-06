@@ -274,7 +274,6 @@ async function fill(row: RequestRecord) {
 
 .blank-row {
   @apply grid items-center flex-none cursor-default border-0;
-  border-radius: 0.4375rem;
   border-bottom: 1px solid var(--line2);
   background: transparent;
   font: inherit;
@@ -283,6 +282,7 @@ async function fill(row: RequestRecord) {
 }
 
 .blank-row:hover {
+  border-radius: 0.4375rem;
   background: var(--bg-hover);
 }
 
@@ -313,6 +313,7 @@ async function fill(row: RequestRecord) {
 }
 
 .blank-method {
+  display: contents;
   font-family: var(--mono);
   font-size: var(--text-11);
   font-weight: 700;

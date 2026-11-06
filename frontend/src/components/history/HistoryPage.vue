@@ -559,12 +559,12 @@ watch(filtered, (rows) => {
 
 .hist-row {
   height: 2.125rem;
-  border-radius: 0.3rem;
   border-bottom: 1px solid var(--line2);
   cursor: default;
 }
 
 .hist-row:hover {
+  border-radius: 0.3rem;
   background: var(--bg-hover);
 }
 
@@ -580,6 +580,7 @@ watch(filtered, (rows) => {
 }
 
 .hist-method {
+  display: contents;
   font-family: var(--mono);
   font-size: var(--text-11);
   font-weight: 700;
