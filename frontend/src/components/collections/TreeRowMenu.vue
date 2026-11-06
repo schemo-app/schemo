@@ -61,6 +61,15 @@ const otherCollections = computed(() => targets.filter((target) => target.id !==
 // only one that removes, and the row says in as many words what goes.
 const armed = ref(false)
 
+// The closing menu keeps focus until its animation ends; opening the popover sooner dismisses it.
+const sharing = ref(false)
+
+function afterClose() {
+  if (!sharing.value) return
+  sharing.value = false
+  emit('share')
+}
+
 // A menu that closes forgets the question it asked: a reopened row must not remove on its first click.
 const menu = injectContextMenuRootContext()
 watch(menu.open, (open) => {
@@ -93,7 +102,7 @@ const head = computed(() =>
 </script>
 
 <template>
-  <ContextMenuContent class="tree-menu">
+  <ContextMenuContent class="tree-menu" @close-auto-focus="afterClose">
     <div class="menu-head">
       <span v-if="row.kind === 'request'" class="menu-head-method" :class="methodInkClass(row.method)">
         {{ row.method }}
@@ -196,7 +205,7 @@ const head = computed(() =>
         <span class="menu-mark"><Icon name="Upload" :size="14" :stroke-width="1.8" /></span>
         <span class="menu-label-text cap-line">{{ t('collections.export') }}</span>
       </ContextMenuItem>
-      <ContextMenuItem @select="emit('share')">
+      <ContextMenuItem @select="sharing = true">
         <span class="menu-mark"><Icon name="Radio" :size="14" :stroke-width="1.8" /></span>
         <span class="menu-label-text cap-line">
           {{ t(shared ? 'publications.publicationMenu' : 'publications.shareMenu') }}
