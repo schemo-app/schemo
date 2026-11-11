@@ -23,6 +23,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   const sheetOpen = ref(false)
   const creating = ref(false)
   const editedId = ref<string | null>(null)
+  let returnToSheetOnCancel = false
 
   const list = computed(() => state.value?.workspaces ?? [])
   const activeId = computed(() => state.value?.activeId ?? '')
@@ -86,6 +87,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   }
 
   function openCreate() {
+    returnToSheetOnCancel = sheetOpen.value
     creating.value = true
     editedId.value = activeId.value
     sheetOpen.value = true
@@ -97,6 +99,10 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   }
 
   function cancelCreating() {
+    if (!returnToSheetOnCancel) {
+      closeSheet()
+      return
+    }
     creating.value = false
   }
 

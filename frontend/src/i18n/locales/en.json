@@ -474,7 +474,6 @@
     },
     "inheritedNothing": "Nothing above sets authorization — the request goes without it",
     "inherited": "Above: {kind}",
-    "scriptsNoteCollection": "Inherits the collection’s scripts and runs after them — the same editor as Collection → Scripts.",
     "body": {
       "format": "Format",
       "findInBody": "Find in body",
@@ -1175,7 +1174,7 @@
     "beforeRequest": "Before the request",
     "afterResponse": "After the answer",
     "preNote": "runs before the request’s own script",
-    "postNote": "tests for every request of the collection",
+    "postNote": "runs after each request",
     "scriptsAvailable": "Scripts can reach vars, send, res and test",
     "import": "Import",
     "deletedRequest": "a deleted request",

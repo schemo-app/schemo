@@ -165,7 +165,7 @@ function removeExample() {
 
 .ex-live {
   @apply flex items-center flex-none cursor-default;
-  height: 2.5rem;
+  height: 2.8rem;
   gap: 0.5rem;
   padding: 0 0.5rem;
   border-radius: 0.4375rem;
@@ -206,9 +206,8 @@ function removeExample() {
 
 .ex-head {
   @apply flex items-center flex-none;
-  height: 1.875rem;
   gap: 0.3rem;
-  padding: 0.5rem 0.3rem 0 0.5rem;
+  padding: 0.5rem 0 0.2rem 0.5rem;
   margin-top: 0.3rem;
   border-top: 1px solid var(--border);
 }

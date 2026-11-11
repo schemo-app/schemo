@@ -298,6 +298,25 @@ function record(id, startedAt = 1) {
   return { id, workspaceId: 'workspace', startedAt }
 }
 
+test('canceling workspace creation keeps the manager open only if it was already open', () => {
+  pinia = createPinia()
+  const workspaces = useWorkspacesStore(pinia)
+
+  workspaces.openSheet()
+  workspaces.openCreate()
+  workspaces.cancelCreating()
+  assert.equal(workspaces.creating, false)
+  assert.equal(workspaces.sheetOpen, true)
+
+  workspaces.closeSheet()
+  workspaces.openCreate()
+  assert.equal(workspaces.sheetOpen, true)
+  assert.equal(workspaces.creating, true)
+  workspaces.cancelCreating()
+  assert.equal(workspaces.creating, false)
+  assert.equal(workspaces.sheetOpen, false)
+})
+
 test('workspace switching supersedes a snapshot requested before the switch', async () => {
   setupTabs()
   store = useWorkspacesStore()

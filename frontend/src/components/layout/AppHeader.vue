@@ -184,7 +184,7 @@ watch(customTitlebar, (custom) => custom && refreshMaximised(), { immediate: tru
 .header-key {
   @apply leading-none text-text-tertiary;
   font-size: var(--text-12);
-  padding: 0 0.3125rem;
+  padding: 0.1rem 0.3rem;
   border-radius: 0.25rem;
   background: var(--chip);
 }

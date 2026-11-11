@@ -9,7 +9,7 @@ import ScriptsEditor from '../scripts/ScriptsEditor.vue'
 
 // The two halves of code the level runs around its requests, as the request's own pane draws them:
 // both at once, and written down on a pause, the way the command line's address is.
-const { source, note } = defineProps<{ source: RequestSource; note: string }>()
+const { source } = defineProps<{ source: RequestSource }>()
 
 // The two off flags travel with the code, so the level above cannot hand down a script it has
 // switched off.
@@ -61,10 +61,6 @@ watch(
     />
 
     <CaptureList :source />
-
-    <div class="note plain">
-      <span class="note-text">{{ note }}</span>
-    </div>
   </div>
 </template>
 
@@ -73,21 +69,5 @@ watch(
 
 .fields {
   @apply flex flex-col gap-3;
-}
-
-.note {
-  @apply flex items-start gap-2 px-3 py-2.5 rounded-lg bg-accent-soft;
-}
-
-.note.plain {
-  @apply bg-transparent p-0 text-13 text-text-tertiary;
-}
-
-.note-text {
-  @apply text-12 leading-normal;
-}
-
-.note.plain .note-text {
-  @apply text-12 text-text-tertiary;
 }
 </style>

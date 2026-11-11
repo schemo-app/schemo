@@ -15,7 +15,6 @@ import { useResizeDrag } from '../../composables/useResizeDrag'
 import { useSlidingPill } from '../../composables/useSlidingPill'
 import { useSetting, useSettings } from '../../composables/useSettings'
 import type { ChipName, RequestSource } from '../../lib/requestSource'
-import { isTabDraft } from '../../lib/strip'
 import { t } from '../../i18n'
 import { rem, unitScale } from '../../lib/units'
 
@@ -62,12 +61,6 @@ function count(chip: ChipName): number {
   if (chip === 'examples') return source.responses.length
   return 0
 }
-
-// Where the scripts' code sits in the order, in one line. Above a tab there is no collection, so
-// the sentence a card says would be untrue there.
-const scriptsNote = computed(() =>
-  isTabDraft(source.scriptsLevel) ? '' : t('request.scriptsNoteCollection')
-)
 
 // The rule travels to the section that was opened rather than appearing under it, and fades where
 // it stands when the pane is folded.
@@ -163,7 +156,7 @@ function resetPaneHeight() {
         empty-key="request.docs.emptyRequest"
       />
       <div v-else class="scripts-pane">
-        <ScriptsPane :source :note="scriptsNote" compact />
+        <ScriptsPane :source compact />
       </div>
     </div>
 

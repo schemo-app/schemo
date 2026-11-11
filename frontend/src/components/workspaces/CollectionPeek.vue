@@ -103,7 +103,7 @@ function openFirst() {
 }
 
 .peek-method {
-  width: 2.875rem;
+  min-width: 1.8rem;
   flex: none;
   font-family: var(--mono);
   font-size: var(--text-12);
