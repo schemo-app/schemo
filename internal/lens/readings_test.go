@@ -79,6 +79,34 @@ func TestANumberThatIsATimeIsOfferedAsOne(t *testing.T) {
 	}
 }
 
+func TestInlineReadingsUseTheInspectorsTimesAndJSONPaths(t *testing.T) {
+	t.Parallel()
+	doc, err := Open("application/json", `{
+		"records": [{"дата": "2026-11-12", "clock.local": "2026-11-12T08:30:00", "clock": "2026-11-12T08:30:00+05:00"}],
+		"number": 1700000000, "string": "1700000000000",
+		"updated_at": 42, "invalid": "2026-02-31"
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]domain.ReadingRow{
+		"$.records[0].дата":           row("time", "2026-11-12", "date"),
+		"$.records[0]['clock.local']": row("time", "2026-11-12T08:30:00.000Z", "wallTime"),
+		"$.records[0].clock":          row("time", "2026-11-12T03:30:00.000Z", "time"),
+		"$.number":                    row("time", "2023-11-14T22:13:20.000Z", "time"),
+		"$.string":                    row("time", "2023-11-14T22:13:20.000Z", "time"),
+	}
+	got := doc.InlineReadings()
+	if len(got) != len(want) {
+		t.Errorf("InlineReadings() = %+v, want %+v", got, want)
+	}
+	for path, reading := range want {
+		if got[path] != reading {
+			t.Errorf("InlineReadings()[%q] = %+v, want %+v", path, got[path], reading)
+		}
+	}
+}
+
 func TestAnIntegerJavaScriptWouldRoundIsFlagged(t *testing.T) {
 	r := find(readOne(t, domain.NodeNumber, "9007199254740993"), "bigint")
 	if r == nil || rowOf(r, "exact") != "9007199254740993" ||

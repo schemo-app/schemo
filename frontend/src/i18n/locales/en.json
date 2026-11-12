@@ -526,7 +526,7 @@
     "copyUrl": "Copy the link",
     "views": {
       "tree": "Tree",
-      "raw": "Text",
+      "raw": "Raw",
       "map": "Map",
       "table": "Table"
     },
@@ -562,7 +562,8 @@
     "pageOf": "Page {page} of {total}",
     "openInRequest": "Open in Request",
     "repeat": "Repeat",
-    "inspector": "Node inspector ({shortcut})",
+    "copyBody": "Copy response body",
+    "copySelected": "Copy selected value",
     "noResponseHeaders": "No response headers",
     "substitutedCaption": "Shown as it was sent, with environment variables substituted",
     "method": "Method",
@@ -609,6 +610,8 @@
       "jar": "In the store"
     },
     "raw": {
+      "format": "Pretty print",
+      "formatFailed": "Could not format the response body: {error}",
       "foldedLines": "{n} line | {n} lines",
       "foldLine": "Fold line",
       "unfoldLine": "Unfold line",
@@ -967,7 +970,7 @@
       "closeTab": "Close the tab",
       "closeOthers": "Close the other tabs",
       "find": "Search the response",
-      "inspector": "Inspector"
+      "inspector": "Response node actions"
     }
   },
   "browser": {
@@ -989,8 +992,13 @@
   },
   "inspector": {
     "title": "Inspector",
+    "actions": "Node actions",
+    "details": "Node details",
+    "copyPath": "Copy path",
+    "copyJavaScript": "Copy for JavaScript",
+    "addCheck": "Add a script assertion",
+    "checkAdded": "Assertion added to the response script",
     "empty": "Click a value in the response.",
-    "notDocument": "This response is not a document the inspector can read.",
     "root": "the whole document",
     "item": "item",
     "parent": "One level up",
@@ -1025,8 +1033,10 @@
       "globals": "Globals",
       "noEnvironment": "No environment",
       "secret": "Store as a secret",
+      "secretShort": "Secret",
       "secretHint": "Masked in the UI and left out of exports.",
       "keep": "Update it every time this request is sent",
+      "keepShort": "Update on send",
       "keepHint": "Re-reads this value each time this request runs.",
       "submit": "Save",
       "hint": "↩ save · esc cancel",
@@ -1659,7 +1669,7 @@
       "paste": "Paste",
       "findInResponse": "Find in the response",
       "sidebar": "Sidebar",
-      "inspector": "Inspector",
+      "inspector": "Response node actions",
       "lightTheme": "Light theme",
       "darkTheme": "Dark theme",
       "zoomIn": "Zoom in",

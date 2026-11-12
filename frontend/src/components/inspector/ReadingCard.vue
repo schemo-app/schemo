@@ -6,6 +6,7 @@ import CopyRow from '../ui/CopyRow.vue'
 import type { Reading, ReadingRow } from '../../../bindings/schemo/internal/domain'
 import { useCopyFeedback } from '../../composables/useCopyFeedback'
 import { formatAgo, formatDate, formatIn, textOf, t } from '../../i18n'
+import { formatReadingTime } from '../../lib/reading'
 
 // Go says the facts as data — a moment is a moment, not a sentence — and the words and the local
 // time are drawn here.
@@ -73,6 +74,9 @@ const expired = (row: ReadingRow): boolean => row.key === 'exp' && Date.parse(ro
         {{ local(row.value) }}
         <span v-if="relative(row.value)" class="sub">· {{ relative(row.value) }}</span>
         <span v-if="expired(row)" class="flag">{{ t('inspector.expired') }}</span>
+      </template>
+      <template v-else-if="row.shape === 'date' || row.shape === 'wallTime'">
+        {{ formatReadingTime(row) }}
       </template>
       <template v-else-if="row.shape === 'colour'">
         <span class="swatch" :style="{ background: row.value }"></span>{{ row.value }}

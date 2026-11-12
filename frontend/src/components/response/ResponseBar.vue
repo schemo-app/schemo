@@ -8,18 +8,15 @@ import { formatBytes, formatMicros } from '../../i18n'
 
 // The end of the answer's row: what came back, then what the reading on screen offers, handed in by
 // the viewer. The time is the size's neighbour and both are the answer's own numbers.
-const { record, searchable, searching, searchTitle, inspectable, inspectorOpen, inspectorTitle } =
+const { record, searchable, searching, searchTitle } =
   defineProps<{
     record: RecordView
     searchable: boolean
     searching: boolean
     searchTitle: string
-    inspectable: boolean
-    inspectorOpen: boolean
-    inspectorTitle: string
   }>()
 
-defineEmits<{ toggleSearch: []; toggleInspector: [] }>()
+defineEmits<{ toggleSearch: [] }>()
 
 const bodySize = () => record.responseBytes ?? new Blob([record.responseBody]).size
 
@@ -52,17 +49,6 @@ const statusLine = computed(() => formatStatus(record.status, record.statusText)
 
     <slot />
 
-    <IconButton
-      v-if="inspectable"
-      variant="bare"
-      size="bar"
-      class="row-mark inspector-toggle"
-      :class="{ on: inspectorOpen }"
-      :hint="inspectorTitle"
-      @click="$emit('toggleInspector')"
-    >
-      <Icon name="PanelRight" :size="16" :stroke-width="1.8" />
-    </IconButton>
   </div>
 </template>
 
@@ -116,9 +102,4 @@ const statusLine = computed(() => formatStatus(record.status, record.statusText)
   color: var(--text);
 }
 
-.resp-actions :deep(.inspector-toggle.on),
-.resp-actions :deep(.inspector-toggle.on:hover) {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 </style>

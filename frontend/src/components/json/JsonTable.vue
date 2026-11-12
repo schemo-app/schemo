@@ -26,7 +26,7 @@ const { arrays, selected = '$', query = '' } = defineProps<{
     selected?: string
     query?: string
 }>()
-const emit = defineEmits<{ inspect: [path: string] }>()
+const emit = defineEmits<{ inspect: [path: string, event?: MouseEvent] }>()
 const arrayPath = ref('')
 const filter = ref('')
 const hidden = reactive(new Set<string>())
@@ -171,7 +171,12 @@ defineExpose({ matches: computed(() => rows.value.length) })
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in pageRows" :key="row.path">
+          <tr
+            v-for="row in pageRows"
+            :key="row.path"
+            :class="{ selected: row.path === selected }"
+            @contextmenu.prevent="emit('inspect', row.path, $event)"
+          >
             <td class="row-index">
               <button
                 type="button"
@@ -340,6 +345,10 @@ th {
 
 tbody tr:hover {
   background: var(--bg-hover);
+}
+
+tbody tr.selected {
+  background: var(--accent-soft);
 }
 
 .table-empty {

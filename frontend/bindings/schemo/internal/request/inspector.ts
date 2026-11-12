@@ -31,6 +31,13 @@ export function Diagnose(id: string, status: number): $CancellablePromise<domain
 }
 
 /**
+ * InlineReadings returns annotations for the JSON tree of an open document.
+ */
+export function InlineReadings(id: string): $CancellablePromise<{ [_ in string]?: domain$0.ReadingRow } | null> {
+    return $Call.ByID(2878168721, id);
+}
+
+/**
  * Locate finds the request body member a JSON Pointer names, or nil.
  */
 export function Locate(contentType: string, text: string, pointer: string): $CancellablePromise<domain$0.Span | null> {

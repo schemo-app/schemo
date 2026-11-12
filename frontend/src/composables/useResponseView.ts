@@ -1,20 +1,17 @@
 import { computed, ref, watch, nextTick, useTemplateRef } from 'vue'
 import type { RecordView } from '../lib/requestRecord'
-import { prettyJson, tryParseJson } from '../lib/json'
-import { buildJsonTree, isContainer } from '../lib/jsonTree'
-import { isJsonApi, type JsonApiDocument } from '../lib/jsonapi'
+import { tryParseJson } from '../lib/json'
+import { buildJsonTree, isContainer, type JsonNode } from '../lib/jsonTree'
+import { isJsonApi } from '../lib/jsonapi'
 import { viewerLanguage } from '../lib/viewerLanguage'
-import { RecordSource, TabKind } from '../../bindings/schemo/internal/domain'
+import { RecordSource } from '../../bindings/schemo/internal/domain'
 import { useRecordsStore } from '../stores/records'
-import { useTabsStore } from '../stores/tabs'
 import { useCookiesStore } from '../stores/cookies'
-import { setViewState, viewState, type PaneSource, inspectorState, setInspectorState } from '../stores/content'
-import { focusUrlField } from '../lib/intents'
+import { setViewState, viewState, type PaneSource } from '../stores/content'
 import { t } from '../i18n'
 import { runOrToast } from '../lib/calls'
 import { touchedJar } from '../lib/responseCookies'
 import { History } from '../../bindings/schemo/internal/request'
-import type { Inspection } from './useInspection'
 import { exampleName, exampleOf, isKeepable } from '../lib/examples'
 import { useToast } from './useToast'
 import { useCopyFeedback } from './useCopyFeedback'
@@ -34,17 +31,16 @@ export function useResponseView(
   const parsed = computed(() => tryParseJson(record().responseBody))
   const isJson = computed(() => parsed.value.ok)
   const jsonValue = computed(() => parsed.value.value)
-  const isJsonApiDoc = computed(() => isJson.value && isJsonApi(jsonValue.value))
-  const doc = computed<JsonApiDocument | null>(() =>
-    isJsonApiDoc.value ? (jsonValue.value as JsonApiDocument) : null
+  const structured = computed(() => jsonValue.value !== null && typeof jsonValue.value === 'object')
+  const doc = computed(() =>
+    isJsonApi(jsonValue.value) ? jsonValue.value : null
   )
 
-  const prettyRaw = computed(() => (isJson.value ? prettyJson(jsonValue.value) : record().responseBody))
   const language = computed(() => viewerLanguage(record().contentType, record().responseBody, isJson.value))
 
-  // Every node of the body, keyed by its address: what the tree walks, the map lists and the counts
-  // are read from. One build per body, however many of the three ask.
-  const nodes = computed(() => (isJson.value ? buildJsonTree(jsonValue.value) : new Map()))
+  const nodes = computed<ReadonlyMap<string, JsonNode>>(() =>
+    structured.value ? buildJsonTree(jsonValue.value) : new Map()
+  )
   const arrays = computed(() => [...nodes.value.values()].filter(node => node.kind === 'array'))
 
   // Which reading is on screen outlives the component: it is the tab's, like the chip a request pane
@@ -58,12 +54,6 @@ export function useResponseView(
     get: () => viewState(pane()).bodyView,
     set: (bodyView) => setViewState(pane(), { bodyView }),
   })
-
-  // What draws the body: the reading that was picked, and what the body is. A body that is not JSON
-  // is read as the text it is, whichever reading was left selected.
-  const reader = computed<'tree' | 'map' | 'table' | 'text'>(() =>
-    isJson.value && bodyView.value !== 'raw' ? bodyView.value : 'text'
-  )
 
   const selected = computed(() => viewState(pane()).selPath)
   const collapsed = computed(() => viewState(pane()).collapsed)
@@ -92,29 +82,28 @@ export function useResponseView(
     return list
   })
 
-  const viewLabels = computed<Record<BodyView, string>>(() => ({
-    tree: t('response.views.tree'),
-    raw: t('response.views.raw'),
-    map: t('response.views.map'),
-    table: t('response.views.table'),
-  }))
-
   /** JSON arrays also have a table; a body that is not JSON has only its text. */
   const views = computed<BodyView[]>(() => {
-    if (!isJson.value) return ['raw']
-    return arrays.value.length ? ['raw', 'tree', 'map', 'table'] : ['raw', 'tree', 'map']
+    if (!structured.value) return ['raw']
+    return arrays.value.length ? ['tree', 'raw', 'map', 'table'] : ['tree', 'raw', 'map']
   })
+
+  const reader = computed(() =>
+    views.value.includes(bodyView.value) ? bodyView.value : views.value[0]
+  )
+  const viewOptions = computed(() =>
+    views.value.map((value) => ({ value, label: t(`response.views.${value}`) }))
+  )
 
   // The tab being read is kept between records; only a reading the record has no room for moves —
   // and a body that is not JSON is read as text, whatever was on screen before it.
   function keepReadingAvailable() {
     if (!tabs.value.includes(activeTab.value)) activeTab.value = 'body'
-    if (!views.value.includes(bodyView.value)) bodyView.value = 'raw'
+    if (structured.value && bodyView.value !== reader.value) bodyView.value = reader.value
   }
 
   // What the body is, in one line beside the reading: what it holds, and of how many parts.
   const bodyInfo = computed(() => {
-    if (!isJson.value) return ''
     const root = nodes.value.get('$')
     if (!root) return ''
     const held =
@@ -153,19 +142,6 @@ export function useResponseView(
     void records.sendSpec({ method: 'GET', url, headers: record().requestHeaders, body: '' })
   }
 
-  function openInRequest() {
-    // The whole record becomes a request tab of its own — Go seeds the draft — and the reader
-    // lands on it.
-    const tabs = useTabsStore()
-    void tabs.open({
-      kind: TabKind.TabKindRequest,
-      ref: record().id,
-      record: record().id,
-      newTab: true,
-    })
-    focusUrlField()
-  }
-
   // The manager opens on the address this answer went to, not on the one it was last left on.
   function openCookieManager() {
     void cookies.openManager(record().url)
@@ -175,8 +151,7 @@ export function useResponseView(
     activeTab,
     bodyView,
     reader,
-    views,
-    viewLabels,
+    viewOptions,
     selected,
     collapsed,
     nodes,
@@ -191,12 +166,8 @@ export function useResponseView(
     tabs,
     keepReadingAvailable,
     doc,
-    isJsonApiDoc,
-    isJson,
-    prettyRaw,
     language,
     follow,
-    openInRequest,
     openCookieManager,
   }
 }
@@ -217,64 +188,6 @@ export function useCookieUndo(record: () => RecordView) {
   }
 
   return { touched, undoing, undo }
-}
-
-// The inspector beside the body: when it is on screen, what it is asked, and which part of the text
-// it marks in the viewer.
-//
-// The watch below offers the body to Go, so whatever resets the inspection when the record changes
-// has to be registered before this is called: reset after offer would discard the offer.
-export function useInspectorPanel(opts: {
-  inspection: Inspection
-  record: () => RecordView
-  pane: () => PaneSource | null
-  tab: () => ResponseTab
-}) {
-  const { inspection } = opts
-
-  const isOpen = computed(() => inspectorState(opts.pane()).open)
-
-  // The panel is the body's: it is on screen while the body is, and is only then asked anything.
-  // Nothing is read, selected or marked while it is closed.
-  const isInspecting = computed(() => isOpen.value && opts.tab() === 'body')
-
-  async function whenInspecting(pick: () => Promise<boolean>) {
-    if (isInspecting.value) await pick()
-  }
-
-  const inspectPath = (path: string) => whenInspecting(() => inspection.pickPath(path))
-  const inspectOffset = (offset: number) => whenInspecting(() => inspection.pickOffset(offset))
-
-  function toggle() {
-    setInspectorState(opts.pane(), { open: !isOpen.value })
-  }
-
-  function close() {
-    setInspectorState(opts.pane(), { open: false })
-  }
-
-  // The body is offered to Go and diagnosed only while the panel is open, and again when the record
-  // or its body changes. Closing forgets the selection.
-  watch(
-    () => {
-      const record = opts.record()
-      return [isInspecting.value, record.id, record.responseBody, record.status] as const
-    },
-    ([inspecting]) => {
-      if (!inspecting) return inspection.reset()
-      void inspection.ensure()
-      void inspection.diagnose(opts.record().status)
-    },
-    { immediate: true }
-  )
-
-  // The part of the text the panel is on, marked in the viewer.
-  const marked = computed(() => {
-    const node = inspection.node.value
-    return node && isInspecting.value ? { head: node.head, start: node.start, end: node.end } : null
-  })
-
-  return { isOpen, isInspecting, marked, inspectPath, inspectOffset, toggle, close }
 }
 
 // "To examples": the answer on screen kept beside the request it belongs to, under a name asked for
@@ -319,7 +232,7 @@ export function useKeepExample(record: () => RecordView, pane: () => PaneSource 
 export function useResponseCopy(opts: {
   record: () => RecordView
   tab: () => ResponseTab
-  prettyRaw: () => string
+  bodyText: () => string
   exportText: (format: string) => string | undefined
 }) {
   const { copied, copy } = useCopyFeedback()
@@ -336,7 +249,7 @@ export function useResponseCopy(opts: {
   const copyText = computed<string | null>(() => {
     switch (opts.tab()) {
       case 'body':
-        return opts.prettyRaw()
+        return opts.bodyText()
       case 'headers':
         return opts
           .record()

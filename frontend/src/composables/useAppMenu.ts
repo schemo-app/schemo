@@ -11,8 +11,7 @@ import { useCollectionsStore } from '../stores/collections'
 import { useSearchStore } from '../stores/search'
 import { useTabsStore } from '../stores/tabs'
 import { useTransferStore } from '../stores/transfer'
-import { inspectorState, setInspectorState, viewState } from '../stores/content'
-import { responseSearchable, saveRequest, searchResponse } from '../lib/intents'
+import { responseNodeActions, responseNodeSelected, responseSearchable, saveRequest, searchResponse } from '../lib/intents'
 import { useCommands } from './useCommands'
 import { usePlatform } from './usePlatform'
 import { useSetting } from './useSettings'
@@ -100,7 +99,6 @@ export function useAppMenu() {
   }
 
   const groups = computed<MenuGroup[]>(() => {
-    const inspector = inspectorState(tabs.pane)
     return [
       {
         id: 'file',
@@ -173,11 +171,10 @@ export function useAppMenu() {
             row(
               'inspector',
               'appMenu.item.inspector',
-              () => setInspectorState(tabs.pane, { open: !inspector.open }),
+              () => void responseNodeActions.trigger(),
               {
                 combo: combo('inspector'),
-                checked: inspector.open,
-                disabled: !tabs.pane || viewState(tabs.pane).tab !== 'body',
+                disabled: !responseNodeSelected.value,
               }
             ),
           ],

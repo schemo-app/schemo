@@ -23,17 +23,23 @@ globalThis.document = { createElement: () => ({}) }
 globalThis.ResizeObserver = ResizeObserverFake
 
 const load = await vite({
-    '/src/i18n/index.ts': 'export const t = key => key; export const textOf = key => key;',
+    '/src/lib/clipboard.ts': 'export const copyToClipboard = async () => true',
+    '/src/lib/json.ts': 'export const prettyJson = JSON.stringify',
+    '/src/i18n/index.ts': `export const t = key => key
+        export const textOf = key => key
+        export const formatDate = (value, options) =>
+            new Intl.DateTimeFormat('en-US', { ...options, timeZone: options.timeZone ?? 'UTC' }).format(value)`,
 }, {
     other(path) {
         if (!path.endsWith('.vue')) return
-        if (/\/Json(Rows|Tree|Map)\.vue$/.test(path)) return clientComponent(path)
+        if (/\/(Json(ApiTree|Rows|Tree|Map|ValueNote)|ResourceNode)\.vue$/.test(path)) return clientComponent(path)
         return 'export default { render: () => null };'
     },
 })
 const { default: JsonRows } = await load('/src/components/json/JsonRows.vue')
 const { default: JsonTree } = await load('/src/components/json/JsonTree.vue')
 const { default: JsonMap } = await load('/src/components/json/JsonMap.vue')
+const { default: JsonApiTree } = await load('/src/components/json/JsonApiTree.vue')
 const { buildJsonTree } = await load('/src/lib/jsonTree.ts')
 
 function node(type, text = '') {
@@ -90,10 +96,11 @@ async function mount(render) {
 const photos = Array.from({ length: 5000 }, (_, index) => ({
     albumId: 1, id: index + 1, title: `Photo ${index + 1}`, url: `/photos/${index + 1}`, thumbnailUrl: `/thumbs/${index + 1}`,
 }))
+const photoNodes = buildJsonTree(photos)
 
 for (const [component, className] of [[JsonTree, 'tree-row'], [JsonMap, 'map-row']]) {
     test(`${className} renders a viewport of a 5000-item response, and scrolling reaches the last item`, async () => {
-        const root = await mount(() => h(component, { value: photos }))
+        const root = await mount(() => h(component, { nodes: photoNodes }))
         const rendered = () => findAll(root, element => element.props.class === className)
         assert.ok(rendered().length > 0)
         assert.ok(rendered().length < 60)
@@ -107,6 +114,68 @@ for (const [component, className] of [[JsonTree, 'tree-row'], [JsonMap, 'map-row
         assert.ok(text.includes(className === 'tree-row' ? '/thumbs/5000' : '$[4999].thumbnailUrl'))
     })
 }
+
+test('the tree displays localized inspector readings beside the original literals', async () => {
+    const value = {
+        дата: '2026-11-12',
+        'clock.local': '2026-11-12T08:30:00',
+        published: '2026-11-12T08:30:00+05:00',
+        updated_at: 42,
+    }
+    const readings = {
+        '$.дата': { shape: 'date', value: '2026-11-12' },
+        "$['clock.local']": { shape: 'wallTime', value: '2026-11-12T08:30:00.000Z' },
+        '$.published': { shape: 'time', value: '2026-11-12T03:30:00.000Z' },
+    }
+    const nodes = buildJsonTree(value)
+    const root = await mount(() => h(JsonTree, { nodes, readings }))
+    const rows = findAll(root, element => element.props.class === 'tree-row')
+    const notes = rows.map(row => findAll(row, element => element.props.class === 'json-value-note')[0]?.text)
+    assert.deepEqual(notes, [
+        'November 12, 2026',
+        'November 12, 2026 at 8:30 AM',
+        'November 12, 2026 at 3:30 AM',
+        undefined,
+    ])
+    assert.ok(findAll(rows[0], element => element.text === '"2026-11-12"').length)
+})
+
+test('folded tree rows still count toward search and a context click forwards the row address', async () => {
+    const nodes = buildJsonTree({ data: { name: 'Search hit' } })
+    const tree = ref(null)
+    const picked = []
+    const root = await mount(() => h(JsonTree, {
+        ref: tree,
+        nodes,
+        query: 'Search hit',
+        collapsed: { '$.data': true },
+        onInspect: (...args) => picked.push(args),
+    }))
+
+    const rows = findAll(root, element => element.props.class === 'tree-row')
+    assert.equal(rows.length, 1)
+    assert.equal(tree.value.matches, 1)
+    const event = { preventDefault() {}, clientX: 40, clientY: 80 }
+    rows[0].props.onClick({ detail: 1 })
+    rows[0].props.onContextmenu(event)
+    assert.deepEqual(picked, [['$.data'], ['$.data', event]])
+})
+
+test('JSON:API context clicks keep the original resource address after filtering', async () => {
+    const doc = {
+        data: [
+            { type: 'users', id: '1', attributes: { name: 'First' } },
+            { type: 'users', id: '2', attributes: { name: 'Second' } },
+        ],
+    }
+    const picked = []
+    const root = await mount(() => h(JsonApiTree, { doc, query: 'Second', onInspect: (...args) => picked.push(args) }))
+    const heads = findAll(root, element => element.props.class === 'ja-resource-head')
+    assert.equal(heads.length, 1)
+    const event = { preventDefault() {}, clientX: 40, clientY: 80 }
+    heads[0].props.onContextmenu(event)
+    assert.deepEqual(picked, [['$.data[1]', event]])
+})
 
 test('a shorter response clamps a previous bottom scroll position instead of leaving an empty viewport', async () => {
     const rows = ref(buildJsonTree(photos).get('$').children)

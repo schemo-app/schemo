@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
 import { EditorState, RangeSetBuilder, StateEffect, StateField, type Text } from '@codemirror/state'
-import { Decoration, EditorView, type DecorationSet } from '@codemirror/view'
+import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view'
 import { codeFolding, foldGutter, foldKeymap } from '@codemirror/language'
 import type { ViewerLanguage } from '../../lib/viewerLanguage'
 import { editorLook } from '../../lib/editorLook'
 import { useSetting } from '../../composables/useSettings'
 import { t } from '../../i18n'
-import { keymap } from '@codemirror/view'
 
 // CodeMirror renders the text itself, so the toolbar's search has to be decorations here rather
 // than markup on HTML.
@@ -19,19 +18,11 @@ const props = defineProps<{
   text: string
   query: string
   language?: ViewerLanguage
-  /** The node the inspector is on: its key from `head`, its value from `start` to `end`. */
-  mark?: { head: number; start: number; end: number } | null
-  /** Whether a click is a question for the inspector: with it off a click is only a click. */
-  picking?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'stats', s: { count: number; index: number }): void
-  /** A click that selected nothing: where in the text it landed. */
-  (e: 'pick', offset: number): void
 }>()
-
-// The catalogue's `t`; lezer's tags are imported as `tags`.
 
 const host = useTemplateRef<HTMLElement>('host')
 const view = shallowRef<EditorView | null>(null)
@@ -40,27 +31,10 @@ const view = shallowRef<EditorView | null>(null)
 const wrap = useSetting('wrapLines')
 const numbers = useSetting('lineNumbers')
 
-// What only a reading has: the page's own padding, the search hits and the marked node. The face,
-// the palette and the reader's settings are lib/editorLook's, and the editor of an example wears
-// the same ones.
 const readerTheme = EditorView.theme({
   '.cm-content': { padding: '0.625rem 0' },
   '.cm-line': { padding: '0 1rem' },
   '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--accent) 25%, transparent)' },
-  // The selected node: a band over the lines it spans with a rule at its edge, its key a shade
-  // lighter than its value, so that the eye finds the member and then the value in it.
-  '.cm-nodeLine': {
-    backgroundColor: 'color-mix(in srgb, var(--accent) 6%, transparent)',
-    boxShadow: 'inset 0.125rem 0 0 var(--accent)',
-  },
-  '.cm-nodeKey': {
-    backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-    borderRadius: '0.1875rem',
-  },
-  '.cm-nodeValue': {
-    backgroundColor: 'color-mix(in srgb, var(--accent) 22%, transparent)',
-    borderRadius: '0.1875rem',
-  },
 })
 
 const folding = codeFolding({
@@ -126,56 +100,6 @@ const matchField = StateField.define<DecorationSet>({
   },
   provide: (field) => EditorView.decorations.from(field),
 })
-
-interface NodeMark {
-  head: number
-  start: number
-  end: number
-}
-
-const setMark = StateEffect.define<NodeMark | null>()
-
-const lineMark = Decoration.line({ class: 'cm-nodeLine' })
-const keyMark = Decoration.mark({ class: 'cm-nodeKey' })
-const valueMark = Decoration.mark({ class: 'cm-nodeValue' })
-
-function markDecorations(doc: Text, mark: NodeMark): DecorationSet {
-  if (mark.start >= mark.end || mark.end > doc.length) return Decoration.none
-  const ranges = []
-  const last = doc.lineAt(mark.end).number
-  for (let lineNumber = doc.lineAt(mark.head).number; lineNumber <= last; lineNumber++) {
-    ranges.push(lineMark.range(doc.line(lineNumber).from))
-  }
-  if (mark.head < mark.start) ranges.push(keyMark.range(mark.head, mark.start))
-  ranges.push(valueMark.range(mark.start, mark.end))
-  return Decoration.set(ranges, true)
-}
-
-const markField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(deco, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(setMark)) return effect.value ? markDecorations(tr.state.doc, effect.value) : Decoration.none
-    }
-    return deco.map(tr.changes)
-  },
-  provide: (field) => EditorView.decorations.from(field),
-})
-
-// A mark set from outside is scrolled to; one made by a click here is not.
-let pickedHere = false
-
-function applyMark(mark: NodeMark | null | undefined) {
-  const editorView = view.value
-  if (!editorView) return
-  const effects: StateEffect<unknown>[] = [setMark.of(mark ?? null)]
-  const scroll = !pickedHere
-  pickedHere = false
-  if (scroll && mark && mark.end <= editorView.state.doc.length) {
-    effects.push(EditorView.scrollIntoView(mark.head, { y: 'nearest', yMargin: 48 }))
-  }
-  editorView.dispatch({ effects })
-}
 
 function foundMatches(): Match[] {
   const editorView = view.value
@@ -243,18 +167,7 @@ function buildState(doc: string): EditorState {
       EditorView.editable.of(false),
       queryField,
       matchField,
-      markField,
       readerTheme,
-      // A click with nothing selected is a place in the text; a drag is the reader copying.
-      EditorView.domEventHandlers({
-        click: (event, v) => {
-          if (!props.picking || !v.state.selection.main.empty) return
-          const at = v.posAtCoords({ x: event.clientX, y: event.clientY }, false)
-          if (at === null) return
-          pickedHere = true
-          emit('pick', at)
-        },
-      }),
       EditorView.updateListener.of((update) => {
         if (update.selectionSet || update.docChanged) emitMatchStats()
       }),
@@ -266,7 +179,6 @@ onMounted(() => {
   if (!host.value) return
   view.value = new EditorView({ state: buildState(props.text), parent: host.value })
   applyQuery(props.query)
-  applyMark(props.mark)
 })
 
 onBeforeUnmount(() => {
@@ -283,7 +195,6 @@ watch(
     if (!editorView) return
     editorView.setState(buildState(text))
     applyQuery(props.query)
-    applyMark(props.mark)
   }
 )
 
@@ -296,7 +207,6 @@ watch([wrap, numbers], () => {
 })
 
 watch(() => props.query, applyQuery)
-watch(() => props.mark, applyMark)
 
 defineExpose({
   next: () => moveToMatch('next'),

@@ -1,26 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import JsonRows from './JsonRows.vue'
-import { buildJsonTree, isContainer, jsonOrder, type JsonKind, type JsonNode } from '../../lib/jsonTree'
+import { isContainer, type JsonKind, type JsonNode } from '../../lib/jsonTree'
 import { textOf, t } from '../../i18n'
 
 // The same body as the tree draws, listed: every address in the document with what stands there and
 // how much of it. A tree is read by walking it; a list is read by scanning it.
 const {
-  value,
+  nodes,
   query = '',
   selected = '$',
 } = defineProps<{
-  value: unknown
+  nodes: ReadonlyMap<string, JsonNode>
   query?: string
   selected?: string
 }>()
 
-const emit = defineEmits<{ (e: 'select', path: string): void }>()
-
-
-const nodes = computed(() => buildJsonTree(value))
-const rows = computed(() => jsonOrder(nodes.value).filter((node) => node.path !== '$'))
+const emit = defineEmits<{ inspect: [path: string, event?: MouseEvent] }>()
+const rows = computed(() => [...nodes.values()].slice(1))
 
 const needle = computed(() => query.trim().toLowerCase())
 
@@ -29,17 +26,6 @@ function matchesSearch(node: JsonNode): boolean {
   if (!searched) return false
   if (node.path.toLowerCase().includes(searched)) return true
   return !isContainer(node.kind) && String(node.value).toLowerCase().includes(searched)
-}
-
-/** The last step of the address, and what stands before it: the list indents by the first. */
-function stepOf(node: JsonNode): { parent: string; last: string } {
-  if (typeof node.key === 'number') {
-    const cut = node.path.lastIndexOf('[')
-    return { parent: node.path.slice(0, cut), last: node.path.slice(cut) }
-  }
-  const cut = node.path.lastIndexOf('.')
-  if (cut < 0) return { parent: '', last: node.path }
-  return { parent: node.path.slice(0, cut), last: node.path.slice(cut) }
 }
 
 /** How many rows the query names — the search beside the row counts with it. */
@@ -75,10 +61,11 @@ const TYPE_INK: Record<JsonKind, string> = {
       <div
         class="map-row"
         :class="{ selected: node.path === selected, hit: matchesSearch(node) }"
-        @click="emit('select', node.path)"
+        @click="emit('inspect', node.path)"
+        @contextmenu.prevent="emit('inspect', node.path, $event)"
       >
         <span class="map-addr mono">
-          <span class="map-parent">{{ stepOf(node).parent }}</span>{{ stepOf(node).last }}
+          <span class="map-parent">{{ node.parent }}</span>{{ node.path.slice(node.parent?.length ?? 0) }}
         </span>
         <span>
           <span class="map-type mono" :class="TYPE_INK[node.kind]">{{ textOf(`inspector.kinds.${node.kind}`) }}</span>

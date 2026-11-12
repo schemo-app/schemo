@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import Icon from '../ui/Icon.vue'
 import { t } from '../../i18n'
 import { prettyJson } from '../../lib/json'
+import { childPath } from '../../lib/jsonTree'
+import type { InlineReadings } from '../../lib/reading'
 import { resourceKey, resourceLabel, type Resource, type Relationship } from '../../lib/jsonapi'
 import RelationshipLink from './RelationshipLink.vue'
+import JsonValueNote from './JsonValueNote.vue'
 import { useCopyFeedback } from '../../composables/useCopyFeedback'
 
-const { path, highlighted, resource } = defineProps<{
+const { path, highlighted, resource, readings } = defineProps<{
   resource: Resource
   resourceIndex: Map<string, Resource>
   highlighted?: boolean
   path: string
+  readings?: InlineReadings
 }>()
 
 const emit = defineEmits<{
   (e: 'jump', key: string): void
   (e: 'fetch', url: string): void
-  (e: 'inspect', path: string): void
+  (e: 'inspect', path: string, event?: MouseEvent): void
 }>()
 
 const open = ref(false)
@@ -36,7 +39,11 @@ function toggleOpen() {
 }
 
 function relPath(name: string): string {
-  return path + '.relationships.' + name
+  return childPath(path + '.relationships', name)
+}
+
+function attributePath(key: string): string {
+  return childPath(path + '.attributes', key)
 }
 
 // A highlight from the map must expand the node, not just show its header.
@@ -99,10 +106,8 @@ async function copyVal(k: string, v: unknown) {
 
 <template>
   <div class="ja-resource" :id="rid" :class="{ highlight: highlighted }">
-    <button class="ja-resource-head" @click="toggleOpen">
-      <span class="ja-caret" :class="{ open }">
-        <Icon name="ChevronRight" :size="10" />
-      </span>
+    <button class="ja-resource-head" @click="toggleOpen" @contextmenu.prevent="emit('inspect', path, $event)">
+      <span class="ja-caret" :class="{ open }" aria-hidden="true">›</span>
       <span class="ja-type-badge">{{ resource.type }}</span>
       <span class="ja-id">{{ resource.id }}</span>
       <span class="ja-label">{{ label }}</span>
@@ -112,7 +117,12 @@ async function copyVal(k: string, v: unknown) {
       <div v-if="open" class="ja-body">
         <div class="ja-body-inner">
           <div v-if="attributes.length" class="ja-section-title" style="padding-left: 0">attributes</div>
-          <div v-for="[k, v] in attributes" :key="k" class="ja-attr">
+          <div
+            v-for="[k, v] in attributes"
+            :key="k"
+            class="ja-attr"
+            @contextmenu.prevent="emit('inspect', attributePath(k), $event)"
+          >
             <span class="ja-attr-key" :title="t('json.copyKey')" :class="{ copied: copiedKey === k }" @click.stop="copyKey(k)">{{ k }}</span>
             <span
               class="ja-attr-val"
@@ -121,11 +131,17 @@ async function copyVal(k: string, v: unknown) {
               @click.stop="copyVal(k, v)"
               >{{ formatValue(v) }}</span
             >
+            <JsonValueNote v-if="readings?.[attributePath(k)]" :reading="readings[attributePath(k)]" />
           </div>
 
           <template v-if="relationships.length">
             <div class="ja-section-title" style="padding-left: 0">relationships</div>
-            <div v-for="[name, rel] in relationships" :key="name" class="ja-rel">
+            <div
+              v-for="[name, rel] in relationships"
+              :key="name"
+              class="ja-rel"
+              @contextmenu.prevent="emit('inspect', relPath(name), $event)"
+            >
               <span class="ja-rel-name">{{ name }}</span>
               <RelationshipLink :rel :resource-index @jump="(key) => emit('jump', key)" @fetch="(url) => emit('fetch', url)" @inspect="emit('inspect', relPath(name))" />
             </div>

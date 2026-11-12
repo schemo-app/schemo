@@ -225,7 +225,7 @@ func readHash(s string) *domain.Reading {
 
 var timeLayouts = []string{
 	time.RFC3339Nano, "2006-01-02T15:04:05", "2006-01-02 15:04:05", "2006-01-02T15:04",
-	"2006-01-02", time.RFC1123, time.RFC1123Z, time.RFC850, time.ANSIC,
+	time.DateOnly, time.RFC1123, time.RFC1123Z, time.RFC850, time.ANSIC,
 }
 
 // readDateTime reads the date formats APIs use.
@@ -235,13 +235,61 @@ func readDateTime(s string) *domain.Reading {
 	}
 	for _, layout := range timeLayouts {
 		if at, err := time.Parse(layout, s); err == nil {
+			clock := row("time", moment(at), "wallTime")
+			switch layout {
+			case time.DateOnly:
+				clock = row("time", at.Format(time.DateOnly), "date")
+			case time.RFC3339Nano, time.RFC1123, time.RFC1123Z, time.RFC850:
+				clock.Shape = "time"
+			}
 			return &domain.Reading{Kind: "datetime", Rows: []domain.ReadingRow{
-				row("time", moment(at), "time"),
+				clock,
 				row("written", s, "code"),
 			}}
 		}
 	}
 	return nil
+}
+
+// InlineReadings returns the time annotations for a JSON tree, keyed by JSONPath.
+func (d *Document) InlineReadings() map[string]domain.ReadingRow {
+	readings := make(map[string]domain.ReadingRow)
+	if d.kind != domain.DocJSON {
+		return readings
+	}
+
+	var visit func(*node, []step)
+	visit = func(n *node, path []step) {
+		if reading := timeReading(n); reading != nil {
+			for _, one := range reading.Rows {
+				if one.Key == "time" {
+					readings[jsonPath(path)] = one
+					break
+				}
+			}
+		}
+		for index, child := range n.kids {
+			part := step{key: child.name, index: index, isIndex: n.kind == domain.NodeArray}
+			visit(child, append(path, part))
+		}
+	}
+	visit(d.root, nil)
+	return readings
+}
+
+func timeReading(n *node) *domain.Reading {
+	switch n.kind {
+	case domain.NodeString:
+		text := strings.TrimSpace(n.scalar)
+		if reading := readDateTime(text); reading != nil {
+			return reading
+		}
+		return readEpochText(text)
+	case domain.NodeNumber:
+		return readEpoch(n.scalar)
+	default:
+		return nil
+	}
 }
 
 var digitsShape = regexp.MustCompile(`^\d+$`)

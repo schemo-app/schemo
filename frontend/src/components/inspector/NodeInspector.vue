@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { PANEL } from '../../lib/layout'
 import Icon from '../ui/Icon.vue'
 import IconButton from '../ui/IconButton.vue'
 import Block from '../ui/Block.vue'
@@ -13,39 +12,22 @@ import ReadingCard from './ReadingCard.vue'
 import { NodeKind } from '../../../bindings/schemo/internal/domain'
 import { isContainer, type Inspection } from '../../composables/useInspection'
 import { useCopyFeedback } from '../../composables/useCopyFeedback'
-import { useResizeDrag } from '../../composables/useResizeDrag'
 import { formatBytes, textOf, t } from '../../i18n'
-import { rem } from '../../lib/units'
-import { inspectorState, setInspectorState, type PaneSource } from '../../stores/content'
+import type { RequestSource } from '../../lib/requestSource'
 
 const {
-  source = 'request',
   inspection,
-  pane = null,
+  host = null,
   canFollow = false,
 } = defineProps<{
   inspection: Inspection
-  source?: 'request' | 'browser' | 'collection'
-  pane?: PaneSource | null
+  host?: RequestSource | null
   canFollow?: boolean
 }>()
 
 const emit = defineEmits<{ close: []; fetch: [url: string]; pick: [path: string] }>()
 
-const host = source === 'browser' ? null : pane
-
 const { copied, copy } = useCopyFeedback()
-
-const width = computed({
-  get: () => inspectorState(pane).width,
-  set: (v: number) => setInspectorState(pane, { width: v }),
-})
-const { startDrag: startResize } = useResizeDrag(width, {
-  axis: 'x',
-  min: PANEL.min,
-  max: PANEL.max,
-  side: 'right',
-})
 
 const node = computed(() => inspection.node.value)
 
@@ -79,11 +61,9 @@ async function copyValue() {
 </script>
 
 <template>
-  <div class="inspector" :style="{ width: rem(width) }">
-    <div class="inspector-resize" @mousedown.prevent="startResize"></div>
-
+  <div class="inspector">
     <div class="inspector-head">
-      <span class="inspector-title">{{ t('inspector.title') }}</span>
+      <span class="inspector-title">{{ t('inspector.details') }}</span>
       <IconButton v-if="node?.parent" :hint="t('inspector.parent')" @click="emit('pick', node.parent)">
         <Icon name="ChevronUp" :size="14" :stroke-width="2" />
       </IconButton>
@@ -93,8 +73,7 @@ async function copyValue() {
     </div>
 
     <div class="inspector-body">
-      <p v-if="inspection.readable.value === false" class="note">{{ t('inspector.notDocument') }}</p>
-      <p v-else-if="!node" class="note">{{ t('inspector.empty') }}</p>
+      <p v-if="!node" class="note">{{ t('inspector.empty') }}</p>
 
       <template v-else>
         <section class="who">
@@ -174,18 +153,9 @@ async function copyValue() {
 @reference "../../style.css";
 
 .inspector {
-  @apply relative flex-none flex flex-col h-full min-h-0;
-  border-left: 1px solid var(--border);
-  background: var(--bg-sidebar);
-}
-
-.inspector-resize {
-  @apply absolute left-0 top-0 bottom-0 w-1 -ml-1 cursor-col-resize z-1 bg-transparent;
-  transition: background 0.15s ease;
-}
-
-.inspector-resize:hover {
-  background: var(--border-strong);
+  @apply flex flex-col min-h-0;
+  width: min(27rem, 90vw);
+  max-height: 80vh;
 }
 
 .inspector-head {

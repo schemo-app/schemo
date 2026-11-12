@@ -106,6 +106,15 @@ func (s *Inspector) Node(id, path string) (domain.NodeView, error) {
 	return doc.Node(path)
 }
 
+// InlineReadings returns annotations for the JSON tree of an open document.
+func (s *Inspector) InlineReadings(id string) (map[string]domain.ReadingRow, error) {
+	doc, err := s.document(id)
+	if err != nil {
+		return nil, err
+	}
+	return doc.InlineReadings(), nil
+}
+
 // Text is what a copy of the node holds.
 func (s *Inspector) Text(id, path string) (string, error) {
 	doc, err := s.document(id)

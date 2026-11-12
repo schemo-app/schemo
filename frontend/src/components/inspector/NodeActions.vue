@@ -9,7 +9,6 @@ import { DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger } from 'reka-ui'
 import {
   BodyKind,
   CaptureSource,
-  DocKind,
   type NodeView,
   type TypeFormat,
 } from '../../../bindings/schemo/internal/domain'
@@ -32,13 +31,7 @@ const { inspection, node, host } = defineProps<{
 const toast = useToast()
 
 const container = computed(() => isContainer(node))
-const kind = computed(() => inspection.kind.value)
-
-// Types are inferred from values, which a table and a JSON document have and markup has not.
-const typeable = computed(
-  () => container.value && (kind.value === DocKind.DocJSON || kind.value === DocKind.DocCSV)
-)
-const bodyable = computed(() => container.value && kind.value === DocKind.DocJSON && !!host?.scriptsLevel)
+const bodyable = computed(() => container.value && !!host?.scriptsLevel)
 
 const formats = ref<TypeFormat[]>([])
 onMounted(async () => (formats.value = (await Inspector.TypeFormats()) ?? []))
@@ -91,7 +84,7 @@ const hidden = computed(
   <Block :title="t('inspector.use')">
     <ActionRow v-if="container" @click="copyText">{{ t('inspector.copyText') }}</ActionRow>
 
-    <DropdownMenu v-if="typeable">
+    <DropdownMenu v-if="container">
       <DropdownMenuTrigger as-child>
         <ActionRow menu>{{ t('inspector.copyTypes') }}</ActionRow>
       </DropdownMenuTrigger>

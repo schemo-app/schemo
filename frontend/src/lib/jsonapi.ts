@@ -107,7 +107,7 @@ export function documentVersion(doc: JsonApiDocument | null): string {
 }
 
 /** Type guard checking if an unknown object conforms to JSON:API document structure. */
-export function isJsonApi(obj: unknown): boolean {
+export function isJsonApi(obj: unknown): obj is JsonApiDocument {
   if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return false
   const d = obj as Record<string, unknown>
   if ('jsonapi' in d) return true

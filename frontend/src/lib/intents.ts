@@ -17,6 +17,10 @@ export const searchResponse = createEventHook<void>()
 /** Whether the pane on screen has an answer its field can search — what the menu's row reads. */
 export const responseSearchable = ref(false)
 
+/** Opens the menu for the selected response node. */
+export const responseNodeActions = createEventHook<void>()
+export const responseNodeSelected = ref(false)
+
 // A request for something that is drawn only while its chip is open waits here until it registers,
 // instead of being lost.
 function deferred<T = void>() {

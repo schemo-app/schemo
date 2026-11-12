@@ -25,27 +25,16 @@ export function isContainer(kind: JsonKind): boolean {
   return kind === 'object' || kind === 'array'
 }
 
-/** Whether a key reads after a dot, by the same rule the Go lens writes its paths with. */
-function identifier(key: string): boolean {
-  if (key === '') return false
-  for (let i = 0; i < key.length; i++) {
-    const ch = key[i]
-    const letter = /[A-Za-z_$]/.test(ch)
-    const digit = /[0-9]/.test(ch)
-    if (letter || (i > 0 && digit)) continue
-    return false
-  }
-  return true
-}
+const identifier = /^[\p{L}_][\p{L}\p{Nd}_]*$/u
 
 /** The address of a child, written the way Go writes it, so a path picked here round-trips. */
-function childPath(parent: string, key: string | number): string {
+export function childPath(parent: string, key: string | number): string {
   if (typeof key === 'number') return `${parent}[${key}]`
-  if (identifier(key)) return `${parent}.${key}`
+  if (identifier.test(key)) return `${parent}.${key}`
   return `${parent}['${key.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}']`
 }
 
-/** Every node of a value, keyed by its address; the root is `$` and reads whole. */
+/** Nodes in document order, keyed by address, with the root first. */
 export function buildJsonTree(value: unknown): Map<string, JsonNode> {
   const nodes = new Map<string, JsonNode>()
 
@@ -65,18 +54,6 @@ export function buildJsonTree(value: unknown): Map<string, JsonNode> {
 
   walk(value, '$', '$', null, 0)
   return nodes
-}
-
-/** The nodes in the order the tree draws them: a parent before its children, siblings in place. */
-export function jsonOrder(nodes: Map<string, JsonNode>): JsonNode[] {
-  const out: JsonNode[] = []
-  const dive = (node: JsonNode) => {
-    out.push(node)
-    for (const child of node.children) dive(child)
-  }
-  const root = nodes.get('$')
-  if (root) dive(root)
-  return out
 }
 
 /** A row's words: a primitive shows itself, a container shows how many things stand inside it. */

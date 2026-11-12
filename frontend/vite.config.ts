@@ -13,9 +13,7 @@ const FAMILIES: [string, RegExp][] = [
 ]
 
 function vendorChunk(id: string): string | undefined {
-  if (!id.includes('node_modules')) return undefined
-
-  return FAMILIES.find(([, family]) => family.test(id))?.[0] ?? 'vendor'
+  return FAMILIES.find(([, family]) => family.test(id))?.[0]
 }
 
 export default defineConfig({

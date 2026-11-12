@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import HeaderTable from './HeaderTable.vue'
 import JsonApiSteps from './JsonApiSteps.vue'
@@ -21,20 +21,19 @@ import JsonApiTree from '../json/JsonApiTree.vue'
 import JsonTree from '../json/JsonTree.vue'
 import JsonMap from '../json/JsonMap.vue'
 import JsonTable from '../json/JsonTable.vue'
-import TextViewerTab from './TextViewerTab.vue'
 import SchemaMap from '../json/SchemaMap.vue'
-import NodeInspector from '../inspector/NodeInspector.vue'
+import ResponseNodeBar from '../inspector/ResponseNodeBar.vue'
 import CookiesTab from './CookiesTab.vue'
 import TimingsTab from './TimingsTab.vue'
 import ScriptsTab from './ScriptsTab.vue'
 import type { PaneSource } from '../../stores/content'
 import { formatBytes, t } from '../../i18n'
 import { useCommands } from '../../composables/useCommands'
+import { useIndent } from '../../composables/useIndent'
 import { statusBadgeClass } from '../../lib/format'
 import { useInspection } from '../../composables/useInspection'
 import {
   useCookieUndo,
-  useInspectorPanel,
   useKeepExample,
   useResponseCopy,
   useResponseSearch,
@@ -43,12 +42,17 @@ import {
   type TextViewer,
 } from '../../composables/useResponseView'
 import { useScriptRuns } from '../../composables/useScriptRuns'
-import { responseSearchable, searchResponse } from '../../lib/intents'
+import { responseNodeActions, responseNodeSelected, responseSearchable, searchResponse } from '../../lib/intents'
 import { allResources, resourceMatchesQuery } from '../../lib/jsonapi'
+import { prettyJson } from '../../lib/json'
 import { tabBadge, type BodyView } from '../../lib/responseView'
+import { callOrToast } from '../../lib/calls'
+import { formatResponse, responseParser } from '../../lib/responseFormat'
+
+const RawViewer = defineAsyncComponent(() => import('./RawViewer.vue'))
 
 // Where this pane is drawn: beside the command line, beside a captured request, or inside a
-// collection card. The record is a prop either way; whose state it is (the inspector) is not.
+// collection card.
 const {
   source = 'request',
   record,
@@ -78,8 +82,8 @@ const {
   activeTab,
   bodyView,
   reader,
-  views,
-  viewLabels,
+  viewOptions,
+  nodes,
   selected,
   collapsed,
   bodyInfo,
@@ -91,10 +95,8 @@ const {
   tabs: availableTabs,
   keepReadingAvailable,
   doc,
-  isJson,
   jsonValue,
   arrays,
-  prettyRaw,
   language,
   follow,
   openCookieManager,
@@ -104,58 +106,101 @@ const {
   () => pane
 )
 
-// The readings in the segment's own shape: the label each one is drawn under is the catalogue's.
-const viewOptions = computed(() =>
-  views.value.map((view) => ({ value: view, label: viewLabels.value[view] }))
+const { indent } = useIndent()
+const parser = computed(() => responseParser(record.contentType, language.value))
+const canFormat = computed(() =>
+  activeTab.value === 'body' && reader.value === 'raw' && !!parser.value && !!record.responseBody.trim()
 )
+const formattedBody = ref<string | null>(null)
+const formatting = ref(false)
+let formatRequest = 0
+const displayedBody = computed(() =>
+  reader.value === 'raw' ? formattedBody.value ?? record.responseBody : record.responseBody
+)
+
+async function toggleFormatting() {
+  const selectedParser = parser.value
+  if (!selectedParser || formatting.value) return
+  if (formattedBody.value !== null) {
+    formattedBody.value = null
+    return
+  }
+  const request = ++formatRequest
+  formatting.value = true
+  const text = await callOrToast(
+    formatResponse(record.responseBody, selectedParser, indent.value),
+    'response.raw.formatFailed'
+  )
+  if (request !== formatRequest) return
+  formatting.value = false
+  if (text !== undefined) formattedBody.value = text
+}
 
 const { runs: scriptRuns, isLoading: runsLoading } = useScriptRuns(() => record.id)
 
-// The inspector reads the text on screen, so an offset in the viewer means the same place to Go.
-const inspection = useInspection(() => ({
-  text: prettyRaw.value,
-  contentType: record.contentType ?? '',
-}))
+const inspectable = computed(() => activeTab.value === 'body' && reader.value !== 'raw')
+// The inspector reads the same JSON value as the tree, including how it resolves duplicate keys.
+const inspectionBody = computed(() => inspectable.value ? prettyJson(jsonValue.value) : '')
+const inspection = useInspection(() => inspectionBody.value)
+const { inlineReadings } = inspection
 
 const highlightKey = ref<string | null>(null)
+const nodeBar = useTemplateRef<InstanceType<typeof ResponseNodeBar>>('nodeBar')
+const node = computed(() => {
+  if (!inspectable.value) return null
+  const view = inspection.node.value
+  return view && view.path !== '$' && view.path === selected.value ? view : null
+})
 
-// Switching between history entries keeps the tab being read; only a reading the new record has no
-// room for moves. It comes before the inspector panel: see `useInspectorPanel`.
-watch(() => record.id, () => {
+// The view stays on the same reading when the response changes. Its selection belongs to the old body.
+watch([() => record.id, () => record.responseBody, () => record.contentType], () => {
+  formatRequest++
+  formattedBody.value = null
+  formatting.value = false
   highlightKey.value = null
   inspection.reset()
+  selectPath('$')
   keepReadingAvailable()
-})
-
-const {
-  isOpen: isInspectorOpen,
-  isInspecting,
-  marked,
-  inspectPath,
-  inspectOffset,
-  toggle: toggleInspector,
-  close: closeInspector,
-} = useInspectorPanel({
-  inspection,
-  record: () => record,
-  pane: () => pane,
-  tab: () => activeTab.value,
-})
-
-const inspectorTitle = computed(() => {
-  const shortcut = hint('inspector')
-  return shortcut ? t('response.inspector', { shortcut }) : t('inspector.title')
 })
 
 function highlightResource(key: string) {
   highlightKey.value = key
 }
 
-// The tree's own click selects the node it names and, with the panel open, shows it.
-function pickNode(path: string) {
-  selectPath(path)
-  void inspectPath(path)
+async function pickNode(path: string, event?: MouseEvent) {
+  if (!inspectable.value || !(await inspection.pickPath(path))) return
+  const picked = inspection.node.value
+  if (!picked) return
+  selectPath(picked.path)
+  if (event) {
+    await nextTick()
+    if (node.value === picked) nodeBar.value?.openActions(event)
+  }
 }
+
+function collapseTree() {
+  inspection.clearSelection()
+  collapseAll()
+}
+
+watch(() => pane, inspection.reset)
+watch([() => pane, inspectable], () => {
+  if (!inspectable.value) return
+  if (selected.value !== '$' && inspection.node.value?.path !== selected.value) {
+    void pickNode(selected.value)
+  }
+}, { immediate: true })
+
+const showsTree = computed(() => activeTab.value === 'body' && reader.value === 'tree')
+watch([() => pane, () => record.id, () => record.responseBody, () => record.contentType, showsTree], () => {
+  if (showsTree.value) void inspection.loadInlineReadings()
+}, { immediate: true })
+
+responseNodeActions.on(() => nodeBar.value?.openActions())
+watch(() => !!node.value, (available) => {
+  responseNodeSelected.value = available
+}, { immediate: true })
+onBeforeUnmount(() => (responseNodeSelected.value = false))
 
 function openResourceInBody(key: string) {
   highlightKey.value = key
@@ -197,9 +242,9 @@ function jsonApiMatches(query: string): number {
 // What the search on screen walks: a JSON:API document is counted by its own readers, and any other
 // JSON by the tree or the map that is drawn.
 function bodyMatches(query: string): number {
-  if (bodyView.value === 'table') return jsonTable.value?.matches ?? 0
-  if (bodyView.value === 'tree') return doc.value ? jsonApiMatches(query) : (jsonTree.value?.matches ?? 0)
-  if (bodyView.value === 'map') return doc.value ? (schemaMap.value?.matchCount ?? 0) : (jsonMap.value?.matches ?? 0)
+  if (reader.value === 'table') return jsonTable.value?.matches ?? 0
+  if (reader.value === 'tree') return doc.value ? jsonApiMatches(query) : (jsonTree.value?.matches ?? 0)
+  if (reader.value === 'map') return doc.value ? (schemaMap.value?.matchCount ?? 0) : (jsonMap.value?.matches ?? 0)
   return 0
 }
 
@@ -208,10 +253,9 @@ function bodyMatches(query: string): number {
 const searchKind = computed<SearchKind | null>(() => {
   if (activeTab.value === 'headers' || activeTab.value === 'cookies') return 'list'
   if (activeTab.value !== 'body') return null
-  if (bodyView.value === 'map') return 'map'
-  if (bodyView.value === 'table') return 'list'
-  if (bodyView.value === 'raw') return 'text'
-  return 'tree'
+  if (reader.value === 'table') return 'list'
+  if (reader.value === 'raw') return 'text'
+  return reader.value
 })
 
 function searchMatches(query: string): number {
@@ -223,7 +267,7 @@ function searchMatches(query: string): number {
 // What the field says about itself: a JSON:API document is searched by its own words, and any other
 // reader by a key or a value.
 const searchPlaceholder = computed(() => {
-  if (activeTab.value === 'body' && bodyView.value === 'table') return t('response.table.filter')
+  if (activeTab.value === 'body' && reader.value === 'table') return t('response.table.filter')
   if (activeTab.value === 'headers') return t('response.searchHeaders')
   if (activeTab.value === 'cookies') return t('response.searchCookies')
   if (searchKind.value === 'text') return t('response.text.searchPlaceholder')
@@ -266,15 +310,22 @@ onBeforeUnmount(() => (responseSearchable.value = false))
 const { copied, copy, copyText, copyExport } = useResponseCopy({
   record: () => record,
   tab: () => activeTab.value,
-  prettyRaw: () => prettyRaw.value,
+  bodyText: () => displayedBody.value,
   exportText: (format) => schemaMap.value?.exportText(format),
 })
 
 const { touched: wroteCookies, undoing, undo: undoCookies } = useCookieUndo(() => record)
 
-// The map of a JSON:API document exports in other shapes as well, which is a menu rather than a
-// mark: anywhere else the button copies the body as it stands.
-const copyIsMenu = computed(() => activeTab.value === 'body' && reader.value === 'map' && !!doc.value)
+const copyIsMenu = computed(() =>
+  inspectable.value && (!!node.value || !!schemaMap.value?.exportFormats.length)
+)
+
+async function copySelectedValue() {
+  const picked = node.value
+  if (!picked) return
+  const value = await inspection.valueOf(picked)
+  if (value !== null) await copy(value)
+}
 
 // An answer that came back empty says so; a cancelled or failed one already has its own banner.
 const hintText = computed(() => {
@@ -285,20 +336,16 @@ const hintText = computed(() => {
 function onWindowKeydown(e: KeyboardEvent) {
   // What searching the answer and the inspector are bound to comes from the registry.
   if (matches('inspector', e)) {
-    e.preventDefault()
-    if (!e.repeat && activeTab.value === 'body') toggleInspector()
+    if (node.value) {
+      e.preventDefault()
+      if (!e.repeat) nodeBar.value?.openActions()
+    }
   } else if (matches('find', e) && searchable.value) {
     e.preventDefault()
     if (!e.repeat) openSearch()
   } else if (e.key === 'Escape' && searching.value && document.activeElement !== searchField.value) {
     closeSearch()
   }
-}
-
-function inspectTableRow(path: string) {
-  if (!isInspectorOpen.value) toggleInspector()
-  selectPath(path)
-  void inspectPath(path)
 }
 
 useEventListener(window, 'keydown', onWindowKeydown)
@@ -324,15 +371,9 @@ useEventListener(window, 'keydown', onWindowKeydown)
           :searchable
           :searching
           :search-title="searchTitle"
-          :inspectable="activeTab === 'body'"
-          :inspector-open="isInspectorOpen"
-          :inspector-title="inspectorTitle"
-          @toggle-inspector="toggleInspector"
           @toggle-search="searching ? closeSearch() : openSearch()"
         >
           <template #leading>
-            <!-- The mark acts on the answer as a whole, so it stands where the answer is read:
-                 the body's tab, as the inspector beside it does. -->
             <Popover v-if="activeTab === 'body' && canKeep" v-model:open="isKeeping">
               <PopoverTrigger as-child>
                 <IconButton
@@ -410,7 +451,12 @@ useEventListener(window, 'keydown', onWindowKeydown)
                 <Icon name="ChevronDown" :size="8" :stroke-width="3" class="row-action-caret" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent :side-offset="4">
+            <DropdownMenuContent class="copy-menu" :side-offset="4">
+              <DropdownMenuItem @select="copy(copyText ?? '')">{{ t('response.copyBody') }}</DropdownMenuItem>
+              <template v-if="node">
+                <DropdownMenuItem @select="copySelectedValue">{{ t('response.copySelected') }}</DropdownMenuItem>
+                <DropdownMenuItem @select="copy(node.path)">{{ t('inspector.copyPath') }}</DropdownMenuItem>
+              </template>
               <DropdownMenuItem v-for="f in schemaMap?.exportFormats ?? []" :key="f.id" @select="copyExport(f.id)">
                 {{ f.label }}
               </DropdownMenuItem>
@@ -425,6 +471,20 @@ useEventListener(window, 'keydown', onWindowKeydown)
             @click="copy(copyText)"
           >
             <Icon :name="copied ? 'Check' : 'Copy'" :size="16" :stroke-width="1.8" />
+          </IconButton>
+          <IconButton
+            v-if="canFormat"
+            variant="bare"
+            size="bar"
+            class="row-mark"
+            :class="{ on: formattedBody !== null }"
+            :hint="t('response.raw.format')"
+            :aria-label="t('response.raw.format')"
+            :aria-pressed="formattedBody !== null"
+            :disabled="formatting"
+            @click="toggleFormatting"
+          >
+            <Icon name="AlignLeft" :size="16" :stroke-width="1.8" />
           </IconButton>
         </ResponseBar>
       </div>
@@ -448,17 +508,29 @@ useEventListener(window, 'keydown', onWindowKeydown)
       <div class="resp-main">
         <TabsContent class="resp-tab" value="body">
           <!-- JSON arrays also have a table; other formats are read as text. -->
-          <div v-if="isJson" class="body-bar">
+          <div v-if="viewOptions.length > 1" class="body-bar">
             <Segment
               class="flex-none"
               size="xs"
               :grow="false"
               :options="viewOptions"
-              :value="bodyView"
+              :value="reader"
               @pick="bodyView = $event as BodyView"
             />
-            <span class="body-info">{{ bodyInfo }}</span>
-            <template v-if="bodyView === 'tree'">
+            <ResponseNodeBar
+              v-if="node"
+              ref="nodeBar"
+              :node
+              :inspection
+              :host="captureHost"
+              :body="inspectionBody"
+              :status="record.status"
+              :can-follow="hasHistory"
+              @pick="pickNode"
+              @follow="follow"
+            />
+            <span v-else-if="reader !== 'raw'" class="body-info">{{ bodyInfo }}</span>
+            <template v-if="!doc && reader === 'tree'">
               <IconButton
                 variant="bare"
                 size="xl"
@@ -471,21 +543,21 @@ useEventListener(window, 'keydown', onWindowKeydown)
                 variant="bare"
                 size="xl"
                 :hint="t('response.collapseAll')"
-                @click="collapseAll"
+                @click="collapseTree"
               >
                 <Icon name="ChevronsDownUp" :size="14" :stroke-width="1.9" />
               </IconButton>
             </template>
           </div>
 
-          <div class="resp-content" :class="{ 'resp-viewport': reader === 'table' || (!doc && reader !== 'text') }">
+          <div class="resp-content" :class="{ 'resp-viewport': reader === 'table' || (!doc && reader !== 'raw') }">
             <JsonTable
               v-if="reader === 'table'"
               ref="jsonTable"
               :arrays
               :selected
               :query
-              @inspect="inspectTableRow"
+              @inspect="pickNode"
             />
             <template v-else-if="reader === 'tree'">
               <!-- A JSON:API answer keeps the steps through its pages over the tree: they are where
@@ -497,8 +569,9 @@ useEventListener(window, 'keydown', onWindowKeydown)
                     :doc
                     :query
                     :highlight-key
+                    :readings="inlineReadings"
                     @select="highlightResource"
-                    @inspect="inspectPath"
+                    @inspect="pickNode"
                     @fetch="follow"
                   />
                 </div>
@@ -506,11 +579,12 @@ useEventListener(window, 'keydown', onWindowKeydown)
               <JsonTree
                 v-else
                 ref="jsonTree"
-                :value="jsonValue"
+                :nodes
+                :readings="inlineReadings"
                 :query
                 :collapsed
                 :selected
-                @select="pickNode"
+                @inspect="pickNode"
                 @toggle="toggleNode"
               />
             </template>
@@ -527,22 +601,19 @@ useEventListener(window, 'keydown', onWindowKeydown)
               <JsonMap
                 v-else
                 ref="jsonMap"
-                :value="jsonValue"
+                :nodes
                 :query
                 :selected
-                @select="pickNode"
+                @inspect="pickNode"
               />
             </template>
-            <TextViewerTab
+            <RawViewer
               v-else
               ref="bodyTextViewer"
-              :text="prettyRaw"
+              :text="displayedBody"
               :language
               :query
-              :mark="marked"
-              :picking="isInspecting"
               @stats="setTextStats"
-              @pick="inspectOffset"
             />
 
             <div v-if="hintText" class="resp-hint">{{ hintText }}</div>
@@ -586,16 +657,6 @@ useEventListener(window, 'keydown', onWindowKeydown)
             <SentRequest :record />
           </div>
         </TabsContent>
-        <NodeInspector
-          v-if="isInspecting"
-          :inspection
-          :source
-          :pane
-          :can-follow="hasHistory"
-          @close="closeInspector"
-          @fetch="follow"
-          @pick="inspectPath"
-        />
       </div>
     </Tabs>
   </div>

@@ -1254,7 +1254,8 @@ mark.search-match.current {
 }
 
 .ja-caret {
-  @apply inline-flex items-center justify-center w-3 h-3 flex-none text-text-secondary;
+  @apply inline-grid place-items-center w-3 h-3 flex-none text-text-tertiary;
+  font: var(--mono-size)/1 var(--mono);
   transition: transform 0.12s ease;
 }
 

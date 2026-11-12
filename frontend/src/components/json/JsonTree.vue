@@ -1,47 +1,44 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Icon from '../ui/Icon.vue'
 import JsonRows from './JsonRows.vue'
-import {
-  buildJsonTree,
-  isContainer,
-  jsonOrder,
-  jsonValueView,
-  type JsonNode,
-} from '../../lib/jsonTree'
-import { textOf } from '../../i18n'
+import JsonValueNote from './JsonValueNote.vue'
+import { isContainer, jsonValueView, type JsonNode } from '../../lib/jsonTree'
+import type { InlineReadings } from '../../lib/reading'
+import { t, textOf } from '../../i18n'
 
 // A JSON body, read as a tree: every value under the key that names it, in the order it was
 // written. An answer that is JSON:API has a tree of its own; this one is for everything else the
 // server sends.
 const {
-  value,
+  nodes,
+  readings,
   query = '',
   collapsed = {},
   selected = '$',
 } = defineProps<{
-  value: unknown
+  nodes: ReadonlyMap<string, JsonNode>
+  readings?: InlineReadings
   query?: string
   collapsed?: Record<string, boolean>
   selected?: string
 }>()
 
 const emit = defineEmits<{
-  (e: 'select', path: string): void
-  (e: 'toggle', path: string): void
+  inspect: [path: string, event?: MouseEvent]
+  toggle: [path: string]
 }>()
 
-const nodes = computed(() => buildJsonTree(value))
+const rows = computed(() => {
+  const visible: JsonNode[] = []
 
-const rows = computed(() => jsonOrder(nodes.value).filter((node) => node.path !== '$' && !hidden(node)))
-
-/** A row under a folded one is not drawn: what is folded is the whole of what it holds. */
-function hidden(node: JsonNode): boolean {
-  for (let up = node.parent; up && up !== '$'; up = nodes.value.get(up)?.parent ?? null) {
-    if (collapsed[up]) return true
+  function add(node: JsonNode) {
+    visible.push(node)
+    if (!collapsed[node.path]) node.children.forEach(add)
   }
-  return false
-}
+
+  nodes.get('$')?.children.forEach(add)
+  return visible
+})
 
 function count(kind: 'fields' | 'items', n: number): string {
   return textOf(kind === 'fields' ? 'response.jsonFields' : 'response.jsonItems', n)
@@ -63,25 +60,19 @@ function matchesSearch(node: JsonNode): boolean {
 
 /** How many rows the query found, counted over the whole document rather than its drawn part. */
 const matches = computed(() => {
-  const searched = needle.value
-  if (!searched) return 0
+  if (!needle.value) return 0
   let count = 0
-  for (const node of nodes.value.values()) {
-    if (node.path === '$') continue
-    if (String(node.key).toLowerCase().includes(searched)) {
-      count++
-      continue
-    }
-    if (!isContainer(node.kind) && String(node.value).toLowerCase().includes(searched)) count++
+  for (const node of nodes.values()) {
+    if (node.path !== '$' && matchesSearch(node)) count++
   }
   return count
 })
 
-defineExpose({ matches, nodes })
+defineExpose({ matches })
 
 function pick(node: JsonNode, event: MouseEvent) {
   if (event.detail > 1) return
-  emit('select', node.path)
+  emit('inspect', node.path)
 }
 
 function wantToggle(node: JsonNode) {
@@ -105,17 +96,24 @@ const INK: Record<string, string> = {
         :style="{ paddingLeft: `${0.75 + (node.depth - 1) * 1.125}rem` }"
         @click="pick(node, $event)"
         @dblclick="wantToggle(node)"
+        @contextmenu.prevent="emit('inspect', node.path, $event)"
       >
-        <span
+        <button
+          v-if="isContainer(node.kind)"
+          type="button"
           class="tree-caret"
-          :class="{ open: !collapsed[node.path], leaf: !isContainer(node.kind) }"
+          :class="{ open: !collapsed[node.path] }"
+          :aria-expanded="!collapsed[node.path]"
+          :title="t(collapsed[node.path] ? 'response.raw.unfoldLine' : 'response.raw.foldLine')"
+          :aria-label="t(collapsed[node.path] ? 'response.raw.unfoldLine' : 'response.raw.foldLine')"
           @click.stop="wantToggle(node)"
-        >
-          <Icon name="ChevronRight" :size="8" :stroke-width="3" />
-        </span>
+          @dblclick.stop
+        >›</button>
+        <span v-else class="tree-caret leaf" aria-hidden="true"></span>
         <span class="tree-key" :class="{ index: typeof node.key === 'number' }">{{ node.key }}</span>
         <span class="tree-colon">:</span>
         <span class="tree-val" :class="INK[view(node).ink]">{{ view(node).text }}</span>
+        <JsonValueNote v-if="readings?.[node.path]" :reading="readings[node.path]" />
       </div>
     </JsonRows>
   </div>
@@ -152,10 +150,16 @@ const INK: Record<string, string> = {
 }
 
 .tree-caret {
-  @apply flex-none inline-flex items-center justify-center text-text-tertiary;
+  @apply flex-none inline-grid place-items-center text-text-tertiary border-0 bg-transparent;
   width: 1rem;
   height: 1.25rem;
+  padding: 0;
+  font: var(--mono-size)/1 var(--mono);
   transition: transform 0.12s ease;
+}
+
+.tree-caret:hover {
+  @apply cursor-pointer text-text;
 }
 
 .tree-caret.open {

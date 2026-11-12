@@ -48,5 +48,5 @@ export interface ResponseViewState {
 }
 
 export function freshResponseView(): ResponseViewState {
-  return { tab: 'body', bodyView: 'raw', collapsed: {}, selPath: '$' }
+  return { tab: 'body', bodyView: 'tree', collapsed: {}, selPath: '$' }
 }

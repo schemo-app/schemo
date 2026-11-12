@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useTimeoutFn } from '@vueuse/core'
 import Icon from '../ui/Icon.vue'
 import Button from '../ui/Button.vue'
@@ -16,7 +16,7 @@ import { t } from '../../i18n'
 
 // Takes the value into a variable, the step between one request and the next. It guesses the name,
 // the place and whether it is a secret, so that the usual case is one press.
-const { suggested, secretByDefault, source, path, value, host, heading } = defineProps<{
+const { suggested, secretByDefault, source, path, value, host, heading, compact = false } = defineProps<{
   /** The name the variable is offered under. */
   suggested: string
   secretByDefault: boolean
@@ -31,6 +31,7 @@ const { suggested, secretByDefault, source, path, value, host, heading } = defin
   /** Where the value comes from, said under the title; absent inside the inspector, which already
    *  says so around the form. */
   heading?: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{ done: []; cancel: [] }>()
@@ -38,6 +39,7 @@ const emit = defineEmits<{ done: []; cancel: [] }>()
 const environments = useEnvironmentsStore()
 
 const name = ref(suggested)
+const nameInput = useTemplateRef<InstanceType<typeof Input>>('nameInput')
 const where = ref<'environment' | 'globals'>(environments.activeEnvironment ? 'environment' : 'globals')
 const secret = ref(secretByDefault)
 
@@ -53,7 +55,10 @@ const braceClose = '}}'
 
 // Read once, so the preview below the form and the value saved are the same call's answer.
 const preview = ref<string | null>(null)
-onMounted(async () => (preview.value = await value()))
+onMounted(async () => {
+  if (compact) nameInput.value?.select()
+  preview.value = await value()
+})
 
 const previewLine = computed(() => {
   if (preview.value === null) return ''
@@ -154,24 +159,25 @@ async function undo() {
       <button type="button" class="undo" @click="undo">{{ t('inspector.undo') }}</button>
     </div>
 
-    <form v-else class="form" :class="{ bare: !!heading }" @submit.prevent="save">
-      <div v-if="heading" class="heading">
+    <form v-else class="form" :class="{ bare: !!heading || compact, compact }" @submit.prevent="save">
+      <div v-if="heading || compact" class="heading">
         <span class="heading-title">{{ t('inspector.saveToVariable') }}</span>
-        <span class="heading-sub">{{ heading }}</span>
+        <slot v-if="compact" name="heading" :preview="previewLine" />
+        <span v-else class="heading-sub">{{ heading }}</span>
       </div>
 
       <label class="field">
         <span class="label">{{ t('inspector.save.name') }}</span>
         <div class="name-box">
           <span class="brace">{{ braceOpen }}</span>
-          <Input v-model="name" variant="bare" size="sm" mono autofocus class="name-input" />
+          <Input ref="nameInput" v-model="name" variant="bare" size="sm" mono autofocus class="name-input" />
           <span class="brace">{{ braceClose }}</span>
         </div>
       </label>
       <p v-if="!valid" class="hint bad">{{ t('inspector.save.badName') }}</p>
 
       <div class="field">
-        <span class="label">{{ t('inspector.save.where') }}</span>
+        <span :class="compact ? 'sr-only' : 'label'">{{ t('inspector.save.where') }}</span>
         <Segment
           :options="[
             {
@@ -187,26 +193,28 @@ async function undo() {
         />
       </div>
 
-      <label class="toggle-row">
-        <Checkbox v-model="secret" tone="secret" />
-        <span class="toggle-copy">
-          <span class="toggle-title">{{ t('inspector.save.secret') }}</span>
-          <span class="toggle-hint">{{ t('inspector.save.secretHint') }}</span>
-        </span>
-      </label>
+      <div class="toggles">
+        <label class="toggle-row" :title="compact ? t('inspector.save.secretHint') : undefined">
+          <Checkbox v-model="secret" tone="secret" />
+          <span class="toggle-copy">
+            <span class="toggle-title">{{ t(compact ? 'inspector.save.secretShort' : 'inspector.save.secret') }}</span>
+            <span v-if="!compact" class="toggle-hint">{{ t('inspector.save.secretHint') }}</span>
+          </span>
+        </label>
 
-      <label v-if="host?.scriptsLevel" class="toggle-row">
-        <Checkbox v-model="keep" />
-        <span class="toggle-copy">
-          <span class="toggle-title">{{ t('inspector.save.keep') }}</span>
-          <span class="toggle-hint">{{ t('inspector.save.keepHint') }}</span>
-        </span>
-      </label>
+        <label v-if="host?.scriptsLevel" class="toggle-row" :title="compact ? t('inspector.save.keepHint') : undefined">
+          <Checkbox v-model="keep" />
+          <span class="toggle-copy">
+            <span class="toggle-title">{{ t(compact ? 'inspector.save.keepShort' : 'inspector.save.keep') }}</span>
+            <span v-if="!compact" class="toggle-hint">{{ t('inspector.save.keepHint') }}</span>
+          </span>
+        </label>
+      </div>
 
-      <div class="preview">{{ previewLine }}</div>
+      <div v-if="!compact" class="preview">{{ previewLine }}</div>
 
       <div class="buttons">
-        <span class="keys">{{ t('inspector.save.hint') }}</span>
+        <span v-if="!compact" class="keys">{{ t('inspector.save.hint') }}</span>
         <Button type="button" variant="outline" size="md" @click="emit('cancel')">
           {{ t('common.cancel') }}
         </Button>
@@ -233,6 +241,30 @@ async function undo() {
 .form.bare {
   @apply rounded-none p-0;
   background: transparent;
+}
+
+.compact .heading {
+  @apply flex-row items-center gap-2 min-w-0;
+}
+
+.compact .heading-title {
+  @apply flex-1 min-w-0;
+}
+
+.compact .toggles {
+  @apply flex-row flex-wrap gap-x-4 gap-y-1;
+}
+
+.compact .toggle-row {
+  @apply items-center gap-2;
+}
+
+.compact .name-box {
+  height: 2rem;
+}
+
+.toggles {
+  @apply flex flex-col gap-3;
 }
 
 .field {

@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { t } from '../../i18n'
 import { prettyJson } from '../../lib/json'
+import type { InlineReadings } from '../../lib/reading'
 import {
   buildResourceIndex,
   dataResources,
@@ -10,23 +11,26 @@ import {
   type Resource,
 } from '../../lib/jsonapi'
 import ResourceNode from './ResourceNode.vue'
-import Icon from '../ui/Icon.vue'
 
 
-const { doc, query = '', highlightKey } = defineProps<{
+const { doc, query = '', highlightKey, readings } = defineProps<{
   doc: JsonApiDocument
   highlightKey?: string | null
   query?: string
+  readings?: InlineReadings
 }>()
 
 const emit = defineEmits<{
   (e: 'fetch', url: string): void
   (e: 'select', key: string): void
-  (e: 'inspect', path: string): void
+  (e: 'inspect', path: string, event?: MouseEvent): void
 }>()
 
 const resourceIndex = computed(() => buildResourceIndex(doc))
-const primaryData = computed(() => dataResources(doc))
+const primaryData = computed(() => dataResources(doc).map((resource, index) => ({
+  resource,
+  path: Array.isArray(doc.data) ? `$.data[${index}]` : '$.data',
+})))
 const included = computed(() => doc.included ?? [])
 const errors = computed(() => doc.errors ?? [])
 
@@ -37,7 +41,7 @@ const includedFlatIndex = computed(() => {
 })
 
 function includedPath(r: Resource): string {
-  return 'included[' + (includedFlatIndex.value.get(r.type + '/' + r.id) ?? 0) + ']'
+  return '$.included[' + (includedFlatIndex.value.get(r.type + '/' + r.id) ?? 0) + ']'
 }
 
 const highlightedKey = ref<string | null>(null)
@@ -118,7 +122,7 @@ const isFiltering = computed(() => query.trim().length > 0)
 const filteredData = computed(() => {
   const needle = query.trim().toLowerCase()
   if (!needle) return primaryData.value
-  return primaryData.value.filter((resource) => resourceMatchesQuery(resource, needle))
+  return primaryData.value.filter(({ resource }) => resourceMatchesQuery(resource, needle))
 })
 
 const filteredIncluded = computed(() => {
@@ -180,15 +184,16 @@ const noResults = computed(
         data · {{ t('counts.resources', filteredData.length) }}
       </div>
       <ResourceNode
-        v-for="(r, i) in filteredData"
+        v-for="{ resource: r, path } in filteredData"
         :key="r.type + '/' + r.id"
         :resource="r"
         :resource-index
-        :path="'data[' + i + ']'"
+        :path
+        :readings
         :highlighted="isHighlighted(r.type + '/' + r.id)"
         @jump="jumpTo"
         @fetch="(url) => emit('fetch', url)"
-        @inspect="(path) => emit('inspect', path)"
+        @inspect="(path, event) => emit('inspect', path, event)"
       />
     </template>
 
@@ -216,9 +221,7 @@ const noResults = computed(
 
       <div v-for="g in includedGroups" :key="g.type" class="included-group">
         <button class="included-group-head" @click="toggleGroup(g.type)">
-          <span class="ja-caret" :class="{ open: isGroupOpen(g.type) }">
-            <Icon name="ChevronRight" :size="10" />
-          </span>
+          <span class="ja-caret" :class="{ open: isGroupOpen(g.type) }" aria-hidden="true">›</span>
           <span class="ja-type-badge">{{ g.type }}</span>
           <span class="group-res-count">
             {{ t('counts.resources', g.resources.length) }}
@@ -232,10 +235,11 @@ const noResults = computed(
             :resource="r"
             :resource-index
             :path="includedPath(r)"
+            :readings
             :highlighted="isHighlighted(r.type + '/' + r.id)"
             @jump="jumpTo"
             @fetch="(url) => emit('fetch', url)"
-            @inspect="(path) => emit('inspect', path)"
+            @inspect="(path, event) => emit('inspect', path, event)"
           />
         </div>
       </div>

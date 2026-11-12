@@ -736,7 +736,7 @@ test('an inherited publication notice opens the parent settings and follows publ
 function inspectionFor(context, body) {
   const scope = effectScope()
   context.after(() => scope.stop())
-  return scope.run(() => useInspection(() => ({ text: body.value, contentType: 'application/json' })))
+  return scope.run(() => useInspection(() => body.value))
 }
 
 test('inspector shares document opening and ignores answers for the previous body', async (context) => {
@@ -746,17 +746,17 @@ test('inspector shares document opening and ignores answers for the previous bod
     opened++
     return text === 'old' ? older.promise : CancellablePromise.resolve({ id: 'new', kind: 'json' })
   }
+  ports.services.Inspect.Node = (_, path) => CancellablePromise.resolve({ path })
   const body = ref('old')
   const inspection = inspectionFor(context, body)
-  const first = inspection.ensure()
-  const same = inspection.ensure()
+  const first = inspection.pickPath('$.old')
+  const same = inspection.pickPath('$.alsoOld')
   assert.equal(opened, 1)
   body.value = 'new'
-  await inspection.ensure()
-  older.resolve({ id: '', kind: '' })
-  await Promise.all([first, same])
-  assert.equal(inspection.readable.value, true)
-  assert.equal(inspection.kind.value, 'json')
+  assert.equal(await inspection.pickPath('$.new'), true)
+  older.resolve({ id: 'old', kind: 'json' })
+  assert.deepEqual(await Promise.all([first, same]), [false, false])
+  assert.equal(inspection.node.value.path, '$.new')
 })
 
 test('inspector keeps the latest selection when node reads finish out of order', async (context) => {

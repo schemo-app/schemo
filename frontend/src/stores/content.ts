@@ -2,7 +2,6 @@ import { computed, effectScope, reactive, ref, shallowReactive, type ComputedRef
 import { TabKind, type Draft, type DraftID, type Record as RequestRecord, type ResponseExample, type Tab, BodySide } from '../../bindings/schemo/internal/domain'
 import { Drafts, type NodeEditor, type Seed, History } from '../../bindings/schemo/internal/request'
 import type { RecordView } from '../lib/requestRecord'
-import { freshInspector, type InspectorState } from '../lib/inspector'
 import { freshResponseView, type ResponseViewState } from '../lib/responseView'
 import { t } from '../i18n'
 import { callOrToast } from '../lib/calls'
@@ -173,23 +172,6 @@ export async function recordInto(tabId: string, recordId: string) {
   const instance = instances.get(tabId)
   if (!instance || instance.kind !== TabKind.TabKindRequest) return
   await instance.showRecord(recordId)
-}
-
-// The inspector a tab without a draft still has: a captured response is inspected the same way, and
-// there is no draft under it to keep the width on.
-const bareInspector = ref<InspectorState>(freshInspector())
-
-/** The inspector the viewer draws with — the pane's own, or the window's when the tab has none. */
-export function inspectorState(pane: PaneSource | null): InspectorState {
-  return pane?.inspector ?? bareInspector.value
-}
-
-export function setInspectorState(
-  pane: PaneSource | null,
-  partial: Partial<InspectorState>
-) {
-  if (pane) pane.setInspector(partial)
-  else bareInspector.value = { ...bareInspector.value, ...partial }
 }
 
 const bareResponseView = ref<ResponseViewState>(freshResponseView())

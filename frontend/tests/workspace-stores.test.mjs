@@ -12,6 +12,7 @@ globalThis.environmentServices = {}
 globalThis.cookieServices = {}
 globalThis.runServices = {}
 globalThis.draftServices = {}
+globalThis.scriptServices = {}
 globalThis.tabContent = {}
 globalThis.collectionServices = {}
 globalThis.recordServices = {}
@@ -32,7 +33,7 @@ const load = await vite({
     export const Drafts = globalThis.draftServices
     export const Cookies = globalThis.cookieServices
     export const Runs = globalThis.runServices`,
-  '/bindings/schemo/internal/script/index.ts': 'export const Scripts = {}',
+  '/bindings/schemo/internal/script/index.ts': 'export const Scripts = globalThis.scriptServices',
   '/bindings/schemo/internal/workspace/index.ts': `export const Collections = globalThis.collectionServices
     export const Workspaces = globalThis.workspaceServices
     export const Environments = globalThis.environmentServices`,
@@ -754,6 +755,30 @@ function draftForTest(persisted = true) {
   draft.load({ id: 'tab:draft', method: 'GET', url: '', body: '', params: [], headers: [], pathParams: [], form: [] })
   return draft
 }
+
+test('adding a response check keeps the latest script edits and their disabled flags', async () => {
+  const draft = useDraft({ persisted: () => true, finished: async () => {}, scriptsLevel: () => 'draft' })
+  const editorSave = deferred()
+  const writes = []
+  let saved = { pre: 'oldPre()', post: 'oldPost()' }
+  globalThis.scriptServices.Scripts = () => CancellablePromise.resolve(saved)
+  globalThis.scriptServices.Chain = () => CancellablePromise.resolve([])
+  globalThis.scriptServices.SaveScripts = async (id, scripts) => {
+    writes.push(id)
+    await editorSave.promise
+    saved = scripts
+    return saved
+  }
+
+  const editing = draft.saveScripts('newPre()', 'newPost()', { pre: false, post: true })
+  const check = 'pm.test("id", () => pm.expect(pm.response.json().id).to.equal(42));'
+  const adding = draft.appendPostScript(check)
+  editorSave.resolve()
+  await editing
+  assert.equal(await adding, true)
+  assert.deepEqual(writes, ['draft', 'draft'])
+  assert.deepEqual(saved, { pre: 'newPre()', preOff: false, post: `newPost()\n${check}`, postOff: true })
+})
 
 test('bulk row replacement updates the query atomically and leaves header edits out of the URL', () => {
   const draft = draftForTest(false)

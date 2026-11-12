@@ -20,7 +20,6 @@ import {
 import { Scripts as ScriptsService, type Level } from '../../bindings/schemo/internal/script'
 import { History } from '../../bindings/schemo/internal/request'
 import { t } from '../i18n'
-import { freshInspector, type InspectorState } from '../lib/inspector'
 import { followUrl, mintRowId, writeParams } from '../lib/draftRows'
 import { FLUSH_MS } from './useDeferredWrite'
 import { takeAnswer } from '../lib/earlyAnswers'
@@ -358,6 +357,7 @@ export function useDraft(target: DraftTarget) {
   const scriptsFor = ref<string | null>(null)
   const scripts = ref<Scripts | null>(null)
   const chain = ref<Level[]>([])
+  let scriptWrites: Promise<unknown> = Promise.resolve()
 
   async function readChain(id: string, own: Scripts | null) {
     const levels = await callOrToast(ScriptsService.Chain(id), 'request.readFailed')
@@ -374,14 +374,42 @@ export function useDraft(target: DraftTarget) {
     if (own !== undefined) await readChain(id, own)
   }
 
+  // Appending a check reads after queued editor saves, so it cannot replace a recent edit.
+  function writeScripts(id: string, read: () => Promise<Scripts | null | undefined>): Promise<boolean> {
+    const writing = scriptWrites.then(async () => {
+      const written = await read()
+      if (written === undefined) return false
+      const saved = await callOrToast(ScriptsService.SaveScripts(id, written), 'request.editFailed')
+      if (saved === undefined) return false
+      await readChain(id, saved)
+      return true
+    })
+    scriptWrites = writing.catch(() => {})
+    return writing
+  }
+
   async function saveScripts(pre: string, post: string, off: { pre: boolean; post: boolean }) {
     const id = target.scriptsLevel()
     if (!id) return
-    const written = pre.trim() || post.trim()
+    await writeScripts(id, async () => pre.trim() || post.trim()
       ? { pre, post, preOff: off.pre && !!pre.trim(), postOff: off.post && !!post.trim() }
       : null
-    const saved = await callOrToast(ScriptsService.SaveScripts(id, written), 'request.editFailed')
-    if (saved !== undefined) await readChain(id, saved)
+    )
+  }
+
+  function appendPostScript(statement: string): Promise<boolean> {
+    const id = target.scriptsLevel()
+    if (!id) return Promise.resolve(false)
+    return writeScripts(id, async () => {
+      const own = await callOrToast(ScriptsService.Scripts(id), 'request.readFailed')
+      if (own === undefined) return undefined
+      return {
+        pre: own?.pre ?? '',
+        preOff: own?.preOff ?? false,
+        post: [own?.post?.trimEnd(), statement].filter(Boolean).join('\n'),
+        postOff: own?.postOff ?? false,
+      }
+    })
   }
 
   const captures = computed<Capture[]>(() => scripts.value?.captures ?? [])
@@ -406,14 +434,9 @@ export function useDraft(target: DraftTarget) {
   }
 
   const openChip = ref<ChipName | null>('params')
-  const inspector = ref<InspectorState>(freshInspector())
 
   function setOpenChip(chip: ChipName | null) {
     openChip.value = chip
-  }
-
-  function setInspector(partial: Partial<{ open: boolean; width: number }>) {
-    inspector.value = { ...inspector.value, ...partial }
   }
 
   return {
@@ -475,11 +498,10 @@ export function useDraft(target: DraftTarget) {
     captures,
     loadScripts,
     saveScripts,
+    appendPostScript,
     saveCaptures,
     inheritedScript,
     openChip,
-    inspector,
     setOpenChip,
-    setInspector,
   }
 }
