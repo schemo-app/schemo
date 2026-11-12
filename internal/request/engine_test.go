@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -73,6 +74,35 @@ func TestARedirectedAnswerReportsWhereItCameFrom(t *testing.T) {
 	plain := send(newTestEngine(t, EngineConfig{}), http.MethodGet, landing.URL, nil, "")
 	if plain.FinalURL != landing.URL {
 		t.Errorf("final url = %q, want the address that was asked", plain.FinalURL)
+	}
+}
+
+func TestHTTP1ModeNegotiatesHTTP1(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, r.Proto)
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	settings := domain.DefaultRequests()
+	settings.HTTPVersion = domain.HTTP1
+	engine := newTestEngine(t, EngineConfig{Requests: settings})
+	transport := engine.net.plain
+	// Trust the fixture while retaining the cloned TLS config's ALPN list.
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	transport.TLSClientConfig.RootCAs = x509.NewCertPool()
+	transport.TLSClientConfig.RootCAs.AddCert(server.Certificate())
+
+	res := send(engine, http.MethodGet, server.URL, nil, "")
+	if res.Status != http.StatusNotFound || res.Body != "HTTP/1.1" || res.Error != "" {
+		t.Fatalf("GET with HTTP/1.1 forced returned status %d, body %q, error %q; want 404, HTTP/1.1, no error",
+			res.Status, res.Body, res.Error)
 	}
 }
 

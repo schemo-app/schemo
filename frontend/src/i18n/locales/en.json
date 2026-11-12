@@ -16,6 +16,7 @@
   },
   "units": {
     "ms": "ms",
+    "s": "s",
     "b": "B",
     "kb": "KB",
     "mb": "MB",
@@ -183,16 +184,8 @@
     "installing": "Installing the update…"
   },
   "request": {
-    "urlPlaceholder": "Start typing the request address.",
-    "recent": "Recent",
-    "frequent": "Frequent",
-    "recentCopy": "Opens a copy as a draft",
-    "recentCurlTitle": "Paste a cURL",
-    "recentCurlNote": "The parameters will be filled in automatically",
-    "recentSaveTitle": "Save to a collection",
-    "recentSaveNote": "Until then the draft lives in the history",
-    "freqCalls": "Calls",
-    "freqLast": "Last",
+    "urlPlaceholder": "Request URL or cURL command",
+    "pasteCurl": "Paste a cURL command",
     "chips": {
       "params": "Params",
       "headers": "Headers",
@@ -539,7 +532,6 @@
     },
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
-    "hintSend": "Press “Send” or ⌘↵",
     "hintEmptyBody": "An empty body · {status}",
     "jsonFields": "{n} field | {n} fields",
     "jsonItems": "{n} item | {n} items",
@@ -618,6 +610,8 @@
     },
     "raw": {
       "foldedLines": "{n} line | {n} lines",
+      "foldLine": "Fold line",
+      "unfoldLine": "Unfold line",
       "expand": "Expand"
     },
     "table": {
@@ -811,7 +805,7 @@
     "waiting": "Waiting for capture"
   },
   "history": {
-    "emptySent": "Nothing sent yet.",
+    "empty": "History is empty",
     "loadingOlder": "Loading…",
     "today": "Today",
     "yesterday": "Yesterday",
@@ -830,7 +824,13 @@
     "filterAll": "All",
     "filterManual": "Manual",
     "filterBrowser": "Browser",
-    "filterMcp": "Agents",
+    "filterMcp": "MCP",
+    "errors": "Errors",
+    "errorsHint": "HTTP statuses 4xx and 5xx",
+    "slow": "Slow",
+    "slowHint": "One second or longer",
+    "showRepeated": "Show all {n} requests",
+    "collapseRepeated": "Collapse requests",
     "sourceAgent": "MCP · {agent}",
     "session": "Tab: {title}",
     "countOf": "{shown} of {total}",
@@ -845,7 +845,6 @@
     "colStatus": "Status",
     "colTime": "Time",
     "colSize": "Size",
-    "colSource": "Source",
     "colWhen": "When"
   },
   "extension": {

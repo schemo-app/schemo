@@ -139,7 +139,12 @@ func newTransport(cfg EngineConfig) *http.Transport {
 	}
 	transport.DisableCompression = !cfg.Requests.AcceptEncoding
 	if cfg.Requests.HTTPVersion == domain.HTTP1 {
-		transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
+		transport.Protocols = new(http.Protocols)
+		transport.Protocols.SetHTTP1(true)
+		// The default transport's TLS config may already advertise HTTP/2.
+		if transport.TLSClientConfig != nil {
+			transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
+		}
 	}
 	return transport
 }

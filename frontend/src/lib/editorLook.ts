@@ -36,7 +36,16 @@ const editorTheme = EditorView.theme({
     color: 'var(--text-tertiary)',
     paddingLeft: '0.3rem',
   },
-  '.cm-foldGutter span': { color: 'var(--text-tertiary)', cursor: 'pointer' },
+  '.cm-foldGutter span': {
+    display: 'grid',
+    placeItems: 'center',
+    width: 'calc(1ch + 2px)',
+    height: '1lh',
+    padding: '0',
+    cursor: 'pointer',
+  },
+  // An empty openText lets the same chevron point down while the line is expanded.
+  '.cm-foldGutter span:empty::before': { content: '"›"', transform: 'rotate(90deg)' },
   '.cm-foldGutter span:hover': { color: 'var(--text)' },
   '.cm-foldPlaceholder': {
     backgroundColor: 'var(--bg-hover)',

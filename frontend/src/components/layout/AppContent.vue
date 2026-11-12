@@ -10,7 +10,7 @@ import CapturePage from '../history/CapturePage.vue'
 import CollectionPage from '../collections/CollectionPage.vue'
 import PublicationsPage from '../cloud/PublicationsPage.vue'
 import RequestBuilder from '../request/RequestBuilder.vue'
-import BlankRequest from '../request/BlankRequest.vue'
+import RequestShortcuts from '../request/RequestShortcuts.vue'
 import CapturedRequestBar from '../response/CapturedRequestBar.vue'
 import ResponseViewer from '../response/ResponseViewer.vue'
 import Spinner from '../ui/Spinner.vue'
@@ -45,7 +45,7 @@ const capturedRecord = computed(() =>
 
 const requestExpanded = computed(() => {
   const pane = tabs.pane
-  return !capturedRecord.value && !!pane?.nodeId && !pane.blank &&
+  return !capturedRecord.value && !!pane?.nodeId &&
     (pane.openChip === 'docs' || pane.openChip === 'examples')
 })
 
@@ -78,17 +78,16 @@ async function openCapturedInRequest() {
         :expanded="requestExpanded"
       />
       <template v-if="!requestExpanded">
-        <BlankRequest v-if="tabs.pane?.blank && !awaiting" :source="tabs.pane" />
-        <template v-else-if="tabs.pane?.record">
+        <template v-if="tabs.pane?.record">
           <ResponseViewer :record="tabs.pane.record" :source="responseSource" :pane="tabs.pane" />
         </template>
         <div
-          v-else-if="!tabs.pane || tabs.pane.blank || tabs.pane.loading || awaiting"
+          v-else-if="!tabs.pane || tabs.pane.loading || awaiting"
           class="empty"
         >
           <Spinner class="text-accent" />
         </div>
-        <div v-else class="resp-hint">{{ t('response.hintSend') }}</div>
+        <RequestShortcuts v-else />
       </template>
     </template>
     <div v-else class="work-empty">
@@ -152,10 +151,5 @@ async function openCapturedInRequest() {
 .work-empty-history {
   background: var(--chip);
   color: var(--text);
-}
-
-.resp-hint {
-  @apply text-13 text-text-tertiary;
-  padding: 0.875rem 1.25rem;
 }
 </style>

@@ -232,9 +232,13 @@ function buildState(doc: string): EditorState {
     extensions: [
       // Line numbers and wrapping are the reader's choice.
       ...editorLook(props.language, { numbers: numbers.value, wrap: wrap.value }),
-      foldGutter(),
+      foldGutter({ openText: '' }),
       folding,
       keymap.of(foldKeymap),
+      EditorState.phrases.of({
+        'Fold line': t('response.raw.foldLine'),
+        'Unfold line': t('response.raw.unfoldLine'),
+      }),
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
       queryField,

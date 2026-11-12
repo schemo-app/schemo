@@ -8,6 +8,7 @@ export {
   ArrowRightLeft,
   ArrowUp,
   ArrowUpRight,
+  Asterisk,
   BookOpen,
   Bookmark,
   BookmarkPlus,

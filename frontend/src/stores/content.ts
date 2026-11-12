@@ -112,8 +112,7 @@ export function dropContent(id: string) {
 // Concurrent callers share the complete load; warming reads only the draft for the title.
 const ensured = new WeakMap<AnyInstance, Promise<void>>()
 
-// The tabs Go has just made, whose draft holds nothing: there is nothing for the pane to wait for,
-// and it draws its own empty page at once. A name is taken where the tab's instance is made.
+// The tabs Go has just made can show their editor before the empty draft is loaded.
 const bornEmpty = new Set<string>()
 
 /** Names a tab Go has just made blank, before anything is read for it. */
@@ -275,10 +274,6 @@ export function paneSource(instance: RequestInstance) {
     canInherit: computed(() => instance.node.value !== null),
     inheritedAuth: draft.inherited,
     canSave: computed(() => instance.node.value === null),
-    blank: computed(
-      () =>
-        instance.node.value === null && instance.record.value === null && !draft.url.value.trim()
-    ),
     record: instance.response,
     nodeEditor: instance.node,
     responseView: instance.responseView,

@@ -33,6 +33,8 @@ export const useRecordsStore = defineStore('records', () => {
   const sessionFilter = ref('')
   const historySource = ref<'all' | 'manual' | 'browser' | 'mcp'>('all')
   const historyQuery = ref('')
+  const historyErrorsOnly = ref(false)
+  const historySlowOnly = ref(false)
   const browserRecords = computed(() => records.value.filter(record => record.source === RecordSource.SourceBrowser))
 
   /** Writes every draft's owed keystrokes home — the window is hiding or the workspace is changing. */
@@ -105,6 +107,8 @@ export const useRecordsStore = defineStore('records', () => {
     sessionFilter.value = ''
     historySource.value = 'all'
     historyQuery.value = ''
+    historyErrorsOnly.value = false
+    historySlowOnly.value = false
   }
 
   // Inserts or updates a record at the head of the list if accepted by workspace filter.
@@ -125,6 +129,8 @@ export const useRecordsStore = defineStore('records', () => {
     sessionFilter.value = key
     historySource.value = 'browser'
     historyQuery.value = ''
+    historyErrorsOnly.value = false
+    historySlowOnly.value = false
     void tabs.openHistory()
   }
 
@@ -204,6 +210,8 @@ export const useRecordsStore = defineStore('records', () => {
     sessionFilter,
     historySource,
     historyQuery,
+    historyErrorsOnly,
+    historySlowOnly,
     browserRecords,
     flush,
     load,

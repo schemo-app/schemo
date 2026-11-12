@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
-import { computed, onScopeDispose, ref } from 'vue'
+import { computed, nextTick, onScopeDispose, ref } from 'vue'
 import { TabKind, type Collection, type DraftID } from '../../bindings/schemo/internal/domain'
 import { Workspaces } from '../../bindings/schemo/internal/workspace'
 import { Drafts } from '../../bindings/schemo/internal/request'
 import { callOrToast, runOrToast } from '../lib/calls'
+import { focusUrlField } from '../lib/intents'
 import { markStep } from '../composables/useGettingStarted'
 import { useSettings } from '../composables/useSettings'
 import * as strip from '../lib/strip'
@@ -118,6 +119,9 @@ export const useTabsStore = defineStore('tabs', () => {
   function newTab() {
     const change = strip.append(state.value)
     apply(change, () => markBornEmpty(change.active))
+    void nextTick(() => {
+      if (activeId.value === change.active) focusUrlField()
+    })
   }
 
   /** Opens the overview page — one of it, as with the history. */

@@ -16,6 +16,7 @@
   },
   "units": {
     "ms": "мс",
+    "s": "с",
     "b": "Б",
     "kb": "КБ",
     "mb": "МБ",
@@ -295,16 +296,8 @@
     "devBuild": "Обновление для сборки из исходников не доступно"
   },
   "request": {
-    "urlPlaceholder": "Начните вводить адрес запроса",
-    "recent": "Недавние",
-    "frequent": "Частые",
-    "recentCopy": "Откроет копию как черновик",
-    "recentCurlTitle": "Вставьте cURL",
-    "recentCurlNote": "Параметры заполнятся автоматически",
-    "recentSaveTitle": "Сохранить в коллекцию",
-    "recentSaveNote": "До этого черновик хранится в истории",
-    "freqCalls": "Вызовов",
-    "freqLast": "Последний",
+    "urlPlaceholder": "Адрес запроса или команда cURL",
+    "pasteCurl": "Вставить cURL",
     "chips": {
       "params": "Параметры",
       "headers": "Заголовки",
@@ -651,7 +644,6 @@
     },
     "expandAll": "Развернуть всё",
     "collapseAll": "Свернуть всё",
-    "hintSend": "Нажмите «Отправить» или ⌘↵",
     "hintEmptyBody": "Пустое тело · {status}",
     "jsonFields": "{n} поле | {n} поля | {n} полей",
     "jsonItems": "{n} элемент | {n} элемента | {n} элементов",
@@ -730,6 +722,8 @@
     },
     "raw": {
       "foldedLines": "{n} строка | {n} строки | {n} строк",
+      "foldLine": "Свернуть строку",
+      "unfoldLine": "Развернуть строку",
       "expand": "Развернуть"
     },
     "table": {
@@ -811,7 +805,7 @@
     "empty": "(пусто)"
   },
   "history": {
-    "emptySent": "Пока ничего не отправлено.",
+    "empty": "История пуста",
     "loadingOlder": "Загрузка…",
     "today": "Сегодня",
     "yesterday": "Вчера",
@@ -830,7 +824,13 @@
     "filterAll": "Все",
     "filterManual": "Вручную",
     "filterBrowser": "Браузер",
-    "filterMcp": "Агенты",
+    "filterMcp": "MCP",
+    "errors": "Ошибки",
+    "errorsHint": "Статусы HTTP 4xx и 5xx",
+    "slow": "Медленные",
+    "slowHint": "От одной секунды",
+    "showRepeated": "Показать все {n}",
+    "collapseRepeated": "Свернуть запросы",
     "sourceAgent": "MCP · {agent}",
     "session": "Вкладка: {title}",
     "countOf": "{shown} из {total}",
@@ -845,7 +845,6 @@
     "colStatus": "Статус",
     "colTime": "Время",
     "colSize": "Размер",
-    "colSource": "Источник",
     "colWhen": "Когда"
   },
   "extension": {

@@ -234,12 +234,12 @@ function useMissingVars(source: RequestSource) {
 <template>
   <div class="request-block" :class="{ 'request-block-expanded': expanded }">
     <div class="bar-row">
-      <div class="url-field" :class="{ 'has-environment': !source.blank }">
+      <div class="url-field">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <button class="method-plate method-btn" :class="methodInkClass(source.method)">
+            <button type="button" class="method-btn" :class="methodInkClass(source.method)">
               <span class="cap-line">{{ source.method }}</span>
-              <Icon name="ChevronDown" :size="10" />
+              <Icon name="ChevronDown" :size="9" :stroke-width="3" class="text-text-tertiary" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" :side-offset="4">
@@ -253,6 +253,7 @@ function useMissingVars(source: RequestSource) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <span class="method-divider" aria-hidden="true"></span>
 
         <div class="url-text">
           <input
@@ -262,6 +263,7 @@ function useMissingVars(source: RequestSource) {
             class="url-input mono"
             :class="{ 'url-input-veiled': showUrlDisplay }"
             :placeholder="t('request.urlPlaceholder')"
+            :aria-label="t('request.urlPlaceholder')"
             spellcheck="false"
             @input="source.setUrl(($event.target as HTMLInputElement).value); syncUrlScroll()"
             @keydown.enter.exact="send"
@@ -333,15 +335,17 @@ function useMissingVars(source: RequestSource) {
             </template>
           </PopoverContent>
         </Popover>
-        <RequestEnvironment v-if="!source.blank" :source="source" />
+        <RequestEnvironment :source="source" />
       </div>
 
-      <span v-if="!source.blank" class="save-anchor">
+      <span class="save-anchor">
         <button
           type="button"
           class="save-icon"
           :class="{ open: saveOpen, live: saveMarked }"
           :title="saveHint"
+          :aria-label="saveHint"
+          :disabled="!saveBound && !canSaveNow"
           @click="save()"
         >
           <Icon :name="saveBound ? 'Save' : 'FolderPlus'" :size="16" />
@@ -387,7 +391,7 @@ function useMissingVars(source: RequestSource) {
       </div>
     </div>
 
-    <RequestPane v-if="!source.blank" :source="source" :expanded="expanded" />
+    <RequestPane :source="source" :expanded="expanded" />
   </div>
 </template>
 
@@ -403,7 +407,13 @@ function useMissingVars(source: RequestSource) {
 }
 
 .method-btn {
-  @apply border-0 cursor-pointer outline-none;
+  @apply flex h-full flex-none items-center border-0 bg-transparent cursor-pointer;
+  gap: 0.375rem;
+  padding: 0 0.625rem 0 0.8125rem;
+  border-radius: 0.5625rem 0 0 0.5625rem;
+  font-family: var(--mono);
+  font-size: var(--text-13);
+  font-weight: 700;
   --wails-draggable: no-drag;
 }
 
@@ -411,13 +421,20 @@ function useMissingVars(source: RequestSource) {
   background: var(--bg-hover);
 }
 
-.url-field.has-environment {
+.method-divider {
+  @apply flex-none;
+  width: 1px;
+  height: 1.125rem;
+  background: var(--border);
+}
+
+.url-field {
   padding-right: 0;
 }
 
 .url-text {
   @apply relative flex-1 flex items-center min-w-0;
-  min-width: 7.5rem;
+  margin: 0 0.75rem;
 }
 
 .url-input {
@@ -481,9 +498,13 @@ function useMissingVars(source: RequestSource) {
   color: var(--text);
 }
 
-.save-icon:hover,
+.save-icon:hover:not(:disabled),
 .save-icon.open {
   background: var(--bg-hover);
+}
+
+.save-icon:disabled {
+  opacity: 0.45;
 }
 
 .unsaved-dot {

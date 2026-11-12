@@ -243,7 +243,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
           <span class="text-right">{{ t('history.colTime') }}</span>
           <span class="text-right">{{ t('history.colSize') }}</span>
         </div>
-        <template v-for="group in groups" :key="group.label">
+        <template v-for="group in groups" :key="group.day">
           <div class="cap-group">{{ group.label }}</div>
           <button
             v-for="record in group.items"

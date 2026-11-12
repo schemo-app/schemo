@@ -32,6 +32,7 @@ export function useRequestSend(source: RequestSource) {
   const disabled = computed(() => !source.loading && !source.url.trim())
 
   async function send() {
+    if (disabled.value || source.loading) return
     try {
       await source.send()
     } catch (error) {

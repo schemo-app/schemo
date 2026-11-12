@@ -13,15 +13,15 @@ export function responseSize(record: Pick<RequestRecord, 'responseBody'>): strin
 }
 
 /** Groups adjacent history records by display date, preserving their order. */
-export function recordsByDay(records: RequestRecord[]): { label: string; items: RequestRecord[] }[] {
-  const groups: { label: string; items: RequestRecord[] }[] = []
+export function recordsByDay(records: RequestRecord[]): { day: number; label: string; items: RequestRecord[] }[] {
+  const groups: { day: number; label: string; items: RequestRecord[] }[] = []
   for (const record of records) {
-    const label = formatDay(record.startedAt)
+    const day = new Date(record.startedAt).setHours(0, 0, 0, 0)
     const last = groups.at(-1)
-    if (last?.label === label) {
+    if (last?.day === day) {
       last.items.push(record)
     } else {
-      groups.push({ label, items: [record] })
+      groups.push({ day, label: formatDay(record.startedAt), items: [record] })
     }
   }
   return groups

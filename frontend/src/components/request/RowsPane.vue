@@ -258,6 +258,7 @@ function patchValue(id: string, value: string) {
 .rows-pane {
   @apply relative flex flex-col;
   padding: 0.5rem 1.1rem 0.5rem 1.1rem;
+  --key-width: min(13.75rem, 40%);
 }
 
 .kv {
@@ -294,14 +295,14 @@ function patchValue(id: string, value: string) {
 }
 
 .kv-row {
-  grid-template-columns: 1.375rem minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+  grid-template-columns: 1.375rem var(--key-width) minmax(0, 1fr) 1.75rem;
   gap: 0;
   height: 2rem;
   border-bottom: 0;
 }
 
 .kv-path .kv-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+  grid-template-columns: var(--key-width) minmax(0, 1fr) 1.75rem;
   padding-left: 1.375rem;
 }
 
