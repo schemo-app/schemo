@@ -1,57 +1,49 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
+import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
+import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
+import EmptyState from '../ui/EmptyState.vue'
 import Icon from '../ui/Icon.vue'
-import Spinner from '../ui/Spinner.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
-import IconButton from '../ui/IconButton.vue'
 import ExampleForm from './ExampleForm.vue'
-import ExampleLive from './ExampleLive.vue'
 import type { RequestSource } from '../../lib/requestSource'
 import { exampleName, exampleOf, isKeepable } from '../../lib/examples'
-import { formatBytes, formatMicros, t } from '../../i18n'
+import { formatBytes, t } from '../../i18n'
 import type { ResponseExample } from '../../../bindings/schemo/internal/domain'
 
-// The answers kept beside a request: what the server last said, read-only, and the examples (what
-// an import carried in and what a send was saved as). The list is here; the last answer is read in
-// ExampleLive and an example is written in ExampleForm.
 const { source } = defineProps<{ source: RequestSource }>()
 
-
-// Which of the two is on the right: the last answer, or the example picked. By index, because an
-// example is a value of the list and not a thing with a name of its own.
-const picked = ref(-1)
-const live = computed(() => picked.value < 0)
-const example = computed<ResponseExample | null>(() => source.responses[picked.value] ?? null)
-// The index of the example just made, whose name is the first thing to write.
+const picked = ref(0)
 const fresh = ref(-1)
+const pane = ref<'body' | 'headers'>('body')
+const example = computed(() => source.responses[picked.value])
+const keepable = computed(() => {
+  const record = source.record
+  return !source.loading && record && isKeepable(record) ? record : null
+})
+const sizeOf = (body?: string) => body ? formatBytes(new TextEncoder().encode(body).length) : ''
 
-// The list can lose rows from where this is not looking — a delete here, a new example from the
-// answer's own toolbar — and the index has to stay an index of something.
-watch(
-  () => source.responses.length,
-  (len) => {
-    if (picked.value >= len) picked.value = len ? len - 1 : -1
-  }
-)
-
-const record = computed(() => source.record)
-
-const liveMeta = computed(() => {
-  const now = record.value
-  if (!now) return t('request.examples.notSent')
-  return `${formatMicros(now.durationUs)} · ${formatBytes(now.responseBytes ?? 0)}`
+watch(() => source.responses.length, (length) => {
+  if (picked.value >= length) picked.value = Math.max(0, length - 1)
 })
 
-function toExamples() {
-  const now = record.value
-  if (now && isKeepable(now)) addExample(exampleOf(now, exampleName(now.status)))
+function pick(index: number) {
+  picked.value = index
+  fresh.value = -1
 }
 
-function addExample(one: ResponseExample) {
-  const list = [...source.responses, one]
+function addExample(example: ResponseExample) {
+  const list = [...source.responses, example]
   source.saveExamples(list)
   picked.value = list.length - 1
   fresh.value = picked.value
+}
+
+function saveResponse() {
+  const record = keepable.value
+  if (record) addExample(exampleOf(record, exampleName(record.status)))
 }
 
 function blankExample() {
@@ -64,196 +56,128 @@ function blankExample() {
 }
 
 function patch(fields: Partial<ResponseExample>) {
-  source.saveExamples(source.responses.map((one, i) => (i === picked.value ? { ...one, ...fields } : one)))
+  source.saveExamples(source.responses.map((one, index) => index === picked.value ? { ...one, ...fields } : one))
 }
 
 function removeExample() {
-  const index = picked.value
-  const list = source.responses.filter((_, i) => i !== index)
-  const next = index + 1 < source.responses.length ? index : index - 1
+  const list = source.responses.filter((_, index) => index !== picked.value)
   source.saveExamples(list)
-  picked.value = list.length ? Math.min(next, list.length - 1) : -1
-  fresh.value = -1
+  pick(Math.max(0, Math.min(picked.value, list.length - 1)))
 }
 </script>
 
 <template>
-  <div class="examples">
-    <div class="ex-list">
-      <div class="ex-live" :class="{ on: live }" @click="picked = -1">
-        <span class="ex-slot">
-          <Spinner v-if="source.loading" class="text-accent" />
-          <StatusBadge v-else-if="record" :status="record.status" />
-          <span v-else class="ex-blank"></span>
-        </span>
-        <span class="ex-live-text">
-          <span class="ex-live-name">{{ t('request.examples.liveTitle') }}</span>
-          <span class="ex-live-meta">
-            {{ source.loading ? t('request.examples.sending') : liveMeta }}
-          </span>
-        </span>
-      </div>
-
-      <div class="ex-head">
-        <span class="ex-head-label">{{ t('request.chips.examples') }}</span>
-        <IconButton
-          variant="bare"
-          size="md"
-          :hint="t('request.examples.createBlank')"
-          @click="blankExample"
-        >
-          <Icon name="Plus" :size="14" :stroke-width="2.2" />
-        </IconButton>
-      </div>
-
-      <button
-        v-for="(one, i) in source.responses"
-        :key="i"
-        type="button"
-        class="ex-row"
-        :class="{ on: i === picked }"
-        @click="picked = i"
-      >
-        <span class="ex-slot">
-          <StatusBadge :status="one.status ?? 0" />
-        </span>
-        <span class="ex-name" :class="{ anon: !one.name }">
-          {{ one.name || t('request.examples.untitled') }}
-        </span>
+  <ExampleForm
+    v-if="example"
+    :key="`${picked}:${source.responses.length}`"
+    v-model:pane="pane"
+    :example
+    :fresh="picked === fresh"
+    @patch="patch"
+    @remove="removeExample"
+  >
+    <DropdownMenuRoot>
+      <DropdownMenuTrigger as-child>
+        <button type="button" class="example-switch" :title="t('request.examples.select')" :aria-label="t('request.examples.select')">
+          {{ t('request.examples.selection', { current: picked + 1, total: source.responses.length }) }}
+          <Icon name="ChevronDown" :size="10" :stroke-width="1.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <div class="example-menu">
+          <DropdownMenuItem
+            v-for="(one, index) in source.responses"
+            :key="index"
+            class="example-option"
+            :class="{ selected: index === picked }"
+            @select="pick(index)"
+          >
+            <StatusBadge :status="one.status ?? 0" class="example-code" />
+            <span class="min-w-0 flex-1 truncate" :class="{ 'text-text-tertiary': !one.name }">
+              {{ one.name || t('request.examples.untitled') }}
+            </span>
+            <span class="example-size">{{ sizeOf(one.body) }}</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem v-if="keepable" @select="saveResponse">
+            <Icon name="Bookmark" :size="14" :stroke-width="1.5" />
+            <span class="flex-1">{{ t('request.examples.saveResponse') }}</span>
+            <span class="example-size">{{ keepable.status }}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="blankExample">
+            <Icon name="Plus" :size="14" :stroke-width="1.5" />
+            {{ t('request.examples.createBlank') }}
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenuRoot>
+  </ExampleForm>
+  <EmptyState
+    v-else
+    :title="t('request.examples.emptyTitle')"
+    :text="t(keepable ? 'request.examples.emptyWithResponse' : 'request.examples.panelEmpty')"
+  >
+    <div class="example-empty-actions">
+      <button v-if="keepable" type="button" class="example-link" @click="saveResponse">
+        {{ t('request.examples.saveResponse') }}
       </button>
-
-      <span v-if="!source.responses.length" class="ex-hint">
-        {{ t('request.examples.panelEmpty') }}
-      </span>
+      <button type="button" class="example-link" @click="blankExample">
+        {{ t('request.examples.createBlank') }}
+      </button>
     </div>
-
-    <div class="ex-main">
-      <ExampleLive
-        v-if="live"
-        :source
-        :meta="liveMeta"
-        @keep="toExamples"
-        @blank="blankExample"
-      />
-      <ExampleForm
-        v-else-if="example"
-        :key="`${picked}:${source.responses.length}`"
-        :example
-        :fresh="picked === fresh"
-        @patch="patch"
-        @remove="removeExample"
-      />
-    </div>
-  </div>
+  </EmptyState>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
-.examples {
-  @apply grid flex-1 min-h-0;
-  grid-template-columns: 15rem minmax(0, 1fr);
-  min-height: 14rem;
+.example-switch {
+  @apply inline-flex flex-none items-center gap-1.5 rounded-md border-0 bg-transparent text-12 text-text-tertiary whitespace-nowrap cursor-pointer;
+  height: 1.375rem;
+  padding: 0 0.25rem 0 0.375rem;
 }
 
-.ex-list {
-  @apply flex flex-col min-h-0 overflow-auto;
-  padding: 0.5rem;
-  gap: 0.0625rem;
-  border-right: 1px solid var(--border);
-}
-
-.ex-live {
-  @apply flex items-center flex-none cursor-default;
-  height: 2.8rem;
-  gap: 0.5rem;
-  padding: 0 0.5rem;
-  border-radius: 0.4375rem;
-}
-
-.ex-live:hover,
-.ex-live.on {
+.example-switch:hover,
+.example-switch[data-state="open"],
+.example-option.selected {
   background: var(--bg-hover);
 }
 
-.ex-slot {
-  @apply flex justify-center flex-none;
-  width: 2.125rem;
+.example-menu {
+  width: min(18rem, calc(var(--reka-dropdown-menu-content-available-width, 100vw) - 0.75rem));
+  max-height: min(21.75rem, calc(var(--reka-dropdown-menu-content-available-height, 100vh) - 0.75rem));
+  overflow: auto;
 }
 
-.ex-blank {
-  width: 1.625rem;
-  height: 1.125rem;
-  border-radius: 0.3125rem;
-  box-sizing: border-box;
-  box-shadow: inset 0 0 0 1px var(--border);
+.example-option {
+  height: 2.125rem;
+  gap: 0.625rem;
+  padding-inline: 0.375rem 0.625rem;
 }
 
-.ex-live-text {
-  @apply flex flex-col min-w-0;
-  line-height: 1.25;
-}
-
-.ex-live-name {
-  @apply truncate;
-  font-size: var(--text-13);
-}
-
-.ex-live-meta {
-  @apply truncate text-text-tertiary;
-  font-size: var(--text-12);
-}
-
-.ex-head {
-  @apply flex items-center flex-none;
-  gap: 0.3rem;
-  padding: 0.5rem 0 0.2rem 0.5rem;
-  margin-top: 0.3rem;
-  border-top: 1px solid var(--border);
-}
-
-.ex-head-label {
-  @apply flex-1 text-text-tertiary;
-  font-size: var(--text-12);
-}
-
-.ex-row {
-  @apply flex items-center flex-none cursor-default border-0 bg-transparent text-left;
-  height: 2rem;
-  gap: 0.5rem;
-  padding: 0 0.5rem;
-  border-radius: 0.4375rem;
-  font-family: inherit;
-}
-
-.ex-row:hover,
-.ex-row.on {
-  background: var(--bg-hover);
-}
-
-.ex-row.on .ex-name {
+.example-option.selected {
   font-weight: 500;
 }
 
-.ex-name {
-  @apply min-w-0 truncate;
-  font-size: var(--text-13);
-  color: var(--text);
+.example-code {
+  @apply flex-none text-12;
+  width: 2.25rem;
 }
 
-.ex-name.anon {
-  color: var(--text-tertiary);
+.example-size {
+  @apply flex-none text-12 text-text-tertiary;
 }
 
-.ex-hint {
-  padding: 0.25rem 0.5rem;
-  font-size: var(--text-12);
-  color: var(--text-tertiary);
-  line-height: 1.45;
-  text-wrap: pretty;
+.example-empty-actions {
+  @apply flex flex-wrap justify-center gap-x-4 gap-y-2;
+  margin-top: 0.125rem;
 }
 
-.ex-main {
-  @apply flex flex-col min-w-0 min-h-0;
+.example-link {
+  @apply cursor-pointer border-0 bg-transparent p-0 text-13 text-accent;
+}
+
+.example-link:hover {
+  text-decoration: underline;
 }
 </style>

@@ -21,9 +21,10 @@ import { useTransferStore } from '../../stores/transfer'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { findCollection } from '../../lib/collectionTree'
 import { t } from '../../i18n'
-import type { LevelRow, Scripts } from '../../../bindings/schemo/internal/domain'
+import type { CollectionRun, LevelRow, Scripts } from '../../../bindings/schemo/internal/domain'
 import { Scripts as ScriptsService } from '../../../bindings/schemo/internal/script'
 import { Collections } from '../../../bindings/schemo/internal/workspace'
+import { Runs } from '../../../bindings/schemo/internal/request'
 import { callOrToast } from '../../lib/calls'
 import { useLevelRun } from '../../composables/useLevelRun'
 import { useWorkspaceSnapshot } from '../../composables/useWorkspaceSnapshot'
@@ -104,6 +105,23 @@ watch(
 )
 
 const { run, tableRows, resultOf } = useLevelRun(levelId, requests)
+const runList = useWorkspaceSnapshot<CollectionRun[]>([])
+const { state: runs } = runList
+const showRuns = computed(() => section.value === 'runs')
+
+watch([levelId, showRuns, () => run.value?.id, () => run.value?.finishedAt], ([id, visible], previous, onCleanup) => {
+  if (previous && id !== previous[0]) runList.reset()
+  if (!id || !visible) return
+  onCleanup(() => runList.reset(runs.value))
+  const list = Runs.List(id, '').then(items => items ?? []).catch((error: unknown) => {
+    // Vite can reload before the Go process has the new binding.
+    if (error instanceof Error && /^Binding call failed: unknown bound method id \d+$/.test(error.message.trim())) return []
+    throw error
+  })
+  void callOrToast(runList.take(list), 'collections.readFailed')
+}, { immediate: true })
+
+const runCount = computed(() => runs.value.length + (run.value && !runs.value.some(item => item.id === run.value?.id) ? 1 : 0))
 
 const sections = computed<{ key: CollectionSection; label: string; count: string }[]>(() => {
   const pre = scripts.value?.pre?.trim() ? 1 : 0
@@ -114,7 +132,7 @@ const sections = computed<{ key: CollectionSection; label: string; count: string
     { key: 'auth', label: t('collections.subAuth'), count: '' },
     { key: 'vars', label: t('collections.subVars'), count: String((level.value?.variables ?? []).length || '') },
     { key: 'scripts', label: t('collections.subScripts'), count: String(pre + post || '') },
-    { key: 'runs', label: t('collections.subRuns'), count: run.value ? '1' : '' },
+    { key: 'runs', label: t('collections.subRuns'), count: String(runCount.value || '') },
   ]
 })
 
@@ -131,11 +149,12 @@ const overviewRows = computed(() =>
 
 const runLabel = computed(() => {
   const running = collections.running
-  return running ? t('collections.runProgress', { i: running.done + 1, n: running.total }) : t('collections.runAll')
+  if (!running) return t('collections.runAll')
+  return running.total ? t('collections.runProgress', { i: running.done + 1, n: running.total }) : t('collections.runInProgress')
 })
 
 async function runAll() {
-  await collections.run(collections.runNodeId, title.value)
+  await collections.run('', title.value)
 }
 
 function importCollection() {
@@ -228,6 +247,7 @@ function addRequest() {
     <div class="col-body">
       <CollectionOverview
         v-if="section === 'overview'"
+        :key="levelId"
         :rows="overviewRows"
         :loading
         @open="openRow"
@@ -250,7 +270,16 @@ function addRequest() {
         :scripts
         @saved="scriptsSnapshot.replace($event)"
       />
-      <CollectionRuns v-else :run :level-id="levelId" />
+      <CollectionRuns
+        v-else
+        :key="levelId"
+        :run
+        :runs
+        :level-id="levelId"
+        :loading="runList.loading.value"
+        :can-rerun="requests.length > 0 && !collections.running"
+        @rerun="runAll"
+      />
     </div>
   </div>
 </template>

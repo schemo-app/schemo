@@ -38,11 +38,12 @@ type CaptureState struct {
 
 // TabState represents a single captured tab along with the Unix timestamp (in milliseconds) when it was armed.
 type TabState struct {
-	TabID  int    `json:"tabId"`
-	Since  int64  `json:"since"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	Paused bool   `json:"paused"`
+	TabID      int    `json:"tabId"`
+	Since      int64  `json:"since"`
+	Title      string `json:"title"`
+	URL        string `json:"url"`
+	FavIconURL string `json:"favIconUrl,omitempty"`
+	Paused     bool   `json:"paused"`
 }
 
 // FocusRequest represents a command from the extension asking the window to focus on a specific tab.

@@ -1,8 +1,7 @@
 import { computed, type Ref } from 'vue'
 import type { CollectionRun, CollectionRunResult, LevelRow } from '../../bindings/schemo/internal/domain'
 import { useCollectionsStore } from '../stores/collections'
-import { statusBadgeClass } from '../lib/format'
-import { formatMicros, t } from '../i18n'
+import { t } from '../i18n'
 
 // The page's reading of the last run of a level: how each request of it ended, and what a row of the
 // table says about the answer. A row is broken when the request failed or asserted false.
@@ -11,7 +10,7 @@ export function useLevelRun(levelId: Ref<string>, requests: Ref<LevelRow[]>) {
 
   const run = computed<CollectionRun | null>(() => {
     const last = collections.lastRun
-    return last && last.collectionId === levelId.value ? last : null
+    return last && last.collectionId === levelId.value && !last.nodeId ? last : null
   })
 
   const results = computed(() => run.value?.results ?? [])
@@ -24,18 +23,11 @@ export function useLevelRun(levelId: Ref<string>, requests: Ref<LevelRow[]>) {
     return !result.ok || result.assertionsPassed < result.assertionsTotal
   }
 
-  // A request that never went out says so with a dash: the table's columns are narrow, and the
-  // sentence is the row's tooltip rather than its text.
-  function statusOf(result: CollectionRunResult | undefined): { text: string; cls: string; title: string } {
-    if (!result) return { text: '—', cls: 'none', title: t('collections.notRun') }
-    if (result.skipped) return { text: t('collections.skippedShort'), cls: 'none', title: '' }
-    if (result.error) return { text: t('collections.failed'), cls: 'bad', title: result.error }
-    const text = result.status ? String(result.status) : '—'
-    return {
-      text,
-      cls: failed(result) ? 'bad' : statusBadgeClass(result.status ?? 0),
-      title: result.durationUs > 0 ? formatMicros(result.durationUs) : '',
-    }
+  function statusOf(result: CollectionRunResult | undefined): { code: number; text: string } {
+    if (result?.skipped) return { code: 0, text: t('collections.skippedShort') }
+    if (result?.error) return { code: 0, text: t('collections.failed') }
+    const code = result?.status ?? 0
+    return { code, text: code ? String(code) : '—' }
   }
 
   const tableRows = computed(() =>

@@ -128,69 +128,64 @@ func failureColumn(failure *domain.Failure) (string, error) {
 	return string(encoded), nil
 }
 
-// LastRun reads the newest run of a node, or of the whole collection when the node is empty. Rows
-// come in the order they were run, which is the tree's order.
-func (s *Store) LastRun(
-	ctx context.Context,
-	collectionID string,
-	nodeID string,
-) (domain.CollectionRun, bool, error) {
+const runColumns = `id, collection_id, node_id, environment, started_at, finished_at, passed, failed, duration_us`
+
+func scanRun(row interface{ Scan(...any) error }) (domain.CollectionRun, error) {
 	var run domain.CollectionRun
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, collection_id, node_id, environment, started_at, finished_at, passed, failed,
-		        duration_us
-		   FROM collection_runs
+	err := row.Scan(&run.ID, &run.CollectionID, &run.NodeID, &run.Environment, &run.StartedAt,
+		&run.FinishedAt, &run.Passed, &run.Failed, &run.DurationUs)
+	return run, err
+}
+
+// ListRuns reads run summaries for a level, newest first.
+func (s *Store) ListRuns(ctx context.Context, collectionID, nodeID string) ([]domain.CollectionRun, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+runColumns+` FROM collection_runs
 		  WHERE collection_id = ? AND node_id = ?
-		  ORDER BY started_at DESC, rowid DESC LIMIT 1`,
-		collectionID, nodeID).
-		Scan(&run.ID, &run.CollectionID, &run.NodeID, &run.Environment, &run.StartedAt,
-			&run.FinishedAt, &run.Passed, &run.Failed, &run.DurationUs)
+		  ORDER BY started_at DESC, rowid DESC`, collectionID, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("listing runs for %s: %w", collectionID, err)
+	}
+	defer rows.Close()
+
+	runs := []domain.CollectionRun{}
+	for rows.Next() {
+		run, err := scanRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("reading a run of %s: %w", collectionID, err)
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
+// LastRun reads the newest run of a node, or of the whole collection when the node is empty.
+func (s *Store) LastRun(ctx context.Context, collectionID, nodeID string) (domain.CollectionRun, bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+runColumns+` FROM collection_runs
+		  WHERE collection_id = ? AND node_id = ?
+		  ORDER BY started_at DESC, rowid DESC LIMIT 1`, collectionID, nodeID)
+	return s.readRun(ctx, row, collectionID)
+}
+
+// ReadRun reads a saved run and its results within the named level.
+func (s *Store) ReadRun(ctx context.Context, collectionID, nodeID, id string) (domain.CollectionRun, bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+runColumns+` FROM collection_runs WHERE collection_id = ? AND node_id = ? AND id = ?`,
+		collectionID, nodeID, id)
+	return s.readRun(ctx, row, collectionID)
+}
+
+func (s *Store) readRun(ctx context.Context, row *sql.Row, collectionID string) (domain.CollectionRun, bool, error) {
+	run, err := scanRun(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.CollectionRun{}, false, nil
 	}
 	if err != nil {
-		return domain.CollectionRun{}, false, fmt.Errorf("reading the last run of %s: %w", collectionID,
-			err)
+		return domain.CollectionRun{}, false, fmt.Errorf("reading a run of %s: %w", collectionID, err)
 	}
-
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT node_id, position, status, ok, duration_us, error, failure,
-		        ifnull(record_id, ''), assertions_passed, assertions_total, skipped
-		   FROM collection_run_results WHERE run_id = ? ORDER BY position`, run.ID)
-	if err != nil {
-		return domain.CollectionRun{}, false, fmt.Errorf("reading the run %s: %w", run.ID, err)
-	}
-	defer rows.Close()
-
-	run.Results = []domain.CollectionRunResult{}
-	for rows.Next() {
-		var (
-			result  domain.CollectionRunResult
-			status  sql.NullInt64
-			failure string
-			skipped int
-		)
-		if err := rows.Scan(&result.NodeID, &result.Position, &status, &result.OK,
-			&result.DurationUs, &result.Error, &failure, &result.RecordID, &result.AssertionsPassed,
-			&result.AssertionsTotal, &skipped); err != nil {
-			return domain.CollectionRun{}, false, fmt.Errorf("reading the run %s: %w", run.ID, err)
-		}
-		if status.Valid {
-			code := int(status.Int64)
-			result.Status = &code
-		}
-		result.Skipped = skipped != 0
-		if failure != "" {
-			var refusal domain.Failure
-			if err := json.Unmarshal([]byte(failure), &refusal); err != nil {
-				return domain.CollectionRun{}, false, fmt.Errorf("reading a failure of run %s: %w",
-					run.ID, err)
-			}
-			result.Failure = &refusal
-		}
-		run.Results = append(run.Results, result)
-	}
-	return run, true, rows.Err()
+	run.Results, err = resultsOf(ctx, s.db, run.ID)
+	return run, err == nil, err
 }
 
 // The empty id is the top level. A level's requests and its collections are numbered in one

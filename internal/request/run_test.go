@@ -300,6 +300,22 @@ func TestRunRefusesNothingToSend(t *testing.T) {
 	}
 }
 
+func TestRepeatingACompletedRunSavesASeparateResult(t *testing.T) {
+	f := newRunFixture(t)
+	first := f.run(f.collectionID, "")
+	second := f.run(f.collectionID, "")
+	if first.ID == second.ID {
+		t.Fatalf("Run reused the id of a completed run: %q", first.ID)
+	}
+	saved, err := f.List(t.Context(), f.collectionID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 2 || saved[0].ID != second.ID || saved[1].ID != first.ID {
+		t.Errorf("List after repeating a run = %+v, want runs %q and %q", saved, second.ID, first.ID)
+	}
+}
+
 func TestLastIsPerNode(t *testing.T) {
 	f := newRunFixture(t)
 	if last, _ := f.Last(t.Context(), f.collectionID, ""); last != nil {

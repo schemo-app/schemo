@@ -23,6 +23,20 @@ export function Last(collectionID: string, nodeID: string): $CancellablePromise<
 }
 
 /**
+ * List returns the run summaries for the selected level, newest first.
+ */
+export function List(collectionID: string, nodeID: string): $CancellablePromise<domain$0.CollectionRun[] | null> {
+    return $Call.ByID(30818948, collectionID, nodeID);
+}
+
+/**
+ * Read returns the selected run and its results, or nil if it was removed.
+ */
+export function Read(collectionID: string, nodeID: string, id: string): $CancellablePromise<domain$0.CollectionRun | null> {
+    return $Call.ByID(786731248, collectionID, nodeID, id);
+}
+
+/**
  * Run starts a run of everything under a node and returns its id at once; progress arrives as
  * events. One run at a time.
  */

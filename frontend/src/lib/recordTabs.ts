@@ -22,7 +22,13 @@ export function captureSessions(records: RequestRecord[], tabs: TabState[]): Cap
   for (const tab of tabs) {
     const key = String(tab.tabId)
     const group = groups.get(key) ?? { key, title: '', url: '', favIconUrl: '', items: [] }
-    groups.set(key, { ...group, title: tab.title || group.title, url: tab.url || group.url, tab })
+    groups.set(key, {
+      ...group,
+      title: tab.title || group.title,
+      url: tab.url || group.url,
+      favIconUrl: tab.favIconUrl || group.favIconUrl,
+      tab,
+    })
   }
   return [...groups.values()].sort((a, b) => Number(!!b.tab) - Number(!!a.tab))
 }

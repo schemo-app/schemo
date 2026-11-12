@@ -115,11 +115,29 @@ test('saved capture sessions remain visible and exportable without a connected e
     id: 'record-1', source: 'browser', tabId: 7, tabTitle: 'Saved tab',
     tabURL: 'https://example.com', url: 'https://example.com/api', method: 'GET', status: 200, startedAt: 1,
   }]
-  globalThis.captureStore.connected = false
+  globalThis.captureStore.disconnect()
   const html = await renderToString(createSSRApp(CapturePage))
+  assert.match(html, /role="status"[^>]*>.*capture\.notConnected/)
+  assert.match(html, /history\.filterPlaceholder/)
   assert.match(html, /Saved tab/)
+  assert.match(html, /class="cap-row"/)
   assert.match(html, /files.exportHar/)
+  assert.doesNotMatch(html, /cap-table-head/)
   assert.doesNotMatch(html, /capture.waiting/)
+})
+
+test('an empty disconnected capture shows only its setup screen', async () => {
+  globalThis.recordsStore.records = []
+  globalThis.captureStore.disconnect()
+  const html = await renderToString(createSSRApp(CapturePage))
+  assert.match(html, /class="cap-intro-head"/)
+  assert.match(html, /capture\.notConnected/)
+  assert.match(html, /capture\.stepInstall/)
+  assert.match(html, /capture\.stepOpen/)
+  assert.match(html, /capture\.stepEnable/)
+  assert.match(html, /capture\.install/)
+  assert.match(html, /capture\.waiting/)
+  assert.doesNotMatch(html, /cap-filters|cap-actions|cap-filter-bar|cap-rules/)
 })
 
 test('an idle connected extension shows the session list rather than installation instructions', async () => {

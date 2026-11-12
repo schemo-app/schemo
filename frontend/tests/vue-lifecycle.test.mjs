@@ -25,7 +25,7 @@ function resize(target) {
   }
 }
 globalThis.vuePorts = {
-  services: Object.fromEntries(['Collections', 'Draft', 'Records', 'Scripting', 'Inspect', 'Publications', 'System'].map(name => [name, {}])),
+  services: Object.fromEntries(['Collections', 'Draft', 'Records', 'Runs', 'Scripting', 'Inspect', 'Publications', 'System'].map(name => [name, {}])),
   notices: [],
 }
 const ports = globalThis.vuePorts
@@ -80,6 +80,7 @@ const load = await vite({
   '/bindings/schemo/internal/workspace/index.ts': 'export const Collections = globalThis.vuePorts.services.Collections',
   '/bindings/schemo/internal/request/index.ts': `export const Drafts = globalThis.vuePorts.services.Draft;
     export const Inspector = globalThis.vuePorts.services.Inspect;
+    export const Runs = globalThis.vuePorts.services.Runs;
     export const History = globalThis.vuePorts.services.Records;
     export const Cookies = globalThis.vuePorts.services.Cookies;`,
   '/bindings/schemo/internal/script/index.ts': 'export const Scripts = globalThis.vuePorts.services.Scripting',
@@ -697,6 +698,32 @@ test('collection changes cancel old reads instead of rendering their rows', asyn
   older.resolve([{ id: 'old-row' }])
   await settle()
   assert.deepEqual(rendered(root, 'CollectionOverview').props.rows.map(item => item.row.id), ['new-row'])
+  assert.deepEqual(ports.notices, [])
+})
+
+test('collection overview opens before the run history binding is needed', async (context) => {
+  const lastRun = { id: 'latest', collectionId: 'catalogue', finishedAt: 1 }
+  const requested = []
+  ports.collections = reactive({ collectionId: 'catalogue', tree: [{ id: 'catalogue' }], lastRun })
+  ports.publications = { mark() {}, markOf: () => null }
+  ports.transfer = {}
+  ports.workspaces = {}
+  ports.services.Collections.Contents = () => CancellablePromise.resolve([])
+  ports.services.Scripting.Scripts = () => CancellablePromise.resolve(null)
+  ports.services.Runs.List = (id) => {
+    requested.push(id)
+    return CancellablePromise.reject(new Error('Binding call failed: unknown bound method id 30818948'))
+  }
+
+  const root = mount(context, components.CollectionPage)
+  await settle()
+  assert.ok(rendered(root, 'CollectionOverview'))
+  assert.deepEqual(requested, [])
+
+  rendered(root, 'Tabs').props['onUpdate:modelValue']('runs')
+  await settle()
+  assert.deepEqual(requested, ['catalogue'])
+  assert.equal(rendered(root, 'CollectionRuns').props.run.id, lastRun.id)
   assert.deepEqual(ports.notices, [])
 })
 

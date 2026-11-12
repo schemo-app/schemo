@@ -71,5 +71,6 @@ export interface TabState {
     "since": number;
     "title": string;
     "url": string;
+    "favIconUrl"?: string;
     "paused": boolean;
 }

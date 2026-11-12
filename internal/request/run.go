@@ -129,6 +129,20 @@ func (s *Runs) Last(ctx context.Context, collectionID, nodeID string) (*domain.C
 	return &run, nil
 }
 
+// List returns the run summaries for the selected level, newest first.
+func (s *Runs) List(ctx context.Context, collectionID, nodeID string) ([]domain.CollectionRun, error) {
+	return s.store.ListRuns(ctx, collectionID, nodeID)
+}
+
+// Read returns the selected run and its results, or nil if it was removed.
+func (s *Runs) Read(ctx context.Context, collectionID, nodeID, id string) (*domain.CollectionRun, error) {
+	run, ok, err := s.store.ReadRun(ctx, collectionID, nodeID, id)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &run, nil
+}
+
 // Send sends one saved request of a named workspace on behalf of an agent and waits for its record.
 //
 //wails:ignore
@@ -150,7 +164,6 @@ func (s *Runs) Send(ctx context.Context, workspace, nodeID, agent string) (domai
 
 func (s *Runs) execute(workspace string, run domain.CollectionRun, requests []domain.ResolvedRequest) {
 	ctx := context.Background()
-	defer s.running.Store(false)
 
 	started := time.Now()
 	for position, item := range requests {
@@ -177,6 +190,7 @@ func (s *Runs) execute(workspace string, run domain.CollectionRun, requests []do
 	run.DurationUs = time.Since(started).Microseconds()
 	run.FinishedAt = time.Now().UnixMilli()
 	_ = s.store.SaveRun(ctx, run)
+	s.running.Store(false)
 	s.notifier.Publish(TopicRunFinished, run)
 }
 

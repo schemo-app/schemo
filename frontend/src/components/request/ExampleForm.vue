@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue'
 import Icon from '../ui/Icon.vue'
+import IconButton from '../ui/IconButton.vue'
+import Segment from '../ui/Segment.vue'
 import TextEditor from '../ui/TextEditor.vue'
 import KvRow from './KvRow.vue'
-import ExampleView from './ExampleView.vue'
 import { statusBadgeClass } from '../../lib/format'
-import { STATUS_TEXT } from '../../lib/layout'
 import { tryParseJson } from '../../lib/json'
+import { responseParser } from '../../lib/responseFormat'
 import { viewerLanguage } from '../../lib/viewerLanguage'
 import { useRowOrder } from '../../composables/useRowOrder'
 import { useIndent } from '../../composables/useIndent'
@@ -31,7 +32,7 @@ const emit = defineEmits<{
 }>()
 
 
-const pane = ref<'body' | 'headers'>('body')
+const pane = defineModel<'body' | 'headers'>('pane', { required: true })
 
 const nameEl = useTemplateRef<HTMLInputElement>('nameEl')
 
@@ -41,23 +42,19 @@ onMounted(() => {
   nameEl.value?.select()
 })
 
-const reason = computed(
-  () =>
-    STATUS_TEXT[example.status ?? 0] ||
-    (example.status ? t('request.examples.statusCustom') : t('request.examples.statusEmpty'))
-)
-
-function setStatus(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 3)
+function setStatus(input: HTMLInputElement) {
+  const digits = input.value.replace(/\D/g, '').slice(0, 3)
+  input.value = digits
   emit('patch', { status: digits ? Number(digits) : 0 })
 }
 
+const validJson = computed(() => tryParseJson(example.body ?? '').ok)
 const bodyInfo = computed(() => {
   const body = example.body ?? ''
-  if (!body.trim()) return { text: t('request.examples.bodyEmpty'), bad: false, format: false }
-  if (!tryParseJson(body).ok) return { text: t('request.examples.bodyBad'), bad: true, format: false }
+  if (!body.trim()) return { text: '', bad: false, format: false }
+  if (bodyLanguage.value === 'json' && !validJson.value) return { text: t('request.examples.bodyBad'), bad: true, format: false }
   const size = formatBytes(new TextEncoder().encode(body).length)
-  return { text: t('request.examples.bodyJson', { size }), bad: false, format: true }
+  return { text: validJson.value ? t('request.examples.bodyJson', { size }) : size, bad: false, format: validJson.value }
 })
 
 // Go lays the text out: a number keeps its digits and the editor's own indent is the one used.
@@ -77,7 +74,8 @@ async function formatBody() {
 // the answer is read with.
 const bodyLanguage = computed(() => {
   const type = (example.headers ?? []).find((header) => header.name.toLowerCase() === 'content-type')?.value ?? ''
-  return viewerLanguage(type, example.body ?? '', tryParseJson(example.body ?? '').ok)
+  if (responseParser(type, null) === 'json-stringify') return 'json'
+  return viewerLanguage(type, example.body ?? '', validJson.value)
 })
 
 // The headers, as the kv table edits them: rows with an id of their own so a drag has something to
@@ -86,6 +84,11 @@ let seq = 0
 const rows = ref<{ id: string; name: string; value: string }[]>(
   (example.headers ?? []).map((header) => ({ id: `h${seq++}`, name: header.name, value: header.value }))
 )
+
+const panes = computed(() => [
+  { value: 'body', label: t('request.chips.body') },
+  { value: 'headers', label: t('request.chips.headers'), count: rows.value.length },
+])
 
 function writeHeaders() {
   emit('patch', { headers: rows.value.map(({ name, value }) => ({ name, value })) })
@@ -129,60 +132,80 @@ async function addHeader() {
 </script>
 
 <template>
-  <ExampleView v-model:pane="pane" :count="rows.length">
-    <template #title>
-      <input
-        ref="nameEl"
-        class="name"
-        :value="example.name"
-        :placeholder="t('request.examples.namePlaceholder')"
-        spellcheck="false"
-        @input="emit('patch', { name: ($event.target as HTMLInputElement).value })"
-      />
-      <label
-        class="status"
-        :class="example.status ? statusBadgeClass(example.status) : 'neutral'"
-        :title="t('request.examples.statusTitle')"
-      >
+  <div class="example-form">
+    <div class="example-toolbar">
+      <div class="example-picker">
         <input
-          class="status-input"
+          class="example-status"
+          :class="example.status ? statusBadgeClass(example.status) : 'neutral'"
           :value="example.status || ''"
+          :aria-label="t('request.examples.statusTitle')"
+          :title="t('request.examples.statusTitle')"
           inputmode="numeric"
           spellcheck="false"
           placeholder="000"
-          @input="setStatus(($event.target as HTMLInputElement).value)"
+          @input="setStatus($event.target as HTMLInputElement)"
         />
-        <span class="reason">{{ reason }}</span>
-      </label>
-      <button
-        type="button"
-        class="del"
-        :title="t('request.examples.deleteTitle')"
-        @click="emit('remove')"
-      >
-        <Icon name="Trash2" :size="14" :stroke-width="1.8" />
-      </button>
-    </template>
-
-    <template v-if="pane === 'body'" #bar>
-      <span class="info" :class="{ bad: bodyInfo.bad }">{{ bodyInfo.text }}</span>
-      <span class="flex-1"></span>
-      <button v-if="bodyInfo.format" type="button" class="format" @click="formatBody">
-        {{ t('request.examples.format') }}
-      </button>
-    </template>
-
-    <div v-if="pane === 'body'" class="body">
-      <div class="box">
-        <TextEditor
-          :model-value="example.body ?? ''"
-          :language="bodyLanguage"
-          placeholder='{ "id": 1 }'
-          @update:model-value="emit('patch', { body: $event })"
-        />
+        <span class="example-name">
+          <span aria-hidden="true">{{ example.name || t('request.examples.namePlaceholder') }}</span>
+          <input
+            ref="nameEl"
+            :value="example.name"
+            :aria-label="t('request.examples.namePlaceholder')"
+            :placeholder="t('request.examples.namePlaceholder')"
+            :title="example.name"
+            spellcheck="false"
+            @input="emit('patch', { name: ($event.target as HTMLInputElement).value })"
+          />
+        </span>
+        <slot />
+      </div>
+      <Segment
+        class="example-panes"
+        variant="toolbar"
+        size="xs"
+        :grow="false"
+        :options="panes"
+        :value="pane"
+        @pick="pane = $event as 'body' | 'headers'"
+      />
+      <div class="example-tools">
+        <template v-if="pane === 'body'">
+          <span v-if="bodyInfo.text" class="example-info" :class="{ bad: bodyInfo.bad }" :title="bodyInfo.text">
+            {{ bodyInfo.text }}
+          </span>
+          <IconButton
+            v-if="bodyInfo.format"
+            variant="bare"
+            size="bar"
+            :hint="t('request.examples.format')"
+            :aria-label="t('request.examples.format')"
+            @click="formatBody"
+          >
+            <Icon name="AlignLeft" :size="16" :stroke-width="1.5" />
+          </IconButton>
+        </template>
+        <IconButton
+          variant="danger"
+          size="bar"
+          :hint="t('request.examples.deleteTitle')"
+          :aria-label="t('request.examples.deleteTitle')"
+          @click="emit('remove')"
+        >
+          <Icon name="Trash2" :size="16" :stroke-width="1.5" />
+        </IconButton>
       </div>
     </div>
-    <div v-else ref="headerTable" class="kv heads">
+
+    <div v-if="pane === 'body'" class="example-body">
+      <TextEditor
+        :model-value="example.body ?? ''"
+        :language="bodyLanguage"
+        placeholder='{ "id": 1 }'
+        @update:model-value="emit('patch', { body: $event })"
+      />
+    </div>
+    <div v-else ref="headerTable" class="kv example-headers">
       <KvRow
         v-for="(row, i) in rows"
         :key="row.id"
@@ -197,128 +220,136 @@ async function addHeader() {
         @rename="renameHeader(i, $event)"
         @remove="removeHeader(i)"
         @grab="press($event, row.id, i)"
-        @toggle="() => {}"
       >
         <input
-          class="kv-input"
+          class="kv-input mono"
           :value="row.value"
           :placeholder="t('request.examples.columnValue')"
           spellcheck="false"
           @input="valueHeader(i, ($event.target as HTMLInputElement).value)"
         />
       </KvRow>
-
       <button type="button" class="kv-row kv-add" @click="addHeader">
         <span></span>
-        <span class="kv-ghost mono">+ {{ t('request.examples.columnName') }}</span>
+        <span class="kv-ghost mono">{{ t('request.examples.columnName') }}</span>
         <span class="kv-ghost mono">{{ t('request.examples.columnValue') }}</span>
-        <span></span>
       </button>
     </div>
-  </ExampleView>
+  </div>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
-.name {
-  @apply flex-1 min-w-20 border-0 outline-none bg-transparent text-text font-semibold;
-  height: 2rem;
-  box-sizing: border-box;
-  padding: 0 0.5rem;
-  border-radius: 0.4375rem;
-  font-family: inherit;
-  font-size: var(--text-15);
+.example-form {
+  @apply flex flex-1 flex-col min-h-0 min-w-0;
+  container-type: inline-size;
 }
 
-.name:hover,
-.name:focus {
-  background: var(--raise);
+.example-toolbar {
+  @apply flex flex-none items-center min-w-0 border-b border-border;
+  min-height: 2.625rem;
+  gap: 0.625rem;
+  padding: 0.375rem 0.75rem 0.375rem 1rem;
 }
 
-.status {
-  @apply flex items-center flex-none;
+.example-picker {
+  @apply flex items-center min-w-0 rounded-md;
   height: 1.75rem;
   gap: 0.125rem;
-  padding: 0 0.5625rem 0 0.1875rem;
-  border-radius: 0.4375rem;
+  padding: 0 0.1875rem;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.status.neutral {
+.example-status,
+.example-name input {
+  @apply h-[1.375rem] min-w-0 rounded-sm border-0 outline-none;
+}
+
+.example-status {
+  @apply flex-none w-9 text-center text-12 font-mono font-semibold p-0;
+}
+
+.example-status.neutral {
   background: var(--chip);
   color: var(--text-secondary);
 }
 
-.status-input {
-  @apply text-center font-semibold border-0 outline-none bg-transparent;
-  width: 2.25rem;
-  height: 1.375rem;
-  box-sizing: border-box;
-  border-radius: 0.3125rem;
-  color: inherit;
-  font-family: var(--mono);
-  font-size: var(--text-12-5);
+.example-status:focus,
+.example-name input:focus {
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-.status-input:focus {
+.example-name {
+  @apply inline-grid items-center min-w-0 font-medium;
+  max-width: 17.5rem;
+}
+
+.example-name > * {
+  grid-area: 1 / 1;
+  padding: 0 0.375rem;
+}
+
+.example-name span {
+  @apply invisible overflow-hidden whitespace-pre;
+}
+
+.example-name input {
+  @apply w-0 min-w-full bg-transparent text-text;
+  font: inherit;
+}
+
+.example-name input:focus {
   background: var(--bg);
 }
 
-.reason {
-  @apply font-medium whitespace-nowrap;
-  font-size: var(--text-12);
+.example-panes {
+  @apply flex-none;
 }
 
-.del {
-  @apply flex items-center justify-center flex-none cursor-pointer border-0 bg-transparent text-text-tertiary;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 0.4375rem;
+.example-tools {
+  @apply flex items-center min-w-0 gap-0.5 ml-auto;
 }
 
-.del:hover {
-  background: var(--bg-hover);
-  color: var(--red);
+.example-info {
+  @apply truncate text-12 text-text-tertiary;
+  padding: 0 0.25rem;
 }
 
-.info {
-  @apply text-text-tertiary;
-  font-size: var(--text-12);
+.example-info.bad {
+  color: var(--red-text);
 }
 
-.info.bad {
-  color: var(--red);
-}
-
-.format {
-  @apply flex-none cursor-pointer border-0 bg-transparent p-0 text-accent;
-  font-family: inherit;
-  font-size: var(--text-12);
-}
-
-.body {
+.example-body {
   @apply flex flex-1 min-h-0;
-  padding: 0 1.25rem 1rem;
+  padding: 0.5rem 0.9375rem 0;
 }
 
-.box {
-  @apply flex flex-1 min-h-0 overflow-hidden;
-  min-height: 5rem;
-  border-radius: 0.5625rem;
-  background: var(--raise);
-  padding: 0.75rem 0.875rem;
-}
-
-.heads {
+.example-headers {
   @apply flex-1 min-h-0 overflow-auto;
-  padding: 0 1.25rem 1rem;
+  padding: 0.375rem 0.75rem 1rem;
 }
 
-.heads .kv-row {
-  grid-template-columns: 1rem minmax(0, 0.8fr) minmax(0, 1.4fr) 1.75rem;
+.example-headers .kv-row {
+  grid-template-columns: 1rem minmax(0, min(13.75rem, 38%)) minmax(0, 1fr) 1.75rem;
 }
 
-.heads .kv-add {
+.example-headers .kv-add {
   @apply cursor-text;
+}
+
+@container (max-width: 31rem) {
+  .example-toolbar {
+    gap: 0.375rem;
+    padding-inline: 0.625rem;
+  }
+
+  .example-picker {
+    flex: 1;
+  }
+
+  .example-info {
+    display: none;
+  }
 }
 </style>

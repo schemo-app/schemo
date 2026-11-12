@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { t } from '../../i18n'
 import { statusBadgeClass } from '../../lib/format'
 
 // A status as a badge: tinted by its series, and plain where there is none to speak of. What it says
 // is the status unless the caller has more to say about it.
-defineProps<{ status: number }>()
+defineProps<{ status: number; failed?: boolean }>()
 </script>
 
 <template>
-  <span class="badge" :class="status ? statusBadgeClass(status) : 'neutral'">
-    <slot>{{ status || '—' }}</slot>
+  <span class="badge" :class="failed ? 'badge-status-5xx' : status ? statusBadgeClass(status) : 'neutral'">
+    <slot>{{ failed ? t('history.failed') : status || '—' }}</slot>
   </span>
 </template>
 
@@ -16,7 +17,7 @@ defineProps<{ status: number }>()
 @reference "../../style.css";
 
 .badge {
-  @apply text-center font-semibold;
+  @apply justify-center text-center font-semibold;
   min-width: 1.625rem;
   font-family: var(--mono);
   font-size: var(--text-11);

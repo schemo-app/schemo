@@ -5,16 +5,16 @@ import { History } from '../../../bindings/schemo/internal/request'
 import { callOrToast } from '../../lib/calls'
 import { useCaptureStore } from '../../stores/capture'
 import { useRecordsStore } from '../../stores/records'
-import { splitAddress } from '../../lib/address'
-import { methodInkClass, statusTone } from '../../lib/format'
+import { methodInkClass } from '../../lib/format'
 import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
-import { recordsByDay, responseSize } from '../../lib/requestRecord'
-import { daysAgo, formatClock, formatDuration, formatNumber, formatStatus, t } from '../../i18n'
+import { isHttpError, isSlow, matchesRecord, repeatedRecordsByDay, responseSize } from '../../lib/requestRecord'
+import { daysAgo, formatClock, formatDuration, formatNumber, t } from '../../i18n'
 import { useHarExport } from '../../composables/useHarExport'
 import { useLoadOlder } from '../../composables/useLoadOlder'
 import { useToast } from '../../composables/useToast'
 import Icon from '../ui/Icon.vue'
 import Segment from '../ui/Segment.vue'
+import StatusBadge from '../ui/StatusBadge.vue'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
 import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
@@ -47,19 +47,6 @@ function sourceOf(record: RequestRecord): Exclude<Source, 'all'> {
   return record.source === RecordSource.SourceBrowser ? 'browser' : 'manual'
 }
 
-function matches(record: RequestRecord, query: string): boolean {
-  return `${record.method} ${record.url} ${record.status}`.toLowerCase().includes(query) ||
-    (record.agent ?? '').toLowerCase().includes(query)
-}
-
-function isHttpError(record: RequestRecord): boolean {
-  return record.status >= 400 && record.status < 600
-}
-
-function isSlow(record: RequestRecord): boolean {
-  return record.durationUs >= 1_000_000
-}
-
 function duration(record: RequestRecord): string {
   if (!isSlow(record)) return formatDuration(record.durationUs)
   return `${formatNumber(record.durationUs / 1_000_000, 1)} ${t('units.s')}`
@@ -74,7 +61,7 @@ const matching = computed(() => {
     record =>
       (selectedSource === 'all' || sourceOf(record) === selectedSource) &&
       (!session || tabKeyOf(record) === session) &&
-      (!query || matches(record, query)),
+      (!query || matchesRecord(record, query)),
   )
 })
 
@@ -85,50 +72,7 @@ const filtered = computed(() => matching.value.filter(record =>
   (!records.historySlowOnly || isSlow(record))
 ))
 
-function historyEntry(record: RequestRecord) {
-  const { host, path } = splitAddress(record.url)
-  const normalizedPath = path.split(/[?#]/, 1)[0]
-    .replace(/\/(?:\d+|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?=\/|$)/gi, '/{id}') || '/'
-  const origin = record.url.slice(0, record.url.length - path.length)
-  const key = `${record.method} ${origin}${normalizedPath} ${record.status} ${Boolean(record.error)}`
-  return { record, host, path, normalizedPath, key }
-}
-
-type HistoryEntry = ReturnType<typeof historyEntry>
-
-function groupConsecutive(items: RequestRecord[]): HistoryEntry[][] {
-  const groups: HistoryEntry[][] = []
-  for (const record of items) {
-    const entry = historyEntry(record)
-    const last = groups.at(-1)
-    if (last?.[0].key === entry.key) last.push(entry)
-    else groups.push([entry])
-  }
-  return groups
-}
-
-const groups = computed(() => recordsByDay(filtered.value).map(group => ({
-  day: group.day,
-  label: group.label,
-  count: group.items.length,
-  repeats: groupConsecutive(group.items),
-})))
-
-const rowsByDay = computed(() => groups.value.map(group => ({
-  day: group.day,
-  label: group.label,
-  count: group.count,
-  rows: group.repeats.flatMap(repeat => {
-    const first = repeat[0]
-    const expanded = expandedRepeats.value.has(first.record.id)
-    const repeated = repeat.length >= 3
-    const entries = () => repeat.map(entry => ({ ...entry, repeatCount: 0, indented: repeated, expanded: false }))
-    if (!repeated) return entries()
-
-    const summary = { ...first, path: first.normalizedPath, repeatCount: repeat.length, indented: false, expanded }
-    return expanded ? [summary, ...entries()] : [summary]
-  }),
-})))
+const rowsByDay = computed(() => repeatedRecordsByDay(filtered.value, expandedRepeats.value))
 
 const count = computed(() =>
   filtered.value.length === records.records.length
@@ -416,9 +360,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
           </span>
 
           <span class="hist-status">
-            <span class="hist-chip-status" :class="statusTone(row.record)">
-              {{ formatStatus(row.record.status, row.record.error) }}
-            </span>
+            <StatusBadge :status="row.record.status" :failed="!!row.record.error" />
           </span>
 
           <span class="hist-metrics">
@@ -798,25 +740,6 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 
 .hist-status {
   @apply flex justify-end;
-}
-
-.hist-chip-status {
-  @apply truncate;
-  font-family: var(--mono);
-  font-size: var(--text-12);
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 0.3125rem;
-}
-
-.hist-chip-status.is-ok {
-  background: var(--green-soft);
-  color: var(--green-text);
-}
-
-.hist-chip-status.is-bad {
-  background: var(--red-soft);
-  color: var(--red-text);
 }
 
 .hist-metrics,

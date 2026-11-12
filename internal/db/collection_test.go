@@ -674,6 +674,21 @@ func TestLastRunIsTheNewestOfThatNode(t *testing.T) {
 	if nested.ID != "run-folder" {
 		t.Errorf("the nested collection's last run is %s, want its own", nested.ID)
 	}
+
+	runs, err := store.ListRuns(ctx, "col-1", "")
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 2 || runs[0].ID != "run-new" || runs[1].ID != "run-old" {
+		t.Errorf("ListRuns = %+v, want the collection's two runs in descending order", runs)
+	}
+	old, found, err := store.ReadRun(ctx, "col-1", "", "run-old")
+	if err != nil || !found || old.Passed != 1 {
+		t.Errorf("ReadRun for run-old = %+v, %t, %v, want the previous run", old, found, err)
+	}
+	if _, found, err := store.ReadRun(ctx, "col-1", "", "run-folder"); err != nil || found {
+		t.Errorf("ReadRun for run-folder = %t, %v, want no run from another level", found, err)
+	}
 }
 
 func TestNodesSurviveACollectionRename(t *testing.T) {

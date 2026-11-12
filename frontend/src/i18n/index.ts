@@ -212,11 +212,6 @@ export function formatClock(at: number): string {
   return formatDate(at, { hour: '2-digit', minute: '2-digit' })
 }
 
-export function formatStatus(status: number, error?: string): string {
-  if (error) return t('history.failed')
-  return status > 0 ? String(status) : '—'
-}
-
 const BYTE_UNITS = ['units.b', 'units.kb', 'units.mb', 'units.gb'] as const satisfies readonly MessageKey[]
 
 export function formatBytes(bytes: number): string {

@@ -271,14 +271,31 @@ export const useCollectionsStore = defineStore('collections', () => {
   async function run(nodeId: string, name: string) {
     const signal = snapshot.signal()
     const collection = collectionId.value
-    if (!collection) return
+    if (!collection || running.value) return
     // The first progress event says how many requests there are; a guess would show a wrong total.
     running.value = { done: 0, total: 0, name }
-    try {
-      await Runs.Run(collection, nodeId).cancelOn(signal)
-    } catch (error) {
-      if (!signal.aborted) running.value = null
-      throw error
+    const starting = running.value
+    const id = await callOrToast(Runs.Run(collection, nodeId).cancelOn(signal), 'collections.runFailed')
+    if (signal.aborted || running.value !== starting) return
+    if (!id) {
+      running.value = null
+      return
+    }
+    runSnapshot.reset(startedRun(id, collection, nodeId))
+  }
+
+  function startedRun(id: string, collectionId: string, nodeId: string): CollectionRun {
+    return {
+      id,
+      collectionId,
+      nodeId,
+      environment: '',
+      startedAt: Date.now(),
+      finishedAt: 0,
+      durationUs: 0,
+      passed: 0,
+      failed: 0,
+      results: [],
     }
   }
 
@@ -292,22 +309,13 @@ export const useCollectionsStore = defineStore('collections', () => {
     if (!running.value || !findCollection(tree.value, progress.collectionId)) return
     running.value = { ...running.value, done: progress.done, total: progress.total }
 
-    const current = lastRun.value
-    if (current?.id === progress.runId) {
-      runSnapshot.reset({ ...current, results: [...(current.results ?? []), progress.result] })
-      return
-    }
+    const current = lastRun.value?.id === progress.runId
+      ? lastRun.value
+      : startedRun(progress.runId, progress.collectionId, progress.nodeId)
     runSnapshot.reset({
-      id: progress.runId,
-      collectionId: progress.collectionId,
-      nodeId: progress.nodeId,
+      ...current,
       environment: progress.environment ?? '',
-      startedAt: Date.now(),
-      finishedAt: 0,
-      durationUs: 0,
-      passed: 0,
-      failed: 0,
-      results: [progress.result],
+      results: [...(current.results ?? []), progress.result],
     })
   }
 

@@ -42,6 +42,7 @@ export {
   FolderPlus,
   Globe,
   GripVertical,
+  History,
   Info,
   Keyboard,
   Link,
