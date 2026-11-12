@@ -192,9 +192,10 @@ watch([() => pane, inspectable], () => {
 }, { immediate: true })
 
 const showsTree = computed(() => activeTab.value === 'body' && reader.value === 'tree')
+// A pane change can reset the inspector in the same update as a response change.
 watch([() => pane, () => record.id, () => record.responseBody, () => record.contentType, showsTree], () => {
   if (showsTree.value) void inspection.loadInlineReadings()
-}, { immediate: true })
+}, { immediate: true, flush: 'post' })
 
 responseNodeActions.on(() => nodeBar.value?.openActions())
 watch(() => !!node.value, (available) => {
