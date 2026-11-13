@@ -9,6 +9,10 @@ import (
 	"schemo/internal/domain"
 )
 
+// baseVariable is the variable every request's address starts with: the document's server is read
+// into it, or, where the document leaves the address to a person, it is left for them to fill in.
+const baseVariable = "{{" + domain.BaseURLVariable + "}}"
+
 // reader holds what the walk needs beside the document: the variables it declares as it goes, the
 // folders it opens, and the order the document declared its tags in.
 type reader struct {
@@ -18,14 +22,14 @@ type reader struct {
 	variables map[string]domain.Variable
 	root      *folderNode
 	topItems  int64
+	server    string
 }
 
 func (r *reader) collection() domain.Collection {
-	base := r.baseURL()
+	base, server := r.baseURL()
+	r.server = server
 	r.declare(domain.BaseURLVariable, base, base == "")
 
-	// The operations first, because the folders are built out of the tags they and the document
-	// carry: every tag is read once, before anything is placed.
 	type operationAt struct {
 		node domain.CollectionNode
 		tags []string
@@ -67,8 +71,7 @@ func (r *reader) collection() domain.Collection {
 	shouldSplit := r.doc.FolderTags == "slash" || sharedTagPathPrefix(tags)
 
 	r.root = newFolderNode("")
-	// The descriptions first: a tag the document describes gets its folder whether or not any
-	// operation lands in it, and where two tags fold to one path the first description stands.
+
 	for _, tag := range tags {
 		description := ""
 		for _, declared := range r.doc.Tags {
@@ -89,8 +92,7 @@ func (r *reader) collection() domain.Collection {
 			folder.description = description
 		}
 	}
-	// Then the requests, each in one folder: the deepest tag it carries, and the top of the
-	// collection where it carries none.
+
 	for _, one := range operations {
 		segments := longestTagSegments(one.tags, shouldSplit)
 		if len(segments) == 0 {
@@ -116,9 +118,6 @@ func (r *reader) collection() domain.Collection {
 	return collection
 }
 
-// declare adds a variable the document implies but does not fill in (the base address, a token). It
-// is declared switched off and empty, since only a person can give a value the document does not
-// carry.
 func (r *reader) declare(name, value string, off bool) {
 	if _, ok := r.variables[name]; ok {
 		return
@@ -132,58 +131,48 @@ func (r *reader) declare(name, value string, off bool) {
 	}
 }
 
-// baseURL is the address every request is written against: the first server of a 3.x document with
-// its variables answered, or the scheme, host and base path of a 2.0 one. A server that is itself a
-// hole (`<<baseUrl>>`) is no address.
-func (r *reader) baseURL() string {
+func (r *reader) baseURL() (value, server string) {
 	if !r.doc2 {
 		if len(r.doc.Servers) == 0 {
-			return ""
+			return "", baseVariable
 		}
 		address := r.doc.Servers[0].URL
 		for name, variable := range r.doc.Servers[0].Variables {
 			address = strings.ReplaceAll(address, "{"+name+"}", variable.Default)
 		}
-		return addressOrNothing(strings.TrimSuffix(strings.TrimSpace(address), "/"))
+		return splitServer(address)
 	}
 
 	if r.doc.Host == "" {
-		return r.doc.BasePath
+		return r.doc.BasePath, baseVariable
 	}
 	scheme := "https"
 	if len(r.doc.Schemes) > 0 {
 		scheme = r.doc.Schemes[0]
 	}
-	return addressOrNothing(strings.TrimSuffix(scheme+"://"+r.doc.Host+r.doc.BasePath, "/"))
+	return splitServer(scheme + "://" + r.doc.Host + r.doc.BasePath)
 }
 
-// addressOrNothing is what a document carries as an address, or nothing where it carries a hole
-// instead: a value only a person can give, and so one the variable is left empty and off for.
-func addressOrNothing(address string) string {
-	if loneHole.MatchString(address) {
-		return ""
+func splitServer(address string) (value, server string) {
+	address = strings.TrimSuffix(strings.TrimSpace(address), "/")
+	if hole := holeServer.FindStringSubmatch(address); hole != nil {
+		return "", baseVariable + hole[1]
 	}
-	return address
+	return address, baseVariable
 }
 
-// request is one operation as a request: its address against the declared server, its query and
-// header parameters, its body and its authorization.
 func (r *reader) request(
 	path, method string, op operation, shared []parameter,
 ) domain.CollectionNode {
 	node := domain.CollectionNode{
-		Name:   nameOf(op),
-		Method: strings.ToUpper(method),
-		// What the document describes the operation as, and nothing else: the summary is the name
-		// Hoppscotch reads too, and writing it here as well would duplicate the row's own text.
+		Name:        nameOf(op),
+		Method:      strings.ToUpper(method),
 		Description: strings.TrimSpace(op.Description),
 	}
 
-	address := "{{" + domain.BaseURLVariable + "}}" + path
+	address := r.server + path
 	query := []string{}
 
-	// The path item's own parameters apply to every operation in it, and the operation's own come
-	// after: a parameter written twice is the operation's.
 	for _, param := range append(append([]parameter{}, shared...), op.Parameters...) {
 		r.parameter(&node, param, &address, &query)
 	}
@@ -198,9 +187,6 @@ func (r *reader) request(
 	return node
 }
 
-// responsesOf reads an operation's declared answers as examples: the name is the document's
-// description (the code if none), the status is the key when numeric, and the body is its example,
-// the first listed example, or a skeleton made from its schema.
 func responsesOf(op operation) []domain.ResponseExample {
 	out := []domain.ResponseExample{}
 	for _, key := range slices.Sorted(maps.Keys(op.Responses)) {
@@ -220,8 +206,6 @@ func responsesOf(op operation) []domain.ResponseExample {
 			one.Headers = append(one.Headers, domain.HeaderPair{Name: "Content-Type", Value: mime})
 			one.Body = bodyOfMedia(media)
 		} else if len(declared.Examples) > 0 || declared.Schema != nil {
-			// Swagger 2.0 keeps an example per media type beside the schema; the body is one, so the
-			// first content type the document lists is the one it is read as.
 			for _, mime := range slices.Sorted(maps.Keys(declared.Examples)) {
 				one.Headers = append(one.Headers, domain.HeaderPair{Name: "Content-Type", Value: mime})
 				one.Body = domain.ValueText(declared.Examples[mime])
@@ -236,8 +220,6 @@ func responsesOf(op operation) []domain.ResponseExample {
 	return out
 }
 
-// bodyOfMedia is what an answer's media type shows: the example it carries, the first of the
-// examples it lists, and otherwise the skeleton of what it describes.
 func bodyOfMedia(media mediaType) string {
 	if media.Example != nil {
 		return domain.ValueText(media.Example)
@@ -250,8 +232,6 @@ func bodyOfMedia(media mediaType) string {
 	return skeleton(media.Schema)
 }
 
-// nameOf is what the row says, in Hoppscotch's order: the summary, the generator's identifier, the
-// title, and a plain placeholder if the operation is named nowhere.
 func nameOf(op operation) string {
 	for _, candidate := range []string{op.Summary, op.OperationID, op.Title} {
 		if strings.TrimSpace(candidate) != "" {
@@ -261,8 +241,6 @@ func nameOf(op operation) string {
 	return domain.UntitledRequest
 }
 
-// parameter reads one parameter: a path id becomes a `:name` in the address with a row of the
-// request to fill, a query parameter becomes a row and, when it is required, part of the address.
 func (r *reader) parameter(
 	node *domain.CollectionNode, param parameter, address *string, query *[]string,
 ) {
@@ -286,7 +264,6 @@ func (r *reader) parameter(
 		row := domain.Row{
 			Name: token, Value: value, Enabled: true, Description: strings.TrimSpace(param.Description),
 		}
-		// A parameter written twice is the operation's, which comes second in the walk.
 		at := slices.IndexFunc(node.PathParams, func(one domain.Row) bool { return one.Name == token })
 		if at >= 0 {
 			node.PathParams[at] = row
@@ -316,9 +293,6 @@ func (r *reader) parameter(
 	}
 }
 
-// slot writes the `{name}` of a path template into an address. A segment of its own becomes a
-// `:token`; one inside other text, such as `v{version}` or `{name}.{ext}`, stays a `{{name}}`
-// variable.
 func slot(address, name, token string) (out string, own, shared bool) {
 	segments := strings.Split(address, "/")
 	for i, segment := range segments {
@@ -332,8 +306,6 @@ func slot(address, name, token string) (out string, own, shared bool) {
 	return strings.Join(segments, "/"), own, shared
 }
 
-// exampleOf is the value a request would carry: what the document showed, or a skeleton from the
-// schema. A parameter with nothing at all is an empty value.
 func exampleOf(
 	example any, examples map[string]example, schema map[string]any, fallback any,
 ) string {

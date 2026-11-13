@@ -20,9 +20,10 @@ import (
 // method at all.
 var methods = []string{"get", "post", "put", "patch", "delete", "head", "options"}
 
-// loneHole is an address that is one placeholder and nothing else: `<<baseUrl>>`, `{{baseUrl}}`,
-// `{baseUrl}` — the shapes a document leaves for whoever reads it to fill in.
-var loneHole = regexp.MustCompile(`^(?:<<[^<>]+>>|\{\{[^{}]+\}\}|\{[^{}]+\})$`)
+// holeServer is a server address whose host part is a hole — `<<baseUrl>>`, `{{baseUrl}}`,
+// `{baseUrl}`, with or without a scheme — and the path behind it, if any. The hole is what a
+// document leaves for whoever reads it to fill in; the path is fixed, and every request carries it.
+var holeServer = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9+.\-]*://)?(?:<<[^<>]+>>|\{\{[^{}]+\}\}|\{[^{}]+\})(/.*)?$`)
 
 // Import reads a document as one collection. A file that is neither version is refused rather than
 // guessed at.
@@ -99,10 +100,7 @@ type document struct {
 	Paths      pathMap       `json:"paths"`
 	Security   []requirement `json:"security,omitempty"`
 	Components *components   `json:"components,omitempty"`
-
-	// FolderTags is Hoppscotch's marker that this document's tags are folder paths: `a/b` reads as a
-	// folder `b` inside a folder `a`.
-	FolderTags string `json:"x-hoppscotch-folder-tags,omitempty"`
+	FolderTags string        `json:"x-hoppscotch-folder-tags,omitempty"`
 
 	// Swagger 2.0 keeps the same things in other places.
 	Host        string                    `json:"host,omitempty"`
@@ -134,9 +132,6 @@ type components struct {
 	SecuritySchemes map[string]map[string]any `json:"securitySchemes,omitempty"`
 }
 
-// requirement is one `security` entry: scheme names with the scopes each is used with. Generators
-// also write a bare array of names (`["bearerAuth"]`), which names no declared scheme: it is read
-// as empty and the request has no authorization, as in Hoppscotch.
 type requirement map[string][]string
 
 func (r *requirement) UnmarshalJSON(data []byte) error {
@@ -202,10 +197,9 @@ func (p *pathItem) UnmarshalJSON(data []byte) error {
 }
 
 type operation struct {
-	OperationID string `json:"operationId,omitempty"`
-	Summary     string `json:"summary,omitempty"`
-	Description string `json:"description,omitempty"`
-	// Not the specification's key, but one some generators write a name under — Hoppscotch reads it.
+	OperationID string              `json:"operationId,omitempty"`
+	Summary     string              `json:"summary,omitempty"`
+	Description string              `json:"description,omitempty"`
 	Title       string              `json:"title,omitempty"`
 	Tags        []string            `json:"tags,omitempty"`
 	Parameters  []parameter         `json:"parameters,omitempty"`

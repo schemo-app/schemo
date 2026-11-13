@@ -46,8 +46,6 @@ func Export(collection domain.Collection) ([]byte, error) {
 	}
 	if len(w.tags) > 0 {
 		doc["tags"] = w.tags
-		// The marker says the tag names are folder paths: a reader that knows it, and this app in
-		// turn, finds the nesting back rather than one flat folder called `a/b`.
 		doc["x-hoppscotch-folder-tags"] = "slash"
 	}
 	if len(w.security) > 0 {

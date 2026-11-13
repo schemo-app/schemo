@@ -107,17 +107,12 @@ func TestImportReadsAnOperationAsARequest(t *testing.T) {
 	if len(list.Headers) != 1 || !list.Headers[0].Enabled || list.Headers[0].Value != "example" {
 		t.Errorf("headers = %+v, want the required header with its default", list.Headers)
 	}
-	// The folders stand in the order the walk met their tags — the same order Hoppscotch makes them
-	// in — and the paths are walked sorted, so `cart` comes first here.
 	if len(collection.Children) != 2 || collection.Children[0].Name != "cart" ||
 		collection.Children[1].Name != "products" {
 		t.Errorf("children = %+v, want a folder per tag where the walk met it", collection.Children)
 	}
 }
 
-// Folders nest when the document's tags show a hierarchy — a tag that is the beginning of another,
-// or two that begin the same way — and stay plain names otherwise, which is the rule Hoppscotch
-// reads by. A tag the document describes stands as a folder even with no operation in it.
 func TestImportNestsTagsOnlyWhenTheDocumentShowsAHierarchy(t *testing.T) {
 	nested := []byte(`{"openapi": "3.1.0", "info": {"title": "Deep"},
 		"tags": [{"name": "api/users", "description": "The people"}, {"name": "api/orders"},
@@ -222,24 +217,24 @@ func TestImportReadsAPathParameterAsTheRequestsOwnRow(t *testing.T) {
 }
 
 func TestImportReadsWhatTheDocumentSaysOfAPathParameter(t *testing.T) {
-	document := []byte(`{"openapi": "3.1.0", "info": {"title": "PIM"},
-	  "paths": {"/groups/{attribute-group}/items/{item.id}": {"get": {"summary": "One item",
+	document := []byte(`{"openapi": "3.1.0", "info": {"title": "Shop"},
+	  "paths": {"/users/{user-id}/orders/{order.id}": {"get": {"summary": "One order",
 	    "parameters": [
-	      {"name": "attribute-group", "in": "path", "required": true, "example": "colors",
-	       "description": "The group", "schema": {"type": "string"}},
-	      {"name": "item.id", "in": "path", "required": true, "schema": {"type": "string"}}
+	      {"name": "user-id", "in": "path", "required": true, "example": "42",
+	       "description": "The user", "schema": {"type": "string"}},
+	      {"name": "order.id", "in": "path", "required": true, "schema": {"type": "string"}}
 	    ], "responses": {"200": {"description": "ok"}}}}}}`)
 	doc, err := Import(document)
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
 	one := doc.Collections[0].Items[0]
-	if one.URL != "{{baseUrl}}/groups/:attribute-group/items/:item_id" {
+	if one.URL != "{{baseUrl}}/users/:user-id/orders/:order_id" {
 		t.Errorf("url = %q, want every name written as an address can carry it", one.URL)
 	}
 	want := []domain.Row{
-		{Name: "attribute-group", Value: "colors", Enabled: true, Description: "The group"},
-		{Name: "item_id", Enabled: true},
+		{Name: "user-id", Value: "42", Enabled: true, Description: "The user"},
+		{Name: "order_id", Enabled: true},
 	}
 	if !slices.Equal(one.PathParams, want) {
 		t.Errorf("path params = %+v, want %+v", one.PathParams, want)
@@ -279,9 +274,9 @@ func TestImportKeepsAPathNameInsideASegmentAVariable(t *testing.T) {
 // A server written as one hole is not an address: the document says where the address goes without
 // knowing it, so the variable is left empty and off rather than sent as `<<baseUrl>>` on the wire.
 func TestImportLeavesAServerThatIsOnlyAHoleEmpty(t *testing.T) {
-	document := []byte(`{"openapi": "3.1.0", "info": {"title": "PIM"},
+	document := []byte(`{"openapi": "3.1.0", "info": {"title": "Thin"},
 		"servers": [{"url": "<<baseUrl>>"}],
-		"paths": {"/attributes": {"get": {"responses": {"200": {"description": "OK"}}}}}}`)
+		"paths": {"/items": {"get": {"responses": {"200": {"description": "OK"}}}}}}`)
 
 	doc, err := Import(document)
 	if err != nil {
@@ -291,8 +286,52 @@ func TestImportLeavesAServerThatIsOnlyAHoleEmpty(t *testing.T) {
 	if base := variable(t, collection, "baseUrl"); base.Value != "" || base.Enabled {
 		t.Errorf("baseUrl = %+v, want a switched-off variable for a server nobody named", base)
 	}
-	if url := collection.Items[0].URL; url != "{{baseUrl}}/attributes" {
+	if url := collection.Items[0].URL; url != "{{baseUrl}}/items" {
 		t.Errorf("url = %q, want the address written against the variable", url)
+	}
+}
+
+// A hole with a path behind it leaves only the address for a person to fill in: the path is fixed by
+// the document, so it stays in every request rather than in a variable that loses it once filled.
+func TestImportKeepsThePathOfAServerWrittenAsAHole(t *testing.T) {
+	for _, hole := range []string{"<<baseUrl>>", "{{baseUrl}}", "{baseUrl}"} {
+		t.Run(hole, func(t *testing.T) {
+			document := []byte(`{"openapi": "3.1.0", "info": {"title": "Thin"},
+				"servers": [{"url": "` + hole + `/api"}],
+				"paths": {"/items": {"get": {"responses": {"200": {"description": "OK"}}}}}}`)
+
+			doc, err := Import(document)
+			if err != nil {
+				t.Fatalf("Import: %v", err)
+			}
+			collection := doc.Collections[0]
+			if base := variable(t, collection, "baseUrl"); base.Value != "" || base.Enabled {
+				t.Errorf("baseUrl = %+v, want a switched-off variable for the address", base)
+			}
+			if url := collection.Items[0].URL; url != "{{baseUrl}}/api/items" {
+				t.Errorf("url = %q, want the path the document fixed behind the hole", url)
+			}
+		})
+	}
+}
+
+// A hole in the host of a 2.0 document is the address to fill in as well, and its base path stays in
+// every request.
+func TestImportKeepsTheBasePathOfASwaggerHostWrittenAsAHole(t *testing.T) {
+	document := []byte(`{"swagger": "2.0", "info": {"title": "Legacy"}, "host": "<<baseUrl>>",
+		"basePath": "/api",
+		"paths": {"/items": {"get": {"responses": {"200": {"description": "OK"}}}}}}`)
+
+	doc, err := Import(document)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	collection := doc.Collections[0]
+	if base := variable(t, collection, "baseUrl"); base.Value != "" || base.Enabled {
+		t.Errorf("baseUrl = %+v, want a switched-off variable for the address", base)
+	}
+	if url := collection.Items[0].URL; url != "{{baseUrl}}/api/items" {
+		t.Errorf("url = %q, want the base path behind the hole", url)
 	}
 }
 
@@ -304,8 +343,6 @@ func TestImportBuildsBodiesFromSchemas(t *testing.T) {
 	if created.BodyKind != domain.BodyJSON {
 		t.Fatalf("kind = %q, want a JSON body", created.BodyKind)
 	}
-	// The placeholders are written the way Hoppscotch writes them: a person sees what the document
-	// expects, not an empty body.
 	if created.Body != "{\n  \"name\": \"string\",\n  \"price\": 0\n}" {
 		t.Errorf("body = %q, want the skeleton of the schema", created.Body)
 	}
@@ -354,9 +391,6 @@ func TestImportReadsAuthorization(t *testing.T) {
 	}
 }
 
-// A scheme offering several flows is read as the first one Hoppscotch reads: authorization code,
-// implicit, password, client credentials. What the requirement asks the scheme with — its scopes —
-// is what the grant carries, and the client pair arrives as variables a person fills in once.
 func TestImportReadsTheFirstOAuthFlowTheDocumentOffers(t *testing.T) {
 	document := []byte(`{"openapi": "3.1.0", "info": {"title": "Auth"},
 		"components": {"securitySchemes": {"oauth": {
@@ -394,10 +428,6 @@ func TestImportReadsTheFirstOAuthFlowTheDocumentOffers(t *testing.T) {
 	}
 }
 
-// A generator may write a security entry as a bare array of scheme names — `["bearerAuth"]` — where
-// the specification asks for an object. The entry names no scheme the document declares, so the
-// document reads with no authorization — which is what Hoppscotch makes of it too, and not a
-// refusal: the rest of the document is still a document.
 func TestImportLeavesASecurityEntryWrittenAsAnArrayWithoutAScheme(t *testing.T) {
 	collection, _ := read(t, "bare-security.json")
 	if collection.Auth != nil {
@@ -483,8 +513,6 @@ func TestImportLeavesAnUnusedTagOut(t *testing.T) {
 	}
 }
 
-// A document that names an operation nowhere leaves it under the plain placeholder — the name
-// Hoppscotch writes, and not a name invented out of the path.
 func TestImportLeavesAnUnnamedOperationUnderThePlaceholderName(t *testing.T) {
 	document := []byte(`{"openapi": "3.1.0", "info": {"title": "Thin"},
 		"paths": {"/a": {"get": {"responses": {"200": {"description": "OK"}}}}}}`)
@@ -501,7 +529,7 @@ func TestImportLeavesAnUnnamedOperationUnderThePlaceholderName(t *testing.T) {
 // The document's title is the name a person reads, and the identifier is the generator's: a slug is
 // not a name, so the title wins wherever the document has both.
 func TestImportNamesARequestByTheDocumentTitle(t *testing.T) {
-	document := []byte(`{"openapi": "3.1.0", "info": {"title": "PIM"},
+	document := []byte(`{"openapi": "3.1.0", "info": {"title": "Shop"},
 		"paths": {"/a": {"get": {"operationId": "_", "summary": "List products",
 			"responses": {"200": {"description": "OK"}}}}}}`)
 

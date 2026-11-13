@@ -169,8 +169,6 @@ func schemaSample(schema map[string]any, depth int) any {
 		}
 		return []any{}
 	case "string":
-		// The placeholder a person replaces, written the way Hoppscotch writes it: an empty string
-		// would make an imported body look like nothing came through.
 		return "string"
 	case "integer", "number":
 		return 0

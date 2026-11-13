@@ -131,8 +131,6 @@ func TestImportRefusesAFileThatIsNotAHAR(t *testing.T) {
 	}
 }
 
-// The collection is named the constant Hoppscotch names it by, whatever the log says about itself:
-// a log has no name of its own, and the tool that wrote it named nothing either.
 func TestImportNamesTheCollectionTheSameEveryTime(t *testing.T) {
 	one := []byte(`{"log":{"version":"1.2","creator":{"name":"Charles"},"entries":[
 		{"request":{"method":"GET","url":"https://only.example.com/a","headers":[],"queryString":[]}}]}}`)

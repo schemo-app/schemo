@@ -98,9 +98,6 @@ func (r *reader) schemeOf(declared map[string]any, scopes []string) *domain.Auth
 	return nil
 }
 
-// oauth2 reads one scheme's flow. A document may offer several; the first present wins in the order
-// authorization code, implicit, password, client credentials (as in Hoppscotch). A 2.0 document
-// keeps one flow beside the scheme.
 func (r *reader) oauth2(declared map[string]any, scopes []string) *domain.Auth {
 	if flows, ok := declared["flows"].(map[string]any); ok {
 		if code, ok := flows["authorizationCode"].(map[string]any); ok {

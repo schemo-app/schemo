@@ -255,11 +255,9 @@ func (r *reader) request(from resource, out *domain.Document) domain.CollectionN
 		Auth:        r.auth(from.Auth, out),
 	}
 	if node.Name == "" {
-		// The placeholder Hoppscotch writes where a file names a request nowhere.
 		node.Name = domain.UntitledRequest
 	}
 	if node.Method == "" {
-		// The method a file leaves out is the one its own dialog runs.
 		node.Method = "GET"
 	}
 
@@ -400,8 +398,6 @@ func (r *reader) auth(from *auth, out *domain.Document) *domain.Auth {
 			"key": templated(from.Key), "value": templated(from.Value), "place": place,
 		}}
 	case "oauth2":
-		// The grant the file names, and the authorization code flow where it names none — which is
-		// what a file leaves out and what Hoppscotch imports every one of them as.
 		return &domain.Auth{Type: domain.AuthOAuth2, Fields: map[string]string{
 			"grant":        domain.GrantNamed(from.GrantType),
 			"authUrl":      templated(from.AuthorizationURL),

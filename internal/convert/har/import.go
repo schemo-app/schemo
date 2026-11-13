@@ -20,8 +20,6 @@ func Import(data []byte) (domain.Document, error) {
 	}
 
 	var doc domain.Document
-	// One flat collection, named as Hoppscotch names it: a log has no name of its own, and each
-	// request carries its whole address, so no host level is needed.
 	collection := domain.Collection{Name: "Imported from HAR"}
 	for _, one := range file.Log.Entries {
 		collection.Items = append(collection.Items, requestNode(one.Request, &doc))

@@ -56,7 +56,3 @@ Request edits are partial: omit a field to keep it unchanged. Scripts, files and
 The desktop refreshes affected workspace data after MCP edits. Normal storage writes enqueue changes for synchronization.
 
 Application account credentials, OS credential-store entries and the MCP access token are not exposed through tools. No token-reveal tools, local filesystem access, arbitrary script execution or remote MCP listener are provided.
-
-## Compatibility approach
-
-Saved API data is readable by an authorized agent, while explicitly protected variables remain hidden. This follows the distinction documented by [Hoppscotch MCP](https://github.com/hoppscotch/hoppscotch-mcp-server#security). [Postman MCP](https://github.com/postmanlabs/postman-mcp-server/blob/main/src/tools/getCollection/getCollection.ts) returns collection API data, while [Postman Vault](https://learning.postman.com/docs/use/postman-vault/use-vault-secrets) separates protected secrets from saved request data. Schemo secret variables are not a Postman Vault implementation.

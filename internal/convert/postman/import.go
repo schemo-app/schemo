@@ -294,9 +294,6 @@ func authOf(from auth) *domain.Auth {
 		fields[key] = fieldValue(from.Extra[written.Name], name)
 	}
 	if kind == domain.AuthOAuth2 && fields["grant"] == "" {
-		// Postman writes no grant. Reading the scheme as client credentials would ask for the wrong
-		// flow; Postman's own dialog runs authorization code, which is also how Hoppscotch imports
-		// it.
 		fields["grant"] = domain.GrantAuthorizationCode
 	}
 	return &domain.Auth{Type: kind, Fields: fields}
