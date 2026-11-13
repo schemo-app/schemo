@@ -207,13 +207,13 @@ func (s *Settings) ParseProxyAddress(raw string) (ProxyAddress, error) {
 
 // Network is the HTTP engine as the network settings see it.
 type Network interface {
-	Probe(ctx context.Context) domain.ProxyProbe
+	Probe(ctx context.Context, destination string) domain.ProxyProbe
 	ProxyEnvironment() []domain.EnvEntry
 }
 
-// TestProxy sends one request through the configured proxy.
-func (s *Settings) TestProxy(ctx context.Context) domain.ProxyProbe {
-	return s.engine.Probe(ctx)
+// TestProxy checks whether the configured proxy can open a tunnel to the destination.
+func (s *Settings) TestProxy(ctx context.Context, destination string) domain.ProxyProbe {
+	return s.engine.Probe(ctx, destination)
 }
 
 // ProxyEnvironment is the proxy variables the system mode follows.

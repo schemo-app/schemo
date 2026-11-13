@@ -1,6 +1,7 @@
 package request
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -724,6 +725,76 @@ func TestProxyIsUsed(t *testing.T) {
 	}
 }
 
+func TestHTTPSProxyUsesTLSAndCredentialsForRequestsAndProbe(t *testing.T) {
+	const destination = "api.example.com:443"
+	const user, password = "proxy-user", "pa:ss"
+	proxyServer := httptest.NewUnstartedServer(nil)
+	proxyServer.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Proxy-Authorization") != domain.BasicAuthorization(user, password) {
+			w.WriteHeader(http.StatusProxyAuthRequired)
+			return
+		}
+		if r.Host != destination {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		if r.Method != http.MethodConnect {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		conn, buffered, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Errorf("hijack proxy tunnel: %v", err)
+			return
+		}
+		defer conn.Close()
+		if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Errorf("set tunnel deadline: %v", err)
+			return
+		}
+		if _, err := buffered.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
+			t.Errorf("write tunnel response: %v", err)
+			return
+		}
+		if err := buffered.Flush(); err != nil {
+			t.Errorf("flush tunnel response: %v", err)
+			return
+		}
+		// The probe closes after CONNECT. A request starts a second TLS handshake inside the tunnel.
+		inner := tls.Server(conn, &tls.Config{Certificates: proxyServer.TLS.Certificates})
+		req, err := http.ReadRequest(bufio.NewReader(inner))
+		if err != nil {
+			return
+		}
+		defer req.Body.Close()
+		if req.Header.Get("Proxy-Authorization") != "" {
+			t.Error("the origin received the proxy credentials")
+		}
+		_, _ = io.WriteString(inner, "HTTP/1.1 200 OK\r\nContent-Length: 16\r\nConnection: close\r\n\r\nproxied securely")
+	})
+	proxyServer.StartTLS()
+	defer proxyServer.Close()
+
+	proxy := manualProxy(t, proxyServer.URL)
+	proxy.User, proxy.Password = user, password
+	root := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: proxyServer.Certificate().Raw})
+	engine := newTestEngine(t, EngineConfig{
+		Proxy: proxy,
+		Roots: []domain.Root{{PEM: string(root)}},
+	})
+
+	result := send(engine, http.MethodGet, "https://"+destination+"/path", nil, "")
+	if result.Error != "" || result.Body != "proxied securely" {
+		t.Errorf("request through HTTPS proxy = %q (%s), want the authenticated response", result.Body, result.Error)
+	}
+	if probe := engine.Probe(t.Context(), "https://api.example.com/path"); !probe.OK {
+		t.Errorf("probe for the permitted host = %+v, want an open tunnel", probe)
+	}
+	if probe := engine.Probe(t.Context(), ""); probe.OK || probe.Status != http.StatusForbidden {
+		t.Errorf("probe for the default host = %+v, want an explicit refusal", probe)
+	}
+}
+
 func manualProxy(t *testing.T, rawURL string) domain.ProxySettings {
 	t.Helper()
 	parsed, err := url.Parse(rawURL)
@@ -736,7 +807,7 @@ func manualProxy(t *testing.T, rawURL string) domain.ProxySettings {
 	}
 	return domain.ProxySettings{
 		Mode:     domain.ProxyManual,
-		Protocol: domain.ProxyHTTP,
+		Protocol: domain.ProxyProtocol(parsed.Scheme),
 		Host:     parsed.Hostname(),
 		Port:     port,
 	}
@@ -754,7 +825,7 @@ func TestProbeReadsWhatTheProxyAnswers(t *testing.T) {
 
 	engine := newTestEngine(t, EngineConfig{})
 	engine.Apply(domain.Network{Proxy: manualProxy(t, tunnel.URL)})
-	opened := engine.Probe(context.Background())
+	opened := engine.Probe(t.Context(), "")
 	if !opened.OK || opened.Error != "" || opened.NeedsAuth {
 		t.Errorf("probe = %+v, want a tunnel that opened", opened)
 	}
@@ -765,7 +836,7 @@ func TestProbeReadsWhatTheProxyAnswers(t *testing.T) {
 	defer walled.Close()
 
 	engine.Apply(domain.Network{Proxy: manualProxy(t, walled.URL)})
-	refused := engine.Probe(context.Background())
+	refused := engine.Probe(t.Context(), "")
 	if refused.OK || !refused.NeedsAuth || refused.Status != http.StatusProxyAuthRequired {
 		t.Errorf("probe = %+v, want the proxy asking for credentials", refused)
 	}
@@ -786,11 +857,11 @@ func TestProbeAsksForATunnelWithTheProxyCredentials(t *testing.T) {
 	engine := newTestEngine(t, EngineConfig{})
 	engine.Apply(domain.Network{Proxy: proxy})
 
-	if opened := engine.Probe(context.Background()); !opened.OK {
+	if opened := engine.Probe(t.Context(), ""); !opened.OK {
 		t.Fatalf("probe = %+v, want a tunnel that opened", opened)
 	}
-	if target != probeHost {
-		t.Errorf("the tunnel was asked for %q, want %q", target, probeHost)
+	if target != defaultProbeAddress {
+		t.Errorf("the tunnel was asked for %q, want %q", target, defaultProbeAddress)
 	}
 	if want := domain.BasicAuthorization("me", "pa:ss"); credentials != want {
 		t.Errorf("Proxy-Authorization = %q, want %q", credentials, want)
@@ -803,7 +874,7 @@ func TestProbeSaysWhenNothingAnswers(t *testing.T) {
 		Mode: domain.ProxyManual, Protocol: domain.ProxyHTTP, Host: "127.0.0.1", Port: 1,
 	}})
 
-	probe := engine.Probe(context.Background())
+	probe := engine.Probe(t.Context(), "")
 	if probe.OK || probe.Error == "" {
 		t.Errorf("probe = %+v, want a failure with its reason", probe)
 	}

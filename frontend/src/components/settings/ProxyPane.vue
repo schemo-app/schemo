@@ -139,12 +139,13 @@ async function takeFromEnvironment() {
 // closed. Nothing travels through it.
 const probing = ref(false)
 const probe = ref<ProxyProbe | null>(null)
+const destination = ref('')
 
 async function test() {
   probing.value = true
   probe.value = null
   await withNotice(async () => {
-    probe.value = await Settings.TestProxy()
+    probe.value = await Settings.TestProxy(destination.value.trim())
   })
   probing.value = false
 }
@@ -155,7 +156,10 @@ const probeLine = computed(() => {
   if (held.ok) return t('settings.proxy.probeOk', { ms: String(held.millis) })
   if (held.needsAuth) return t('settings.proxy.probeAuth')
   if (held.error) return held.error
-  return t('settings.proxy.probeRefused', { status: String(held.status) })
+  return t('settings.proxy.probeRefused', {
+    destination: destination.value.trim() || 'example.com:443',
+    status: String(held.status),
+  })
 })
 
 onMounted(async () => {
@@ -300,14 +304,27 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="card-block foot">
-        <Button size="field" :disabled="probing" @click="test">
-          {{ probing ? t('settings.proxy.probeRunning') : probe ? t('settings.proxy.probeAgain') : t('settings.proxy.probeRun') }}
-        </Button>
-        <span v-if="probe" class="answer" :class="{ ok: probe.ok, bad: !probe.ok }">
-          <span class="dot" :class="{ ok: probe.ok }"></span>
-          <span class="answer-text">{{ probeLine }}</span>
-        </span>
+      <div class="card-block probe">
+        <label class="field">
+          <span class="field-label">{{ t('settings.proxy.probeDestination') }}</span>
+          <Input
+            v-model="destination"
+            :disabled="probing"
+            spellcheck="false"
+            placeholder="example.com:443"
+            @update:model-value="probe = null"
+            @keydown.enter="!probing && test()"
+          />
+        </label>
+        <div class="foot">
+          <Button size="field" :disabled="probing" @click="test">
+            {{ probing ? t('settings.proxy.probeRunning') : probe ? t('settings.proxy.probeAgain') : t('settings.proxy.probeRun') }}
+          </Button>
+          <span v-if="probe" class="answer" :class="{ ok: probe.ok, bad: !probe.ok }">
+            <span class="dot" :class="{ ok: probe.ok }"></span>
+            <span class="answer-text">{{ probeLine }}</span>
+          </span>
+        </div>
       </div>
     </SettingsSection>
 
@@ -469,9 +486,11 @@ onMounted(async () => {
 }
 
 .foot {
-  @apply flex-row items-center;
+  @apply flex items-center;
   gap: 0.875rem;
-  padding: 0.75rem 1rem;
+}
+
+.probe {
   background: var(--bg-hover);
 }
 

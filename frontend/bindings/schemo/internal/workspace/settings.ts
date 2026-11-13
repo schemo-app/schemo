@@ -73,8 +73,8 @@ export function Save(patch: { [_ in string]?: any } | null): $CancellablePromise
 }
 
 /**
- * TestProxy sends one request through the configured proxy.
+ * TestProxy checks whether the configured proxy can open a tunnel to the destination.
  */
-export function TestProxy(): $CancellablePromise<domain$0.ProxyProbe> {
-    return $Call.ByID(1670571627);
+export function TestProxy(destination: string): $CancellablePromise<domain$0.ProxyProbe> {
+    return $Call.ByID(1670571627, destination);
 }

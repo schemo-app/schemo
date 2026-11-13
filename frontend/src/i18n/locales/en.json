@@ -1954,12 +1954,13 @@
       "bypassNote": "These hosts go straight out: names, *.masks, subnets",
       "bypassAdd": "Type and press Enter",
       "probe": "Test the connection",
+      "probeDestination": "Tunnel destination",
       "probeRun": "Test the connection",
       "probeRunning": "Testing…",
       "probeAgain": "Test again",
       "probeOk": "Works · {ms} ms",
       "probeAuth": "The proxy wants a username and a password",
-      "probeRefused": "The proxy refused the tunnel ({status})",
+      "probeRefused": "The proxy refused the tunnel to {destination} ({status})",
       "offNote": "Requests are sent directly. Environment variables are not used."
     },
     "certificates": {

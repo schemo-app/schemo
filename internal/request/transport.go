@@ -175,7 +175,11 @@ func proxyURL(proxy domain.ProxySettings) string {
 	if address == "" {
 		return ""
 	}
-	held := url.URL{Scheme: "http", Host: address}
+	scheme := "http"
+	if proxy.Protocol == domain.ProxyHTTPS {
+		scheme = "https"
+	}
+	held := url.URL{Scheme: scheme, Host: address}
 	if proxy.User != "" {
 		held.User = url.UserPassword(proxy.User, proxy.Password)
 	}
