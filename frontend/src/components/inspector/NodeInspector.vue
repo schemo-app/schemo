@@ -64,9 +64,6 @@ async function copyValue() {
   <div class="inspector">
     <div class="inspector-head">
       <span class="inspector-title">{{ t('inspector.details') }}</span>
-      <IconButton v-if="node?.parent" :hint="t('inspector.parent')" @click="emit('pick', node.parent)">
-        <Icon name="ChevronUp" :size="14" :stroke-width="2" />
-      </IconButton>
       <IconButton :hint="t('common.close')" @click="emit('close')">
         <Icon name="X" :size="14" :stroke-width="2.2" />
       </IconButton>
