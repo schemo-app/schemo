@@ -7,7 +7,7 @@ info:
   description: "A cross-platform API client for building, testing, and sharing HTTP requests."
   copyright: "© 2026, Yuri Gerassimov"
   comments: "Schemo"
-  version: "0.3.0"
+  version: "0.4.0"
 
 protocols:
   - scheme: schemo
