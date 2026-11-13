@@ -5,7 +5,20 @@ import { describeFailure, failureText, t as tr } from '../i18n'
 import { useWailsEvent } from './useWailsEvent'
 
 /** Current stage of the application update lifecycle. */
-export type UpdatePhase = 'idle' | 'checking' | 'uptodate' | 'available' | 'installing' | 'error'
+type TransferPhase = 'downloading' | 'downloaded' | 'installing'
+type UpdatePhase = TransferPhase | 'idle' | 'checking' | 'uptodate' | 'available' | 'error'
+
+function updatePhase({ phase, checkedAt, available }: UpdateStatus): UpdatePhase {
+  switch (phase) {
+    case 'downloading':
+    case 'downloaded':
+    case 'installing':
+      return phase
+    default:
+      if (!checkedAt) return 'idle'
+      return available ? 'available' : 'uptodate'
+  }
+}
 
 // One state per window however many views draw it — the settings window draws it twice — and its
 // listeners live as long as any of them does.
@@ -17,6 +30,8 @@ const useUpdateState = createSharedComposable(() => {
   const checkedAt = ref(0)
   const error = ref('')
   const development = ref(false)
+  let checking = false
+  let revision = 0
 
   /** Synchronizes local state with backend update information. */
   function apply(info: UpdateStatus | null): void {
@@ -27,36 +42,49 @@ const useUpdateState = createSharedComposable(() => {
     checkedAt.value = info.checkedAt ?? 0
     development.value = info.development ?? false
 
-    if (phase.value === 'installing') return
-    if (!info.checkedAt) {
-      phase.value = 'idle'
-      return
+    error.value = ''
+    phase.value = updatePhase(info)
+  }
+
+  async function load(): Promise<void> {
+    const before = revision
+    try {
+      const status = await Updates.Status()
+      if (revision === before) apply(status)
+    } catch {
+      // The window keeps the last update state it received.
     }
-    phase.value = info.available ? 'available' : 'uptodate'
   }
 
   /** Triggers an asynchronous update check via backend service. */
   async function check(): Promise<void> {
-    if (phase.value === 'checking' || phase.value === 'installing') return
+    if (checking || phase.value === 'downloading' || phase.value === 'installing') return
+    checking = true
+    const before = revision
     phase.value = 'checking'
     error.value = ''
     try {
-      apply(await Updates.Check())
+      const status = await Updates.Check()
+      if (revision === before) apply(status)
     } catch {
-      error.value = tr('errors.updateCheckFailed')
-      phase.value = 'error'
+      if (revision === before) {
+        error.value = tr('errors.updateCheckFailed')
+        phase.value = 'error'
+      }
+    } finally {
+      checking = false
     }
   }
 
   /** Initiates application binary update installation process. */
   async function install(): Promise<void> {
-    if (!latest.value || phase.value === 'installing') return
+    if (!available.value || phase.value === 'downloading' || phase.value === 'installing') return
     phase.value = 'installing'
     error.value = ''
     try {
       await Updates.Install(latest.value)
-    } catch (e) {
-      error.value = tr('errors.updateFailed', { error: describeFailure(e) })
+    } catch (failure) {
+      error.value = tr('errors.updateFailed', { error: describeFailure(failure) })
       phase.value = 'error'
     }
   }
@@ -65,8 +93,8 @@ const useUpdateState = createSharedComposable(() => {
   async function skip(): Promise<void> {
     try {
       apply(await Updates.Skip())
-    } catch (e) {
-      error.value = tr('errors.updateFailed', { error: describeFailure(e) })
+    } catch (failure) {
+      error.value = tr('errors.updateFailed', { error: describeFailure(failure) })
       phase.value = 'error'
     }
   }
@@ -86,13 +114,13 @@ const useUpdateState = createSharedComposable(() => {
     }
   }
 
-  useWailsEvent('update-changed', (event) => apply(event.data))
-  useWailsEvent('wails:updater:download-started', () => {
-    phase.value = 'installing'
-    error.value = ''
+  useWailsEvent('update-changed', (event) => {
+    revision++
+    apply(event.data)
   })
   useWailsEvent('wails:updater:error', (event) => {
-    if (event.data.stage === 'check') return
+    if (event.data.stage === 'check' || phase.value !== 'installing') return
+    revision++
     const message = failureText({ code: event.data.message }) ?? event.data.message
     error.value = tr('errors.updateFailed', { error: message })
     phase.value = 'error'
@@ -106,7 +134,7 @@ const useUpdateState = createSharedComposable(() => {
     checkedAt,
     error,
     development,
-    apply,
+    load,
     check,
     install,
     skip,
@@ -117,13 +145,7 @@ const useUpdateState = createSharedComposable(() => {
 
 /** The update state every window draws, refreshed from Go as the view mounts. */
 export function useUpdateCheck() {
-  const { apply, ...state } = useUpdateState()
-  onMounted(async () => {
-    try {
-      apply(await Updates.Status())
-    } catch {
-      // No backend answer: the line stays on "no check yet".
-    }
-  })
+  const { load, ...state } = useUpdateState()
+  onMounted(load)
   return state
 }

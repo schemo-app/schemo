@@ -3,8 +3,13 @@ package desktop
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"testing/synctest"
 	"time"
+
+	wailsupdater "github.com/wailsapp/wails/v3/pkg/updater"
 
 	"schemo/internal/db"
 	"schemo/internal/db/dbtest"
@@ -18,6 +23,9 @@ type fakeReleases struct {
 	asked      []domain.UpdateChannel
 	installed  []string
 	installErr error
+	staged     []string
+	stageErr   error
+	stagingDir string
 }
 
 func (f *fakeReleases) Latest(
@@ -31,9 +39,22 @@ func (f *fakeReleases) Latest(
 	return f.release, nil
 }
 
-func (f *fakeReleases) Install(_ context.Context, _ domain.UpdateChannel, version string) error {
-	f.installed = append(f.installed, version)
+func (f *fakeReleases) Install(_ context.Context, staged stagedRelease) error {
+	defer staged.discard()
+	f.installed = append(f.installed, staged.release.Version)
 	return f.installErr
+}
+
+func (f *fakeReleases) Stage(_ context.Context, _ domain.UpdateChannel, version string) (stagedRelease, error) {
+	f.staged = append(f.staged, version)
+	if f.stageErr != nil {
+		return stagedRelease{}, f.stageErr
+	}
+	dir, err := os.MkdirTemp(f.stagingDir, "stage-")
+	if err != nil {
+		return stagedRelease{}, err
+	}
+	return stagedRelease{release: &wailsupdater.Release{Version: version}, path: filepath.Join(dir, "release")}, nil
 }
 
 type harness struct {
@@ -45,7 +66,7 @@ type harness struct {
 
 func newHarness(t *testing.T, version string) *harness {
 	t.Helper()
-	releases := &fakeReleases{}
+	releases := &fakeReleases{stagingDir: t.TempDir()}
 	store := dbtest.New(t)
 	return &harness{t: t, updates: NewUpdates(releases, store, nil, platform.BuildInfo{Version: version}),
 		releases: releases, store: store}
@@ -63,6 +84,9 @@ func (h *harness) state() domain.UpdateState {
 
 func (h *harness) remember(state domain.UpdateState) {
 	h.t.Helper()
+	if state.Channel == "" {
+		state.Channel = domain.ChannelStable
+	}
 	if err := h.store.SaveUpdateState(context.Background(), state); err != nil {
 		h.t.Fatalf("SaveUpdateState: %v", err)
 	}
@@ -199,34 +223,33 @@ func TestNotesFollowTheDisplayedRelease(t *testing.T) {
 	assertNotes("Installed release changes")
 }
 
-func TestStartupCheckSkipsWhenTheLastCheckIsYoung(t *testing.T) {
+func TestLaunchChecksAgainAfterARecentCheck(t *testing.T) {
 	h := newHarness(t, "1.0.0")
-	h.remember(domain.UpdateState{LastCheckAt: time.Now().Add(-time.Hour).UnixMilli()})
+	h.remember(domain.UpdateState{LastCheckAt: time.Now().Add(-time.Minute).UnixMilli(), Latest: "1.0.0"})
 	h.releases.release = domain.Release{Version: "1.2.0"}
 
-	if got := h.updates.startupCheck(context.Background()); got != nil {
-		t.Errorf("StartupCheck = %+v, want nil inside the interval", got)
-	}
-	if len(h.releases.asked) != 0 {
-		t.Error("the release source was asked despite a young check")
+	h.updates.refresh(t.Context(), true)
+	if got, err := h.updates.Status(t.Context()); err != nil || !got.Available || got.Latest != "1.2.0" {
+		t.Fatalf("Status after launch = %+v, %v; want the new release", got, err)
 	}
 }
 
-func TestStartupCheckAsksAfterTheInterval(t *testing.T) {
-	h := newHarness(t, "1.0.0")
-	h.remember(domain.UpdateState{LastCheckAt: time.Now().Add(-checkInterval - time.Hour).UnixMilli()})
-	h.releases.release = domain.Release{Version: "1.2.0"}
-
-	got := h.updates.startupCheck(context.Background())
-	if got == nil {
-		t.Fatal("StartupCheck = nil, want the release")
-	}
-	if !got.Available {
-		t.Error("Available = false, want true")
-	}
+func TestUpdatesCheckAgainWhileRunning(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		h := newHarness(t, "1.0.0")
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go h.updates.Run(ctx)
+		synctest.Wait()
+		time.Sleep(checkInterval)
+		synctest.Wait()
+		if got := len(h.releases.asked); got != 2 {
+			t.Errorf("checks = %d, want one on launch and one after the interval", got)
+		}
+	})
 }
 
-func TestStartupOffersRememberedReleaseWithoutCheckingAgain(t *testing.T) {
+func TestLaunchRetainsRememberedReleaseWhenOffline(t *testing.T) {
 	for _, skipped := range []string{"", "1.2.0"} {
 		t.Run("skipped="+skipped, func(t *testing.T) {
 			h := newHarness(t, "1.0.0")
@@ -236,16 +259,11 @@ func TestStartupOffersRememberedReleaseWithoutCheckingAgain(t *testing.T) {
 				Skipped:     skipped,
 				Notes:       []string{"Release notes"},
 			})
-			got := h.updates.startupCheck(context.Background())
-			if skipped != "" {
-				if got != nil {
-					t.Errorf("StartupCheck = %+v, want nil for skipped release", got)
-				}
-			} else if got == nil || !got.Available || got.Latest != "1.2.0" || len(got.Notes) != 1 {
-				t.Errorf("StartupCheck = %+v, want remembered release with notes", got)
-			}
-			if len(h.releases.asked) != 0 {
-				t.Error("StartupCheck reached the network inside the check interval")
+			h.releases.err = errors.New("offline")
+			h.updates.refresh(t.Context(), true)
+			got, err := h.updates.Status(t.Context())
+			if err != nil || got.Latest != "1.2.0" || got.Available != (skipped == "") {
+				t.Errorf("Status after failed check = %+v, %v; want remembered release respecting skip", got, err)
 			}
 		})
 	}
@@ -256,9 +274,7 @@ func TestAutoCheckOffStopsOnlyTheLaunchTimeCheck(t *testing.T) {
 	h.prefer(func(s *domain.Settings) { s.UpdateCheckAuto = false })
 	h.releases.release = domain.Release{Version: "1.2.0"}
 
-	if got := h.updates.startupCheck(context.Background()); got != nil {
-		t.Errorf("StartupCheck = %+v, want nil with the preference off", got)
-	}
+	h.updates.refresh(t.Context(), true)
 	if len(h.releases.asked) != 0 {
 		t.Error("the release source was asked with the preference off")
 	}
@@ -275,9 +291,7 @@ func TestADevBuildNeverChecksOnItsOwn(t *testing.T) {
 	h := newHarness(t, devVersion)
 	h.releases.release = domain.Release{Version: "1.2.0"}
 
-	if got := h.updates.startupCheck(context.Background()); got != nil {
-		t.Errorf("StartupCheck = %+v for a dev build, want nil", got)
-	}
+	h.updates.Run(t.Context())
 	if len(h.releases.asked) != 0 {
 		t.Error("a dev build asked the release source")
 	}
@@ -293,6 +307,81 @@ func TestCheckAsksTheChosenChannel(t *testing.T) {
 	}
 	if len(h.releases.asked) != 1 || h.releases.asked[0] != domain.ChannelBeta {
 		t.Errorf("asked %v, want the beta channel", h.releases.asked)
+	}
+}
+
+func TestChangingChannelChecksEvenWithARecentResult(t *testing.T) {
+	h := newHarness(t, "1.0.0")
+	h.remember(domain.UpdateState{Latest: "1.2.0", LastCheckAt: time.Now().UnixMilli()})
+	h.prefer(func(s *domain.Settings) { s.UpdateChannel = domain.ChannelBeta })
+	got, err := h.updates.Status(t.Context())
+	if err != nil || got.Available {
+		t.Fatalf("Status before checking beta = %+v, %v; want no offer from stable", got, err)
+	}
+	h.releases.release = domain.Release{Version: "2.0.0-beta.1"}
+	h.updates.refresh(t.Context(), false)
+	got, err = h.updates.Status(t.Context())
+	if err != nil || !got.Available || got.Latest != "2.0.0-beta.1" {
+		t.Fatalf("Status after checking beta = %+v, %v; want the beta release", got, err)
+	}
+}
+
+func TestBackgroundDownloadStagesAnOfferedReleaseOnce(t *testing.T) {
+	h := newHarness(t, "1.0.0")
+	h.releases.release = domain.Release{Version: "1.2.0"}
+	h.updates.refresh(t.Context(), true)
+	if len(h.releases.staged) != 0 {
+		t.Fatal("update was staged before automatic downloads were enabled")
+	}
+
+	h.prefer(func(s *domain.Settings) { s.UpdateDownloadAuto = true })
+	h.updates.refresh(t.Context(), false)
+	h.updates.refresh(t.Context(), true)
+	got, err := h.updates.Status(t.Context())
+	if err != nil || got.Phase != phaseDownloaded {
+		t.Fatalf("Status after download = %+v, %v; want the staged release", got, err)
+	}
+	if len(h.releases.staged) != 1 || len(h.releases.installed) != 0 {
+		t.Fatalf("staged %v and installed %v; want one download awaiting installation", h.releases.staged, h.releases.installed)
+	}
+	h.prefer(func(s *domain.Settings) { s.UpdateDownloadAuto = false })
+	h.updates.refresh(t.Context(), false)
+	got, err = h.updates.Status(t.Context())
+	if err != nil || !got.Available || got.Phase != "" {
+		t.Fatalf("Status after disabling background downloads = %+v, %v; want the release without a staged download", got, err)
+	}
+	if entries, err := os.ReadDir(h.releases.stagingDir); err != nil || len(entries) != 0 {
+		t.Fatalf("staging directory = %v, %v; want empty after disabling background downloads", entries, err)
+	}
+	h.prefer(func(s *domain.Settings) { s.UpdateDownloadAuto = true })
+	h.updates.refresh(t.Context(), false)
+	if _, err := h.updates.Skip(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	h.updates.refresh(t.Context(), true)
+	if entries, err := os.ReadDir(h.releases.stagingDir); err != nil || len(entries) != 0 {
+		t.Fatalf("staging directory = %v, %v; want empty after skipping", entries, err)
+	}
+	if len(h.releases.staged) != 2 {
+		t.Fatalf("staged %v; skipping must prevent a new download", h.releases.staged)
+	}
+}
+
+func TestFailedBackgroundDownloadCanBeRetried(t *testing.T) {
+	h := newHarness(t, "1.0.0")
+	h.prefer(func(s *domain.Settings) { s.UpdateDownloadAuto = true })
+	h.releases.release = domain.Release{Version: "1.2.0"}
+	h.releases.stageErr = errors.New("download failed")
+	h.updates.refresh(t.Context(), true)
+	got, err := h.updates.Status(t.Context())
+	if err != nil || !got.Available || got.Phase != "" {
+		t.Fatalf("Status after failed download = %+v, %v; want the release available", got, err)
+	}
+	h.releases.stageErr = nil
+	h.updates.refresh(t.Context(), true)
+	got, err = h.updates.Status(t.Context())
+	if err != nil || got.Phase != phaseDownloaded || len(h.releases.staged) != 2 {
+		t.Fatalf("Status after retry = %+v, %v; want the staged release on the second attempt", got, err)
 	}
 }
 
@@ -335,6 +424,20 @@ func TestInstallHandsTheVersionToTheMechanism(t *testing.T) {
 	}
 }
 
+func TestInstallReusesTheBackgroundDownload(t *testing.T) {
+	h := newHarness(t, "1.0.0")
+	h.prefer(func(s *domain.Settings) { s.UpdateDownloadAuto = true })
+	h.releases.release = domain.Release{Version: "1.2.0"}
+	h.updates.refresh(t.Context(), true)
+
+	if err := h.updates.Install(t.Context(), "1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.releases.staged) != 1 || len(h.releases.installed) != 1 {
+		t.Fatalf("staged %v, installed %v; want one download and one installation", h.releases.staged, h.releases.installed)
+	}
+}
+
 // A build from the sources says so in its status and never installs a release over itself.
 func TestABuildFromTheSourcesDoesNotInstall(t *testing.T) {
 	h := newHarness(t, "dev")
@@ -374,8 +477,5 @@ func TestAStoreFailureIsReported(t *testing.T) {
 	}
 	if _, err := h.updates.Status(context.Background()); err == nil {
 		t.Error("Status returned no error with an unreadable store")
-	}
-	if got := h.updates.startupCheck(context.Background()); got != nil {
-		t.Error("StartupCheck reported an update it could not have read")
 	}
 }

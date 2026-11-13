@@ -38,6 +38,8 @@ const meta = computed(() => {
   const said = { build: build.value || '—' }
   switch (phase.value) {
     case 'available':
+    case 'downloading':
+    case 'downloaded':
       return t('settings.buildAvailable', { ...said, version: formatVersion(latest.value) })
     case 'uptodate':
       return t('settings.buildCurrent', said)

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	wailsupdater "github.com/wailsapp/wails/v3/pkg/updater"
@@ -50,8 +51,10 @@ func TestPackageUpdatesVerifyBeforeInstallationAndRestartOnlyAfterSuccess(t *tes
 			for _, name := range []string{"TMPDIR", "TEMP", "TMP"} {
 				t.Setenv(name, staging)
 			}
+			var downloads atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/artifact" {
+					downloads.Add(1)
 					if mode == "truncated" {
 						w.Header().Set("Content-Length", "1000")
 					}
@@ -124,8 +127,17 @@ func TestPackageUpdatesVerifyBeforeInstallationAndRestartOnlyAfterSuccess(t *tes
 				},
 				restart: func() error { restarted = true; return nil },
 			}
-			err = engine.Install(t.Context(), domain.ChannelStable, "1.1.0")
 			wantInstalled := mode == "signed" || mode == "installation-denied"
+			staged, err := engine.Stage(t.Context(), domain.ChannelStable, "1.1.0")
+			if installed || restarted || (err == nil) != wantInstalled {
+				t.Fatalf("Stage(%s): installed=%v, restarted=%v, error=%v", mode, installed, restarted, err)
+			}
+			if err == nil {
+				err = engine.Install(t.Context(), staged)
+				if got := downloads.Load(); got != 1 {
+					t.Errorf("downloads = %d, want one download for staging and installation", got)
+				}
+			}
 			if (err != nil) != (mode != "signed") || installed != wantInstalled || restarted != (mode == "signed") {
 				t.Errorf("Install(%s): installed=%v, restarted=%v, error=%v", mode, installed, restarted, err)
 			}
@@ -200,17 +212,8 @@ func TestWailsAuthenticatesUpdateBeforeStaging(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			_, err = updater.Check(t.Context())
-			if mode == "unsigned" || mode == "digest-only" {
-				if err == nil {
-					t.Fatal("unsigned release accepted")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = updater.DownloadAndInstall(t.Context())
+			engine := &Updater{updater: updater, source: source}
+			staged, err := engine.Stage(t.Context(), domain.ChannelStable, "1.1.0")
 			if mode != "signed" {
 				if err == nil || updater.DownloadedPath() != "" {
 					t.Fatal("untrusted artifact staged")
@@ -220,10 +223,14 @@ func TestWailsAuthenticatesUpdateBeforeStaging(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			path := updater.DownloadedPath()
+			path := staged.path
 			got, err := os.ReadFile(path)
 			if err != nil || string(got) != string(payload) {
 				t.Fatalf("staged artifact = %q, %v", got, err)
+			}
+			staged.discard()
+			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("discarded artifact: %v, want file removed", err)
 			}
 		})
 	}

@@ -1600,6 +1600,7 @@ export interface Settings {
      */
     "shortcuts"?: { [_ in string]?: string } | null;
     "updateCheckAuto": boolean;
+    "updateDownloadAuto": boolean;
     "updateChannel": UpdateChannel;
     "wrapLines": boolean;
     "lineNumbers": boolean;

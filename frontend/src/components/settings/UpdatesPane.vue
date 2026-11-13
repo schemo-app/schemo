@@ -17,7 +17,7 @@ import logoUrl from '../../assets/logo.svg'
 
 // What the app is right now, which releases it may be offered, and whether it looks for them on its
 // own. The card at the top is the app itself, with the two things a person does about that.
-const { loadSettings, save } = useSettings()
+const { loadSettings, saveOrToast } = useSettings()
 const { phase, latest, available, notes, checkedAt, error, check, openWindow, checkIfRequested } = useUpdateCheck()
 
 const { name: appName, version, build } = useAppInfo()
@@ -31,6 +31,7 @@ const channels = computed(() => [
 // The stored choice until the window has read it: the same defaults Go answers with.
 const channel = useSetting('updateChannel')
 const autoCheck = useSetting('updateCheckAuto')
+const autoDownload = useSetting('updateDownloadAuto')
 
 const channelNote = computed(() =>
   channel.value === UpdateChannel.ChannelBeta
@@ -55,6 +56,10 @@ const stateLine = computed(() => {
       return t('update.checkingLong')
     case 'installing':
       return t('update.installing')
+    case 'downloading':
+      return t('update.downloading')
+    case 'downloaded':
+      return t('update.downloaded', { version: formatVersion(latest.value) })
     case 'uptodate':
       return t('update.upToDate')
     case 'available':
@@ -75,14 +80,17 @@ const tone = computed(() => {
     case 'error':
       return 'bad'
     case 'available':
+    case 'downloaded':
       return 'news'
     default:
       return 'quiet'
   }
 })
 
-const busy = computed(() => phase.value === 'checking' || phase.value === 'installing')
-const openable = computed(() => phase.value === 'available' || phase.value === 'installing')
+const busy = computed(() =>
+  phase.value === 'checking' || phase.value === 'downloading' || phase.value === 'installing'
+)
+const openable = computed(() => available.value && phase.value !== 'checking')
 const newsVersion = computed(() => available.value ? latest.value : version.value)
 
 // The notes of the version on offer; with nothing on offer, the current release's own.
@@ -133,24 +141,22 @@ onMounted(() => {
           :grow="false"
           :options="channels"
           :value="channel"
-          @pick="save({ updateChannel: $event as UpdateChannel })"
+          @pick="saveOrToast({ updateChannel: $event as UpdateChannel })"
         />
       </SettingsRow>
       <SettingsRow :title="t('settings.checkAutomatically')" :note="lastChecked">
         <Switch
           :model-value="autoCheck"
           :aria-label="t('settings.checkAutomatically')"
-          @update:model-value="save({ updateCheckAuto: !!$event })"
+          @update:model-value="saveOrToast({ updateCheckAuto: $event })"
         />
       </SettingsRow>
-      <!-- A row the updater has nothing behind: it downloads and installs in one go, and has no queue
-           to keep a download in. Drawn shut, and saying so. -->
-      <SettingsRow
-        :title="t('settings.autoDownload')"
-        :note="t('settings.autoDownloadNote')"
-        :soon="t('settings.soon')"
-      >
-        <Switch :model-value="false" disabled :aria-label="t('settings.autoDownload')" />
+      <SettingsRow :title="t('settings.autoDownload')" :note="t('settings.autoDownloadNote')">
+        <Switch
+          :model-value="autoDownload"
+          :aria-label="t('settings.autoDownload')"
+          @update:model-value="saveOrToast({ updateDownloadAuto: $event })"
+        />
       </SettingsRow>
     </SettingsSection>
 

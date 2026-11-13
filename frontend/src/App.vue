@@ -54,8 +54,8 @@ const environments = useEnvironmentsStore()
 const search = useSearchStore()
 const workspaces = useWorkspacesStore()
 const cookies = useCookiesStore()
-const { phase: updatePhase, latest: updateVersion } = useUpdateCheck()
-const availableVersion = computed(() => (updatePhase.value === 'available' ? updateVersion.value : ''))
+const { available: updateAvailable, latest: updateVersion } = useUpdateCheck()
+const availableVersion = computed(() => (updateAvailable.value ? updateVersion.value : ''))
 const { hidden: sidebarHidden } = useSidebarToggle()
 const {
   state: accountState,

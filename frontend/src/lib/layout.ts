@@ -44,6 +44,7 @@ export const DEFAULTS = {
     "allWorkspaces": true
   },
   "updateCheckAuto": true,
+  "updateDownloadAuto": false,
   "updateChannel": "stable",
   "wrapLines": true,
   "lineNumbers": true,

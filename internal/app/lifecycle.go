@@ -58,7 +58,7 @@ func newStartup(in startupDeps) (startApplication, stopApplication) {
 		if current.MCP.Enabled {
 			startupError("MCP", in.MCP.Apply(current.MCP))
 		}
-		jobs.Go(func() error { in.Updates.CheckOnStartup(lifetime); return nil })
+		jobs.Go(func() error { in.Updates.Run(lifetime); return nil })
 		jobs.Go(func() error { startupError("publication takedowns", in.Pages.Replay(lifetime)); return nil })
 		return nil
 	}

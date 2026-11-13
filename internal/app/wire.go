@@ -170,6 +170,14 @@ func Build(assets desktop.Assets) (*App, error) {
 	initStorage := desktop.OpenStorage(s.Store, s.Status, dir)
 	app := desktop.NewApp(host, info, assets, dir, s.Status, initStorage)
 	s.Updates = desktop.NewUpdates(desktop.NewUpdater(app, info, host), s.Store, host, info)
+	s.Settings.Watch(func(_ context.Context, before, after domain.Settings) error {
+		if before.UpdateChannel != after.UpdateChannel ||
+			before.UpdateCheckAuto != after.UpdateCheckAuto ||
+			before.UpdateDownloadAuto != after.UpdateDownloadAuto {
+			s.Updates.Wake()
+		}
+		return nil
+	})
 
 	start, stop := newStartup(startupDeps{
 		Status:     s.Status,

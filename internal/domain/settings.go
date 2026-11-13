@@ -185,19 +185,20 @@ type Settings struct {
 	// Shortcuts holds only what was changed: a command not in it uses its default combination, and
 	// ShortcutNone means no combination. The command registry lives in the window, which owns the
 	// labels and the actions.
-	Shortcuts       map[string]string `json:"shortcuts,omitempty"`
-	UpdateCheckAuto bool              `json:"updateCheckAuto"`
-	UpdateChannel   UpdateChannel     `json:"updateChannel"`
-	WrapLines       bool              `json:"wrapLines"`
-	LineNumbers     bool              `json:"lineNumbers"`
-	Indent          Indent            `json:"indent"`
-	ReopenWorkspace bool              `json:"reopenWorkspace"`
-	RestoreTabs     bool              `json:"restoreTabs"`
-	Proxy           ProxySettings     `json:"proxy"`
-	Certificates    Certificates      `json:"certificates"`
-	Requests        Requests          `json:"requests"`
-	Appearance      Appearance        `json:"appearance"`
-	Onboarding      Onboarding        `json:"onboarding"`
+	Shortcuts          map[string]string `json:"shortcuts,omitempty"`
+	UpdateCheckAuto    bool              `json:"updateCheckAuto"`
+	UpdateDownloadAuto bool              `json:"updateDownloadAuto"`
+	UpdateChannel      UpdateChannel     `json:"updateChannel"`
+	WrapLines          bool              `json:"wrapLines"`
+	LineNumbers        bool              `json:"lineNumbers"`
+	Indent             Indent            `json:"indent"`
+	ReopenWorkspace    bool              `json:"reopenWorkspace"`
+	RestoreTabs        bool              `json:"restoreTabs"`
+	Proxy              ProxySettings     `json:"proxy"`
+	Certificates       Certificates      `json:"certificates"`
+	Requests           Requests          `json:"requests"`
+	Appearance         Appearance        `json:"appearance"`
+	Onboarding         Onboarding        `json:"onboarding"`
 }
 
 func DefaultSettings() Settings {
@@ -774,7 +775,8 @@ type Release struct {
 // are separate (Settings), though both share a table.
 type UpdateState struct {
 	// LastCheckAt is when a check last succeeded, in ms since the epoch; zero if none ever has.
-	LastCheckAt int64 `json:"lastCheckAt,omitempty"`
+	LastCheckAt int64         `json:"lastCheckAt,omitempty"`
+	Channel     UpdateChannel `json:"channel,omitempty"`
 	// Latest is the newest release the source reported, whether or not it was offered.
 	Latest string   `json:"latest,omitempty"`
 	Notes  []string `json:"notes,omitempty"`

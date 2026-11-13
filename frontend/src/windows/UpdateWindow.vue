@@ -11,10 +11,20 @@ import { formatVersion } from '../lib/format'
 import logoUrl from '../assets/logo.svg'
 
 const { customTitlebar } = usePlatform()
-const { phase, latest, notes, error, development, install, skip } = useUpdateCheck()
+const { phase, latest, available, notes, error, development, install, skip } = useUpdateCheck()
 const { name: appName, versionLabel } = useAppInfo()
 
 const busy = computed(() => phase.value === 'installing')
+const installLabel = computed(() => {
+  switch (phase.value) {
+    case 'downloading':
+      return t('update.downloading')
+    case 'installing':
+      return t('update.installing')
+    default:
+      return t('update.installAndRestart')
+  }
+})
 
 // The name arrives after the window opens, so the title is written again when it does.
 watch(
@@ -42,10 +52,12 @@ async function onSkip() {
         <img class="update-icon" :src="logoUrl" :alt="appName" draggable="false" />
         <div class="update-heading">
           <div class="update-title">
-            {{ latest ? t('update.available', { version: formatVersion(latest) }) : t('update.none') }}
+            {{ available ? t('update.available', { version: formatVersion(latest) }) : t('update.none') }}
           </div>
           <div class="update-subtitle">
-            {{ t('update.current', { app: appName || 'Schemo', version: versionLabel || '…' }) }}
+            {{ phase === 'downloaded'
+              ? t('update.readyToInstall')
+              : t('update.current', { app: appName || 'Schemo', version: versionLabel || '…' }) }}
           </div>
         </div>
       </div>
@@ -62,7 +74,7 @@ async function onSkip() {
       </div>
 
       <div class="update-actions">
-        <button v-if="!development" class="update-skip" :disabled="busy" @click="onSkip">
+        <button v-if="available && !development" class="update-skip" :disabled="busy || phase === 'downloading'" @click="onSkip">
           {{ t('update.skip') }}
         </button>
         <span v-else></span>
@@ -74,10 +86,10 @@ async function onSkip() {
             v-if="!development"
             variant="primary"
             size="lg"
-            :disabled="busy || !latest"
+            :disabled="busy || !available || phase === 'downloading'"
             @click="install"
           >
-            {{ busy ? t('update.installing') : t('update.installAndRestart') }}
+            {{ installLabel }}
           </Button>
         </div>
       </div>

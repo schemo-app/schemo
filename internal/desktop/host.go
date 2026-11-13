@@ -121,7 +121,7 @@ func (h *Host) MarkReady() {
 	h.mu.Unlock()
 
 	if u != nil {
-		h.PublishUpdate(u.status, u.available)
+		h.PublishUpdate(u.status, u.show)
 	}
 	if tab > 0 {
 		h.Emit(EventOpenTab, tab)

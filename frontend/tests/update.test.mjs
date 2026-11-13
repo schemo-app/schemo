@@ -42,14 +42,11 @@ function mountUpdate(context) {
   return state
 }
 
-test('Wails download and failure events synchronize a window that did not start installation', async (context) => {
+test('update status and failure events synchronize a window that did not start installation', async (context) => {
   const state = mountUpdate(context)
   await nextTick()
   assert.equal(state.phase.value, 'available')
-  globalThis.updateListeners.get('wails:updater:download-started')({})
-  assert.equal(state.phase.value, 'installing')
-
-  globalThis.updateListeners.get('update-changed')({ data: { checkedAt: 2, available: true } })
+  globalThis.updateListeners.get('update-changed')({ data: { checkedAt: 2, available: true, phase: 'installing' } })
   assert.equal(state.phase.value, 'installing')
 
   globalThis.updateListeners.get('wails:updater:error')({ data: { stage: 'verify', message: 'Invalid signature' } })
@@ -68,7 +65,19 @@ test('background check failures do not replace the last known update in another 
 test('read-only installation failures from updater events use the application catalogue', async (context) => {
   const state = mountUpdate(context)
   await nextTick()
+  globalThis.updateListeners.get('update-changed')({ data: { checkedAt: 2, available: true, phase: 'installing' } })
   globalThis.updateListeners.get('wails:updater:error')({ data: { stage: 'install', message: 'updateReadOnly' } })
   assert.equal(state.phase.value, 'error')
   assert.equal(state.error.value, english.errors.codes.updateReadOnly)
+})
+
+test('background downloads leave the release available for manual installation', async (context) => {
+  const state = mountUpdate(context)
+  await nextTick()
+  const updateChanged = globalThis.updateListeners.get('update-changed')
+  updateChanged({ data: { checkedAt: 2, available: true, phase: 'downloading' } })
+  assert.equal(state.phase.value, 'downloading')
+  updateChanged({ data: { checkedAt: 2, available: true, phase: 'downloaded' } })
+  assert.equal(state.phase.value, 'downloaded')
+  assert.equal(state.available.value, true)
 })

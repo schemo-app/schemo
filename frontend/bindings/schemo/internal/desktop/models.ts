@@ -77,8 +77,7 @@ export interface StartupStatus {
 }
 
 /**
- * UpdateStatus is what the app has to say about updates: the running version, the latest one seen, and
- * whether it is offered.
+ * UpdateStatus describes the running version, the offer, and the state of its download.
  */
 export interface UpdateStatus {
     "current": string;
@@ -86,5 +85,6 @@ export interface UpdateStatus {
     "notes"?: string[] | null;
     "checkedAt"?: number;
     "available": boolean;
+    "phase"?: string;
     "development"?: boolean;
 }

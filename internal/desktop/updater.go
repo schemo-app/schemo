@@ -5,10 +5,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsupdater "github.com/wailsapp/wails/v3/pkg/updater"
@@ -17,7 +17,8 @@ import (
 	"schemo/internal/platform"
 )
 
-// Updater checks for new releases and handles the update installation.
+// Updater checks and applies releases. Updates serializes its operations because Wails
+// downloads the release selected by its most recent successful check.
 type Updater struct {
 	updater *wailsupdater.Updater
 	source  *source
@@ -27,9 +28,21 @@ type Updater struct {
 	installPackage  func(context.Context, string) error
 	packageDownload *packageDownload
 	restart         func() error
+}
 
-	// mu synchronizes release check and installation flows.
-	mu sync.Mutex
+type stagedRelease struct {
+	release *wailsupdater.Release
+	path    string
+}
+
+func (r stagedRelease) discard() {
+	if r.path == "" {
+		return
+	}
+	// Both download paths put the payload inside a private staging directory.
+	if err := os.RemoveAll(filepath.Dir(r.path)); err != nil {
+		slog.Warn("Could not remove staged update", "err", err)
+	}
 }
 
 // NewUpdater configures and initializes the Wails application updater.
@@ -73,9 +86,6 @@ func NewUpdater(app *application.App, info platform.BuildInfo, host *Host) *Upda
 // Latest checks the specified channel manifest for the newest available release.
 // If no newer version is available, it returns the current running version.
 func (e *Updater) Latest(ctx context.Context, channel domain.UpdateChannel) (domain.Release, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	rel, err := e.check(ctx, channel)
 	if err != nil {
 		return domain.Release{}, err
@@ -86,45 +96,51 @@ func (e *Updater) Latest(ctx context.Context, channel domain.UpdateChannel) (dom
 	return domain.Release{Version: rel.Version, Notes: ParseNotes(rel.Notes)}, nil
 }
 
-// Install downloads, verifies, and installs the target release, restarting the app on success.
-func (e *Updater) Install(ctx context.Context, channel domain.UpdateChannel, version string) error {
+// Stage downloads and verifies a release for a later installation.
+func (e *Updater) Stage(ctx context.Context, channel domain.UpdateChannel, version string) (stagedRelease, error) {
 	if e.installPackage == nil {
 		if err := updatable(); err != nil {
-			return err
+			return stagedRelease{}, err
 		}
 	}
 
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+	// Check again when staging from a remembered offer, which may have been superseded.
 	rel, err := e.check(ctx, channel)
 	if err != nil {
-		return err
+		return stagedRelease{}, err
 	}
-	if rel == nil || rel.Version != strings.TrimPrefix(version, "v") {
-		return fmt.Errorf("updater: release %s is no longer offered", version)
+	if rel == nil || rel.Version != version {
+		return stagedRelease{}, fmt.Errorf("updater: release %s is no longer offered", version)
 	}
-
+	staged := stagedRelease{release: rel}
 	if e.installPackage != nil {
-		path, err := e.packageDownload.download(ctx, rel)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			_ = os.Remove(path)
-			_ = os.Remove(filepath.Dir(path))
-		}()
-		e.packageDownload.publish(wailsupdater.EventInstalling, rel)
-		if err := e.installPackage(ctx, path); err != nil {
-			return err
-		}
-		e.packageDownload.publish(wailsupdater.EventUpdateReady, rel)
-		return e.restart()
+		staged.path, err = e.packageDownload.download(ctx, rel)
+		return staged, err
 	}
 	if err := e.updater.DownloadAndInstall(ctx); err != nil {
+		return stagedRelease{}, err
+	}
+	staged.path = e.updater.DownloadedPath()
+	return staged, nil
+}
+
+// Install consumes the staged release. On a portable install, the Wails helper
+// owns the staging directory once it accepts the restart.
+func (e *Updater) Install(ctx context.Context, staged stagedRelease) error {
+	if e.installPackage == nil {
+		err := e.updater.Restart(ctx)
+		if err != nil {
+			staged.discard()
+		}
 		return err
 	}
-	return e.updater.Restart(ctx)
+	defer staged.discard()
+	e.packageDownload.publish(wailsupdater.EventInstalling, staged.release)
+	if err := e.installPackage(ctx, staged.path); err != nil {
+		return err
+	}
+	e.packageDownload.publish(wailsupdater.EventUpdateReady, staged.release)
+	return e.restart()
 }
 
 func (e *Updater) check(

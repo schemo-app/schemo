@@ -181,7 +181,10 @@
     "remindLater": "Remind me later",
     "installAndRestart": "Update and restart",
     "devBuild": "An update for the source-based build is not available.",
-    "installing": "Installing the update…"
+    "installing": "Installing the update…",
+    "downloading": "Downloading the update…",
+    "downloaded": "Version {version} is ready to install",
+    "readyToInstall": "Update downloaded and ready to install"
   },
   "request": {
     "urlPlaceholder": "Request URL or cURL command",
@@ -2096,7 +2099,7 @@
     "channelStableNote": "Releases that have been checked, about once a month",
     "channelBetaNote": "Beta builds are released more frequently, but may contain bugs.",
     "autoDownload": "Download in the background",
-    "autoDownloadNote": "The install happens after a restart",
+    "autoDownloadNote": "Use “Update and restart” to install the downloaded update",
     "whatsNewTitle": "What's new in {app}",
     "whatsNewLine": "Channel “{channel}”, installed {version}",
     "installedBadge": "Installed",

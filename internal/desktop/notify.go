@@ -45,26 +45,28 @@ func (h *Host) TakeImportLink() string {
 // PublishUpdate tells every window that the update state moved, parked until the page can take one.
 // It is published on a check and on a skip, not only when a release turns up: a skip must reach the
 // windows showing the release, and the About window cannot see the update window's click.
-// The payload is the Updates status; available says it offers a release, which opens the
-// update window.
-func (h *Host) PublishUpdate(status any, available bool) {
+// The caller decides when to open the update window.
+func (h *Host) PublishUpdate(status UpdateStatus, show bool) {
 	h.mu.Lock()
 	if !h.ready.Load() {
-		h.pendingUpdate = &parkedUpdate{status: status, available: available}
+		if pending := h.pendingUpdate; pending != nil && pending.status.Latest == status.Latest && status.Available {
+			show = show || pending.show
+		}
+		h.pendingUpdate = &parkedUpdate{status: status, show: show}
 		h.mu.Unlock()
 		return
 	}
 	h.mu.Unlock()
-	h.Emit(EventUpdateChanged, status)
-	if available {
+	h.Broadcast(EventUpdateChanged, status)
+	if show {
 		h.ShowUpdate()
 	}
 }
 
 // parkedUpdate is an update published before the page could take it.
 type parkedUpdate struct {
-	status    any
-	available bool
+	status UpdateStatus
+	show   bool
 }
 
 // RequestUpdateCheck opens the settings' updates page and asks it for a check. Both halves are
