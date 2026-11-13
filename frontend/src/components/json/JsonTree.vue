@@ -126,7 +126,7 @@ const INK: Record<string, string> = {
   @apply flex flex-col flex-1 min-h-0;
   padding: 0.125rem 0 1.25rem;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .tree-row {
@@ -181,7 +181,7 @@ const INK: Record<string, string> = {
 
 .tree-colon {
   @apply flex-none text-text-tertiary;
-  margin-right: 0.3rem;
+  margin-right: 0.3125rem;
 }
 
 .tree-val {

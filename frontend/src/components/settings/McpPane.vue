@@ -363,7 +363,7 @@ async function copyConfig(): Promise<void> {
   @apply text-13 rounded-[0.4375rem] outline-none;
   width: 5rem;
   height: 1.875rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   font-family: var(--mono);
   color: var(--text);
   background: var(--bg-inset);
@@ -382,7 +382,7 @@ async function copyConfig(): Promise<void> {
 
 .token {
   @apply flex-1 min-w-0 text-12;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   font-family: var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -419,7 +419,7 @@ async function copyConfig(): Promise<void> {
 
 .chip {
   @apply inline-flex items-center gap-2 h-7.5 text-13 rounded-[0.4375rem] cursor-pointer;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   font-family: inherit;
   color: var(--text);
   background: var(--bg-inset);
@@ -437,7 +437,7 @@ async function copyConfig(): Promise<void> {
   height: 0.875rem;
   box-sizing: border-box;
   border-radius: 0.25rem;
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   color: #fff;
 }
 

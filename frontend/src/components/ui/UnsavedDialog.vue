@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { nextTick, useTemplateRef, watch } from 'vue'
-import Dialog from './Dialog.vue'
+import Modal from './Modal.vue'
 import DialogButton from './DialogButton.vue'
+import { useShownWhileOpen } from '../../composables/useShownWhileOpen'
 import { t } from '../../i18n'
 
-// The question asked wherever unsaved work is about to be replaced: discard it, or stay. A place
-// whose work can be kept where it stands asks a third answer, saving; one that cannot says so in
-// its hint rather than offering a door that would have to open somewhere else.
-const { open, title, hint, canSave = false } = defineProps<{
+const { open, title, hint, canSave = false, saveLabel = '' } = defineProps<{
   open: boolean
   title: string
   hint: string
   canSave?: boolean
+  saveLabel?: string
 }>()
+
+const shown = useShownWhileOpen(() => open, () => ({ title, hint, saveLabel }))
 
 const emit = defineEmits<{
   (e: 'discard'): void
   (e: 'cancel'): void
   (e: 'save'): void
 }>()
-
 
 const save = useTemplateRef<{ focus(): void }>('save')
 
@@ -34,50 +34,28 @@ watch(
 </script>
 
 <template>
-  <Dialog :open tone="cover" class="w-120" @update:open="(value) => !value && emit('cancel')">
-    <div class="head">
-      <span class="title">{{ title }}</span>
-      <span class="hint">{{ hint }}</span>
-    </div>
-    <div class="foot">
+  <Modal :open :title="shown.title" variant="ask" @close="emit('cancel')">
+    <span class="hint">{{ shown.hint }}</span>
+    <template #foot>
       <button type="button" class="discard" @click="emit('discard')">
         {{ t('common.discard') }}
       </button>
       <span class="flex-1" />
       <DialogButton @click="emit('cancel')">{{ t('common.cancel') }}</DialogButton>
       <DialogButton v-if="canSave" ref="save" primary @click="emit('save')">
-        {{ t('common.save') }}
+        {{ shown.saveLabel || t('common.save') }}
       </DialogButton>
-    </div>
-  </Dialog>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
-.head {
-  @apply flex flex-col;
-  gap: 0.5rem;
-  padding: 1.375rem 1.25rem;
-}
-
-.title {
-  @apply text-15 font-semibold;
-  line-height: 1.35;
-  text-wrap: pretty;
-}
-
 .hint {
-  @apply text-text-tertiary;
+  @apply text-13 text-text-secondary;
   line-height: 1.5;
   text-wrap: pretty;
-}
-
-.foot {
-  @apply flex items-center flex-none;
-  gap: 0.5rem;
-  padding: 0.875rem 1.25rem;
-  border-top: 1px solid var(--border);
 }
 
 .discard {

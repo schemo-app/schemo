@@ -306,8 +306,8 @@ function addRequest() {
 
 .col-count {
   @apply flex-none whitespace-nowrap text-text-tertiary;
-  margin-left: 0.3rem;
-  font-size: var(--text-12-5);
+  margin-left: 0.3125rem;
+  font-size: var(--text-13);
 }
 
 .col-gap {
@@ -349,7 +349,7 @@ function addRequest() {
 
 .col-new {
   padding: 0 0.75rem;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   font-weight: 500;
   background: var(--accent);
   color: var(--accent-text);
@@ -390,7 +390,7 @@ function addRequest() {
   gap: 0.4375rem;
   padding: 0 0 0.5625rem;
   font: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   white-space: nowrap;
 }
 
@@ -400,8 +400,8 @@ function addRequest() {
 
 .publication-dot {
   @apply flex-none bg-green;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   border-radius: 50%;
 }
 </style>

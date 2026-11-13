@@ -342,7 +342,7 @@ async function update() {
 
 .pubs-count {
   @apply min-w-0 truncate text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .pubs-empty {
@@ -366,7 +366,7 @@ async function update() {
 
 .empty-text {
   @apply flex flex-col min-w-0;
-  gap: 0.2rem;
+  gap: 0.1875rem;
 }
 
 .empty-title {
@@ -494,12 +494,12 @@ async function update() {
   @apply flex items-center flex-none cursor-pointer border-0 whitespace-nowrap bg-transparent text-accent;
   gap: 0.3125rem;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .pane-url {
   @apply flex;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .url-text {
@@ -511,7 +511,7 @@ async function update() {
   background: var(--bg-inset);
   box-shadow: inset 0 0 0 1px var(--border-strong);
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .url-address {
@@ -526,9 +526,9 @@ async function update() {
   @apply flex items-center justify-center flex-none border-0 bg-transparent text-text-secondary cursor-pointer;
   width: 1.625rem;
   height: 1.625rem;
-  margin-right: -0.3rem;
+  margin-right: -0.3125rem;
   padding: 0;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .copy-btn:hover {
@@ -578,7 +578,7 @@ async function update() {
 
 .changes-none.loose {
   @apply text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .chg-row {
@@ -619,7 +619,7 @@ async function update() {
   @apply flex-none;
   width: 3rem;
   font-family: var(--mono);
-  font-size: var(--text-10-5);
+  font-size: var(--text-11);
   font-weight: 700;
 }
 
@@ -631,7 +631,7 @@ async function update() {
 .chg-what {
   @apply min-w-0 truncate text-text-tertiary;
   flex: 0 1 auto;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   overflow-wrap: anywhere;
 }
 
@@ -655,7 +655,7 @@ async function update() {
 
 .password-row {
   @apply flex;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   padding: 0 0 0.5rem;
 }
 
@@ -672,7 +672,7 @@ button:disabled {
   min-height: 2.375rem;
   gap: 0.75rem;
   border-top: 1px solid var(--line2);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .version-number {
@@ -691,7 +691,7 @@ button:disabled {
 }
 
 .version-current {
-  @apply text-text-tertiary text-12-5;
+  @apply text-text-tertiary text-13;
 }
 
 .pane-actions {
@@ -713,7 +713,7 @@ button:disabled {
 }
 
 .changes-count {
-  @apply text-orange text-11-5;
+  @apply text-orange text-12;
   margin-left: 0.5rem;
 }
 
@@ -726,7 +726,7 @@ button:disabled {
 
 :global(.publication-actions-menu .menu-item) {
   height: 2rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   gap: 0.625rem;
   border-radius: 0.4375rem;
 }

@@ -122,7 +122,7 @@ function msOf(test: { durationUs: number }): string {
   @apply font-semibold;
   font-size: var(--text-12);
   padding: 0.1875rem 0.5625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .pill.ok {
@@ -142,7 +142,7 @@ function msOf(test: { durationUs: number }): string {
 
 .run-caption {
   @apply min-w-0 truncate text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .run-error {
@@ -208,7 +208,7 @@ function msOf(test: { durationUs: number }): string {
 
 .console {
   @apply flex flex-col;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .console-label {
@@ -220,7 +220,7 @@ function msOf(test: { durationUs: number }): string {
   padding: 0.625rem 0.75rem;
   border-radius: 0.5625rem;
   background: var(--raise);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   line-height: 21px;
 }
 
@@ -247,7 +247,7 @@ function msOf(test: { durationUs: number }): string {
 .none {
   @apply flex flex-col;
   padding: 1.25rem;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   max-width: 32.5rem;
   line-height: 1.55;
 }

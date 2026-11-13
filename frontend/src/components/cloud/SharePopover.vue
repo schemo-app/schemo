@@ -199,7 +199,7 @@ function selectAddress(event: FocusEvent) {
 
 .pop-head {
   @apply flex flex-col;
-  padding: 1rem 1rem 0.3rem;
+  padding: 1rem 1rem 0.3125rem;
   gap: 0.3125rem;
 }
 
@@ -215,11 +215,11 @@ function selectAddress(event: FocusEvent) {
 }
 
 .draft-fields {
-  padding: 0.3rem 1rem 0.625rem;
+  padding: 0.3125rem 1rem 0.625rem;
 }
 
 .pass-note {
-  @apply text-orange text-11-5;
+  @apply text-orange text-12;
 }
 
 .pop-frame {
@@ -234,7 +234,7 @@ function selectAddress(event: FocusEvent) {
 .frame-line {
   @apply flex items-start;
   gap: 0.5rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -284,14 +284,14 @@ function selectAddress(event: FocusEvent) {
 .address-field input {
   @apply flex-1 min-w-0 border-0 outline-none bg-transparent text-text;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .icon-button {
   @apply flex items-center justify-center flex-none border-0 bg-transparent text-text-secondary cursor-pointer;
   width: 1.625rem;
   height: 1.625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .icon-button:hover,
@@ -301,17 +301,17 @@ function selectAddress(event: FocusEvent) {
 
 .quick-actions,
 .quick-fields {
-  padding: 0 0.3rem;
+  padding: 0 0.3125rem;
 }
 
 .quick-actions.last {
-  padding-bottom: 0.3rem;
+  padding-bottom: 0.3125rem;
 }
 
 .action-row {
   @apply flex items-center w-full border-0 bg-transparent text-text cursor-pointer text-left;
   height: 2.125rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   gap: 0.625rem;
   font: inherit;
@@ -319,7 +319,7 @@ function selectAddress(event: FocusEvent) {
 
 .action-row :deep(svg) {
   @apply flex-none text-text-secondary;
-  margin: 0 0.09375rem;
+  margin: 0 0.125rem;
 }
 
 .action-row > span:first-of-type {

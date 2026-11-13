@@ -171,7 +171,7 @@ function save() {
 }
 
 .field-hint {
-  @apply text-11-5 text-text-tertiary;
+  @apply text-12 text-text-tertiary;
 }
 
 .pair {

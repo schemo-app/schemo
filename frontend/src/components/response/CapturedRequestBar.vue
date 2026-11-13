@@ -219,7 +219,7 @@ const copyQuery = () => copy(query.value)
   @apply relative flex flex-none items-center justify-center cursor-pointer border-0;
   width: 2.125rem;
   height: 2.125rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: var(--text-secondary);
   --wails-draggable: no-drag;
@@ -235,7 +235,7 @@ const copyQuery = () => copy(query.value)
   @apply flex-none;
   height: 2.125rem;
   padding: 0 0.9375rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-13);
   font-weight: 600;
 }

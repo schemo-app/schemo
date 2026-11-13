@@ -60,7 +60,7 @@ const emit = defineEmits<{ select: [key: string] }>()
   background: var(--bg-inset);
   color: var(--text);
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   font-weight: 500;
   --wails-draggable: no-drag;
 }

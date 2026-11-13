@@ -30,7 +30,7 @@ const model = defineModel<string>()
 
 .field {
   @apply flex flex-col;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .label {
@@ -55,10 +55,8 @@ const model = defineModel<string>()
 }
 
 .pick-arrow {
-  @apply absolute pointer-events-none;
+  @apply absolute inset-y-0 flex items-center pointer-events-none;
   right: 0.625rem;
-  top: 50%;
-  transform: translateY(-50%);
   color: var(--text-tertiary);
 }
 </style>

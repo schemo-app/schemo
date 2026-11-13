@@ -61,7 +61,7 @@ defineEmits<{ (e: 'drop'): void }>()
 
 .role.boxed {
   @apply min-w-24 h-6 px-2 rounded-md border border-border bg-bg-hover
-         text-11-5 text-text-secondary;
+         text-12 text-text-secondary;
 }
 
 .role-dot {

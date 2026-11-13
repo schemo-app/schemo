@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DialogTitle } from 'reka-ui'
-import Dialog from '../ui/Dialog.vue'
-import Button from '../ui/Button.vue'
+import Modal from '../ui/Modal.vue'
+import DialogButton from '../ui/DialogButton.vue'
+import { useShownWhileOpen } from '../../composables/useShownWhileOpen'
 import { usePublicationsStore } from '../../stores/publications'
 import { useCollectionsStore } from '../../stores/collections'
 import { pageName } from '../../lib/publicationText'
@@ -31,82 +31,33 @@ const url = computed(() => {
   }
   return page.value?.url ?? publications.markOf(publications.asking)?.page?.url ?? ''
 })
+
+const shown = useShownWhileOpen(open, () => ({ name: name.value, url: url.value }))
 </script>
 
 <template>
-  <Dialog
+  <Modal
     :open="open"
-    tone="cover"
-    class="unpublish-dialog"
-    @update:open="publications.cancelUnpublish()"
+    :title="t('publications.unpublishQuestion', { name: shown.name })"
+    variant="ask"
+    @close="publications.cancelUnpublish()"
   >
-    <div class="ask">
-      <DialogTitle class="question">
-        {{ t('publications.unpublishQuestion', { name }) }}
-      </DialogTitle>
-      <span class="why">{{ t('publications.unpublishBody', { url }) }}</span>
-    </div>
-    <div class="actions">
-      <Button size="lg" class="cancel-button" @click="publications.cancelUnpublish()">{{ t('common.cancel') }}</Button>
-      <Button size="lg" variant="danger" class="unpublish-button" @click="publications.confirmUnpublish()">
+    <span class="why">{{ t('publications.unpublishBody', { url: shown.url }) }}</span>
+    <template #foot>
+      <DialogButton @click="publications.cancelUnpublish()">{{ t('common.cancel') }}</DialogButton>
+      <DialogButton danger @click="publications.confirmUnpublish()">
         {{ t('publications.unpublish') }}
-      </Button>
-    </div>
-  </Dialog>
+      </DialogButton>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
-:global(.dialog.unpublish-dialog) {
-  width: 460px;
-  max-width: calc(100vw - 48px);
-  font-size: var(--text-13);
-  line-height: normal;
-}
-
-.ask {
-  @apply flex flex-col;
-  padding: 1.375rem 1.25rem;
-  gap: 0.5rem;
-}
-
-.question {
-  font-size: var(--text-15);
-  font-weight: 600;
-  line-height: 1.35;
-}
-
 .why {
-  @apply text-text-tertiary;
+  @apply text-13 text-text-secondary;
   line-height: 1.5;
   text-wrap: pretty;
-}
-
-.actions {
-  @apply flex justify-end;
-  gap: 0.5rem;
-  padding: 0.875rem 1.25rem;
-  border-top: 1px solid var(--border);
-}
-
-.actions .cancel-button {
-  border: 0;
-  background: var(--chip);
-  font-weight: 400;
-  box-shadow: none;
-}
-
-.actions .unpublish-button {
-  @apply border-0 text-white;
-  padding: 0 1rem;
-  background: var(--red);
-  font-weight: 600;
-  box-shadow: none;
-}
-
-.actions .unpublish-button:hover:not(:disabled) {
-  background: var(--red);
-  filter: brightness(1.06);
 }
 </style>

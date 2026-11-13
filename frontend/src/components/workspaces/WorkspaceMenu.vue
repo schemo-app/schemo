@@ -107,7 +107,7 @@ async function choose(id: string) {
 
 .ws-separator {
   height: 1px;
-  margin: 0.25rem 0.3rem;
+  margin: 0.25rem 0.3125rem;
   background: var(--border);
 }
 </style>

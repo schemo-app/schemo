@@ -7,6 +7,7 @@ import { xml } from '@codemirror/lang-xml'
 import { markdown } from '@codemirror/lang-markdown'
 import { tags } from '@lezer/highlight'
 import type { ViewerLanguage } from './viewerLanguage'
+import { rem, supportsLengthRounding } from './units'
 
 // How every editor of ours looks, said once: the answer is read and the example is written in the
 // same palette and mono face, so the two are recognisably the same text. The colours are the app's
@@ -26,7 +27,10 @@ const editorHighlight = HighlightStyle.define([
 const editorTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', height: '100%', fontSize: 'var(--mono-size)' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.65' },
+  '.cm-scroller': {
+    fontFamily: 'var(--mono)',
+    lineHeight: supportsLengthRounding ? 'round(nearest, calc(1em * 1.65), 1px)' : '1.65',
+  },
   // The app turns selection off globally and that inherits in here — a body is text and has to stay
   // selectable and copyable.
   '.cm-content': { userSelect: 'text', WebkitUserSelect: 'text' },
@@ -34,7 +38,7 @@ const editorTheme = EditorView.theme({
     backgroundColor: 'transparent',
     border: 'none',
     color: 'var(--text-tertiary)',
-    paddingLeft: '0.3rem',
+    paddingLeft: rem(5),
   },
   '.cm-foldGutter span': {
     display: 'grid',
@@ -50,10 +54,10 @@ const editorTheme = EditorView.theme({
   '.cm-foldPlaceholder': {
     backgroundColor: 'var(--bg-hover)',
     border: '1px solid var(--border)',
-    borderRadius: '0.25rem',
+    borderRadius: rem(4),
     color: 'var(--text-secondary)',
-    padding: '0 0.3rem',
-    margin: '0 0.25rem',
+    padding: `0 ${rem(5)}`,
+    margin: `0 ${rem(4)}`,
     cursor: 'pointer',
   },
   '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--accent-soft)' },

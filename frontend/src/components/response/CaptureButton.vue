@@ -74,7 +74,7 @@ const heading = computed(() =>
   @apply flex flex-none items-center justify-center cursor-pointer border-0 bg-transparent text-text-tertiary;
   width: 1.625rem;
   height: 1.625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   opacity: 0;
   transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   --wails-draggable: no-drag;

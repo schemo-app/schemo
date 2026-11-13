@@ -83,7 +83,7 @@ const blockItems = computed(() => [
   { tag: 'p', label: t('request.docs.text'), style: 'font-size: var(--text-13); font-weight: 400;' },
   { tag: 'h1', label: t('request.docs.heading1'), style: 'font-size: var(--text-17); font-weight: 650;' },
   { tag: 'h2', label: t('request.docs.heading2'), style: 'font-size: var(--text-15); font-weight: 600;' },
-  { tag: 'h3', label: t('request.docs.heading3'), style: 'font-size: var(--text-13-5); font-weight: 600;' },
+  { tag: 'h3', label: t('request.docs.heading3'), style: 'font-size: var(--text-14); font-weight: 600;' },
 ] as const)
 
 // The block the toolbar names: what the caret is in, with the plain text standing for the rest.
@@ -531,7 +531,7 @@ defineExpose({
 }
 
 .doc-letter {
-  font-size: var(--text-13-5);
+  font-size: var(--text-14);
   font-weight: 700;
 }
 
@@ -558,9 +558,9 @@ defineExpose({
 .doc-tools :deep(.doc-blk-btn) {
   width: 6.5rem;
   justify-content: space-between;
-  gap: 0.3rem;
-  padding: 0 0.3rem 0 0.5rem;
-  font-size: var(--text-12-5);
+  gap: 0.3125rem;
+  padding: 0 0.3125rem 0 0.5rem;
+  font-size: var(--text-13);
 }
 
 .doc-blk-caret {
@@ -575,7 +575,7 @@ defineExpose({
   backdrop-filter: var(--blur-overlay);
   -webkit-backdrop-filter: var(--blur-overlay);
   box-shadow: var(--popshadow);
-  padding: 0.3rem;
+  padding: 0.3125rem;
   gap: 0.0625rem;
 }
 
@@ -588,7 +588,7 @@ defineExpose({
 .doc-blk-item {
   @apply flex items-center justify-between cursor-pointer border-0 bg-transparent text-text;
   height: 2.125rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   font-family: inherit;
 }
@@ -612,7 +612,7 @@ defineExpose({
   @apply flex items-center cursor-pointer border-0 bg-transparent text-text;
   height: 2rem;
   gap: 0.625rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   font-family: inherit;
   font-size: inherit;
@@ -641,19 +641,19 @@ defineExpose({
   border-radius: 0.4375rem;
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft);
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   color: var(--text);
 }
 
 .doc-link-cancel {
   @apply flex-none cursor-pointer border-0 bg-transparent text-text-secondary;
   height: 1.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .doc-link-cancel:hover {
@@ -667,7 +667,7 @@ defineExpose({
   border-radius: 0.4375rem;
   background: var(--chip);
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .doc-link-apply:hover {
@@ -726,15 +726,15 @@ defineExpose({
 .doc-toc-title {
   @apply text-text-tertiary;
   font-size: var(--text-12);
-  padding: 0 0.5rem 0.3rem;
+  padding: 0 0.5rem 0.3125rem;
 }
 
 .doc-toc-item {
   @apply block cursor-default border-0 bg-transparent text-left text-text-secondary;
   padding: 0.25rem 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   line-height: 1.35;
 }
 
@@ -748,7 +748,7 @@ defineExpose({
 
 .doc-toc-suggestion {
   @apply flex items-center text-accent cursor-pointer;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .doc-toc-item:hover {
@@ -771,8 +771,8 @@ defineExpose({
   border-radius: 0.4375rem;
   background: var(--accent);
   color: var(--accent-text);
-  margin-top: 0.3rem;
+  margin-top: 0.3125rem;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 </style>

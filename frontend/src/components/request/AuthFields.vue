@@ -172,7 +172,7 @@ function onInput(field: Field, event: Event) {
 }
 
 .fields.compact .field {
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .fields.roomy .field {
@@ -252,7 +252,7 @@ function onInput(field: Field, event: Event) {
 .roomy input,
 .roomy select,
 .roomy .highlight {
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
 }
 
 .roomy textarea,
@@ -308,8 +308,8 @@ function onInput(field: Field, event: Event) {
 .eye {
   @apply absolute flex items-center justify-center border-none bg-transparent cursor-pointer text-text-tertiary;
   right: 0.25rem;
-  top: 50%;
-  transform: translateY(-50%);
+  inset-block: 0;
+  margin-block: auto;
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 0.25rem;
@@ -354,7 +354,7 @@ function onInput(field: Field, event: Event) {
   @apply self-start;
   grid-row: span 2;
   padding: 0.5rem 0.5rem 0.5625rem 0;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   font-weight: 400;
 }
 
@@ -372,7 +372,7 @@ function onInput(field: Field, event: Event) {
   border-radius: 0.5rem;
   background: var(--raise);
   box-shadow: inset 0 0 0 1px var(--line2);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .fields.rows input,
@@ -383,15 +383,15 @@ function onInput(field: Field, event: Event) {
 .fields.rows input,
 .fields.rows select,
 .fields.rows .highlight {
-  padding: 0 0.6rem;
-  font-size: var(--text-12-5);
+  padding: 0 0.625rem;
+  font-size: var(--text-13);
 }
 
 .fields.rows textarea,
 .fields.rows .highlight.area {
   height: 2rem;
-  padding: 0 0.6rem;
-  font-size: var(--text-12-5);
+  padding: 0 0.625rem;
+  font-size: var(--text-13);
   line-height: 1.75rem;
 }
 

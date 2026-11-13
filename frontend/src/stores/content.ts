@@ -28,6 +28,7 @@ export interface RequestInstance extends TabInstance {
   markClean(): void
   saveNode(): Promise<boolean>
   discardNode(): Promise<boolean>
+  unsaved: ComputedRef<boolean>
   responses: Ref<ResponseExample[]>
   saveExamples(list: ResponseExample[]): void
   flushExamples(): Promise<void>
@@ -55,13 +56,9 @@ export type AnyInstance = RequestInstance | PageInstance
 
 export type PaneSource = ReturnType<typeof paneSource>
 
-// Shallow, because an instance is a bag of refs and a deep proxy would unwrap them under the code
-// that reads them: a computed that asked for an instance re-asks when the strip moves.
 const instances = shallowReactive(new Map<string, AnyInstance>())
 
-// The alert between leaving a dirty node-bound tab and the click that leaves it. One at a time, as
-// a dialog is; the tab it belongs to travels with the question.
-const pendingLeave = ref<null | { name: string; tabId: string; resolve: (ok: boolean) => void }>(null)
+const pendingLeave = ref<null | { name: string; tabId: string; draft: boolean; resolve: (ok: boolean) => void }>(null)
 
 export const leavePending = pendingLeave
 
@@ -202,20 +199,16 @@ export async function reloadScripts() {
   }
 }
 
-/** A dirty node-bound tab is asked about before it is left; the answer is awaited by whoever asks. */
+// A tab with unsaved work is asked about before it is left; the answer is awaited by whoever asks.
 export function askUnsaved(tabId: string): Promise<boolean> {
   const instance = instances.get(tabId)
-  if (
-    !instance ||
-    instance.kind !== TabKind.TabKindRequest ||
-    !instance.node.value ||
-    !instance.dirty.value
-  ) {
+  if (!instance || instance.kind !== TabKind.TabKindRequest || !instance.unsaved.value) {
     return Promise.resolve(true)
   }
-  const name = instance.node.value.node.name || t('collections.unnamedRequest')
+  const bound = instance.node.value !== null
+  const name = bound ? instance.node.value?.node.name || t('collections.unnamedRequest') : ''
   if (pendingLeave.value) return Promise.resolve(false)
-  return new Promise((resolve) => (pendingLeave.value = { name, tabId, resolve }))
+  return new Promise((resolve) => (pendingLeave.value = { name, tabId, draft: !bound, resolve }))
 }
 
 export async function answerUnsaved(action: 'save' | 'discard' | 'cancel') {
@@ -224,15 +217,19 @@ export async function answerUnsaved(action: 'save' | 'discard' | 'cancel') {
   pendingLeave.value = null
   if (action === 'cancel') return pending.resolve(false)
   const instance = instances.get(pending.tabId)
-  if (instance && instance.kind === TabKind.TabKindRequest && instance.node.value) {
+  if (!pending.draft && instance && instance.kind === TabKind.TabKindRequest && instance.node.value) {
     // "Don't save" throws the edit away: the node is opened anew from what is in the tree.
     const completed = action === 'save' ? await instance.saveNode() : await instance.discardNode()
     if (!completed) {
       pending.resolve(false)
       return
     }
+    pending.resolve(true)
+    return
   }
-  pending.resolve(true)
+  // A draft has no row of its own: "save" is the save panel's, which the window opens once the tab
+  // stays; "don't save" lets the tab be closed as it stands.
+  pending.resolve(action === 'discard')
 }
 
 /** The pane's view of an instance: the draft's own refs and calls, unwrapped by `reactive`, and the
@@ -344,11 +341,10 @@ function requestInstance(tab: Tab): RequestInstance {
     return true
   }
 
-  // The dot: a bound tab's unwritten edit, an address typed and not yet written home, or keystrokes
-  // still on their way. The draft answers for both: a saved request is dirty when its fields differ
-  // from the row, a draft when its text differs from what it was opened with. Reverting every edit
-  // takes the mark back, since there is nothing unsaved to save.
   const dirty = computed(() => draft.changed.value)
+  const unsaved = computed(() =>
+    dirty.value && (node.value !== null || (!tab.preview && !!draft.current.value?.url))
+  )
   const instance: RequestInstance = {
     kind: TabKind.TabKindRequest,
     node,
@@ -357,6 +353,7 @@ function requestInstance(tab: Tab): RequestInstance {
     markClean,
     saveNode,
     discardNode,
+    unsaved,
     record: shown.record,
     dirty,
     warm: open,

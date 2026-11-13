@@ -501,8 +501,8 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
   flex: 0 1 auto;
   height: 1.75rem;
   max-width: 16.25rem;
-  gap: 0.3rem;
-  padding: 0 0.3rem 0 0.625rem;
+  gap: 0.3125rem;
+  padding: 0 0.3125rem 0 0.625rem;
   border-radius: 0.4375rem;
   background: var(--accent-soft);
   color: var(--accent);
@@ -579,7 +579,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
   height: 1.75rem;
   gap: 0.625rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   color: var(--text);
   font-size: var(--text-13);
 }
@@ -608,7 +608,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 
 .hist-menu-sep {
   height: 1px;
-  margin: 0.25rem 0.3rem;
+  margin: 0.25rem 0.3125rem;
   background: var(--border);
 }
 
@@ -620,7 +620,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
   padding: 0 0.5rem 0 0.875rem;
   border-radius: 0.625rem;
   background: var(--raise);
-  box-shadow: inset 0 0 0 0.5px var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .hist-rec-dot {
@@ -715,7 +715,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 .hist-url {
   @apply min-w-0 truncate;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .hist-host {

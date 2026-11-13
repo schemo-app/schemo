@@ -34,9 +34,6 @@ function onOpenChange(value: boolean) {
 <template>
   <DialogRoot :open="true" @update:open="onOpenChange">
     <DialogPortal>
-      <!-- The dim starts under the titlebar, so the window keeps its own name lit. The card is centred by
-      the flex box and not by a transform: a translated card lands on a half pixel whenever its height is
-      odd, and the compositor resamples the whole thing, text included. -->
       <DialogOverlay class="out-overlay">
         <DialogContent class="out-card">
           <DialogTitle class="out-title">{{ t('account.signOut') }}</DialogTitle>
@@ -124,7 +121,7 @@ function onOpenChange(value: boolean) {
   height: 1rem;
   margin-top: 0.0625rem;
   box-sizing: border-box;
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   background: var(--bg-panel);
 }
 

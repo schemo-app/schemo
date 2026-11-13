@@ -697,7 +697,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 .ex-pop-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .ex-pop-field span {
@@ -777,7 +777,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 .resp-search-input {
   @apply flex-1 min-w-0 border-0 outline-none bg-transparent;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   color: var(--text);
 }
 
@@ -794,7 +794,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
   @apply flex flex-none items-center justify-center cursor-pointer border-0 p-0 text-text-tertiary;
   width: 1.375rem;
   height: 1.375rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
 }
 
@@ -805,7 +805,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 .body-bar {
   @apply flex items-center flex-none gap-2.5;
   height: 2.5rem;
-  padding: 0.6rem 0.8rem 0.6rem 0.8rem;
+  padding: 0.625rem 0.8125rem 0.625rem 0.8125rem;
   overflow: hidden;
 }
 
@@ -820,8 +820,8 @@ useEventListener(window, 'keydown', onWindowKeydown)
 .row-action {
   @apply inline-flex flex-none items-center justify-center gap-1 cursor-pointer border-0 text-text-secondary;
   height: 1.75rem;
-  padding: 0 0.3rem 0 0.4375rem;
-  border-radius: 0.3rem;
+  padding: 0 0.3125rem 0 0.4375rem;
+  border-radius: 0.3125rem;
   background: transparent;
   --wails-draggable: no-drag;
 }
@@ -873,7 +873,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 }
 
 .resp-heads {
-  padding: 0.3rem 1.25rem 1.25rem;
+  padding: 0.3125rem 1.25rem 1.25rem;
 }
 
 .resp-white {

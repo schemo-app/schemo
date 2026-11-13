@@ -96,7 +96,7 @@ const tokenState = computed(() => {
 
 .auth-sends {
   @apply flex-1 min-w-0 truncate text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .auth-note {

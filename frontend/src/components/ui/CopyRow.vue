@@ -21,10 +21,10 @@ const { copied, copy } = useCopyFeedback()
 
 .copy-row {
   @apply flex w-full items-baseline gap-2 text-left cursor-pointer border-0 bg-transparent;
-  padding: 0.125rem 0.3rem;
-  margin: 0 -0.3rem;
+  padding: 0.125rem 0.3125rem;
+  margin: 0 -0.3125rem;
   width: calc(100% + 0.75rem);
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   color: var(--text);
   --wails-draggable: no-drag;
 }

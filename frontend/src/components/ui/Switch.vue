@@ -40,16 +40,16 @@ defineOptions({ inheritAttrs: false })
   @apply block rounded-full;
   position: absolute;
   top: 0.125rem;
-  left: 0.125rem;
+  inset-inline-start: 0.125rem;
   width: 1.125rem;
   height: 1.125rem;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform 0.15s ease;
+  transition: inset-inline-start 0.15s ease;
 }
 
 .switch[data-state='checked'] .thumb {
-  transform: translateX(1rem);
+  inset-inline-start: calc(100% - 1.125rem - 0.125rem);
 }
 
 @media (prefers-reduced-motion: reduce) {

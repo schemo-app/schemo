@@ -412,7 +412,7 @@ onMounted(async () => {
   width: 1rem;
   height: 1rem;
   box-sizing: border-box;
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   background: var(--bg-panel);
 }
 
@@ -492,7 +492,7 @@ onMounted(async () => {
 }
 
 .address {
-  @apply flex items-stretch h-8.5 rounded-[0.3rem];
+  @apply flex items-stretch h-8.5 rounded-[0.3125rem];
   border: 1px solid var(--border-strong);
   background: var(--bg-panel);
 }

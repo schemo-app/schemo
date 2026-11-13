@@ -50,7 +50,7 @@ const { style: pillStyle, ready: pillReady } = useSlidingPill(rootEl, '.seg.acti
 }
 
 .segment .seg-pill {
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .seg {

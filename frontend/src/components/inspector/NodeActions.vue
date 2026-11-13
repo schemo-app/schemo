@@ -142,7 +142,7 @@ const hidden = computed(
 }
 
 .ask {
-  @apply flex items-center gap-2 rounded-[0.3rem] px-2 text-13;
+  @apply flex items-center gap-2 rounded-[0.3125rem] px-2 text-13;
   min-height: 1.875rem;
   background: var(--bg-hover);
 }

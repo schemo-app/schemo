@@ -383,7 +383,7 @@ defineExpose({ cancelTop })
 }
 
 .panel-head :deep(.panel-add) {
-  @apply w-[1.375rem] h-[1.375rem] rounded-[0.3rem] text-text-tertiary;
+  @apply w-[1.375rem] h-[1.375rem] rounded-[0.3125rem] text-text-tertiary;
 }
 
 .panel-head :deep(.panel-add:hover:not(:disabled)) {
@@ -397,6 +397,19 @@ defineExpose({ cancelTop })
 
 .panel-row {
   @apply relative;
+}
+
+.row-menu-open:focus-visible {
+  outline: none;
+}
+
+.row-menu-open::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--accent);
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 .row-icon {
@@ -423,7 +436,7 @@ defineExpose({ cancelTop })
 
 .row-rename {
   @apply flex-1 min-w-0 h-6 box-border text-13 outline-none;
-  margin-left: -0.3rem;
+  margin-left: -0.3125rem;
   padding: 0 0.3125rem;
   border-radius: 0.25rem;
   border: 1px solid var(--accent);

@@ -175,7 +175,7 @@ function addVariable() {
   display: grid;
   grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
   align-items: center;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
 }
 
 .head {
@@ -193,7 +193,7 @@ function addVariable() {
   height: 2.5rem;
   border-bottom: 1px solid var(--line2);
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .row.off {
@@ -214,7 +214,7 @@ function addVariable() {
 }
 
 .cur.over {
-  padding: 0.125rem 0.3rem;
+  padding: 0.125rem 0.3125rem;
   border-radius: 0.3125rem;
   background: var(--accent-soft);
   color: var(--accent);
@@ -241,9 +241,9 @@ function addVariable() {
 .add {
   @apply flex items-center gap-1.5 self-start cursor-pointer border-0 bg-transparent text-accent;
   margin-top: 0.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   height: 1.875rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-family: inherit;
   font-size: var(--text-13);
   font-weight: 500;
@@ -256,7 +256,7 @@ function addVariable() {
 .foot {
   @apply text-text-secondary;
   margin-top: 0.875rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   max-width: 42.5rem;
   line-height: 1.55;
 }

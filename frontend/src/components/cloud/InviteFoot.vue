@@ -28,7 +28,7 @@ defineEmits<{ (e: 'add'): void }>()
 }
 
 .add {
-  @apply self-start text-11-5 cursor-pointer rounded-[0.25rem] px-1 py-0.5;
+  @apply self-start text-12 cursor-pointer rounded-[0.25rem] px-1 py-0.5;
   font-family: inherit;
   color: var(--accent);
   background: transparent;
@@ -44,7 +44,7 @@ defineEmits<{ (e: 'add'): void }>()
 }
 
 .note {
-  @apply text-12-5 text-text-tertiary;
+  @apply text-13 text-text-tertiary;
 }
 
 .note.bad {

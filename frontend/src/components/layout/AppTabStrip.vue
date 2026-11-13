@@ -70,7 +70,7 @@ function liftOf(index: number, id: string) {
     transition:
       lifted || noAnim.value
         ? 'none'
-        : 'transform 0.2s cubic-bezier(.2,.8,.2,1), width 0.2s cubic-bezier(.2,.8,.2,1)',
+        : 'transform 0.2s cubic-bezier(.2,.8,.2,1)',
   }
 }
 
@@ -120,7 +120,7 @@ const allViews = computed(() =>
         padding: fixed || tiny.value ? '0' : '0 6px 0 10px',
         transform: shift,
         zIndex: String(z),
-        boxShadow: shadow === 'none' && active ? '0 0.5px 1.5px rgba(0, 0, 0, 0.12), 0 0 0 0.5px var(--border)' : shadow,
+        boxShadow: shadow === 'none' && active ? '0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border)' : shadow,
         transition,
       },
     }
@@ -360,7 +360,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
 
 .tab-strip {
   @apply flex-1 min-w-0 flex items-center;
-  padding-left: 0.3rem;
+  padding-left: 0.3125rem;
 }
 
 .tab-scroll {
@@ -430,7 +430,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
   border-radius: 0.5rem;
   background: var(--bg-hover);
   box-shadow:
-    inset 0 0 0 0.5px var(--border),
+    inset 0 0 0 1px var(--border),
     0 1px 2px rgba(0, 0, 0, 0.06);
   z-index: -1;
   pointer-events: none;
@@ -515,7 +515,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
   align-self: center;
   width: 1.75rem;
   height: 1.75rem;
-  margin: 0 0 0 0.3rem;
+  margin: 0 0 0 0.3125rem;
   border: 0;
   border-radius: 0.4375rem;
   background: transparent;

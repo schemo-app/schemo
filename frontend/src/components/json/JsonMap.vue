@@ -123,7 +123,7 @@ const TYPE_INK: Record<JsonKind, string> = {
 .map-addr {
   @apply min-w-0 truncate;
   padding-left: 0.625rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .map-parent {

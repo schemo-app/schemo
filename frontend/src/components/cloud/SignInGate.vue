@@ -27,6 +27,6 @@ const { openSignIn } = useAccount()
 }
 
 .gate-note {
-  @apply text-12-5 text-text-secondary;
+  @apply text-13 text-text-secondary;
 }
 </style>

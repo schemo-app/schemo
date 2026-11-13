@@ -20,7 +20,7 @@ defineProps<{ mono: string; name: string; hint: string; active?: boolean }>()
   @apply flex items-center;
   height: 2.5rem;
   gap: 0.6875rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.5rem;
   background: transparent;
   cursor: default;
@@ -35,10 +35,10 @@ defineProps<{ mono: string; name: string; hint: string; active?: boolean }>()
   @apply flex items-center justify-center flex-none;
   width: 1.625rem;
   height: 1.625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: var(--chip);
   color: var(--text-secondary);
-  font: 700 0.59375rem var(--mono);
+  font: 700 0.625rem var(--mono);
 }
 
 .name {

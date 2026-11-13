@@ -309,7 +309,7 @@ defineExpose({ cancelTop })
 }
 
 .danger-off {
-  @apply inline-flex items-center flex-none h-7.5 px-3 rounded-[0.3rem] text-13 font-medium;
+  @apply inline-flex items-center flex-none h-7.5 px-3 rounded-[0.3125rem] text-13 font-medium;
   font-family: inherit;
   color: var(--red-text);
   background: transparent;

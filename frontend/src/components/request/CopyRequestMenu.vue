@@ -93,7 +93,7 @@ async function copyAs(format: Format) {
   height: 2.125rem;
   padding: 0 0.4375rem 0 0.5625rem;
   gap: 0.125rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: var(--text-secondary);
   --wails-draggable: no-drag;

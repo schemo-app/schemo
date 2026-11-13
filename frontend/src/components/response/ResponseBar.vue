@@ -80,7 +80,7 @@ const statusLine = computed(() => formatStatus(record.status, record.statusText)
   @apply flex-none self-center;
   width: 1px;
   height: 1.125rem;
-  margin: 0 0.3rem 0 0.625rem;
+  margin: 0 0.3125rem 0 0.625rem;
   background: var(--border);
 }
 

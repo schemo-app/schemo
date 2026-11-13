@@ -81,6 +81,6 @@ async function save() {
 
 .foot {
   @apply text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 </style>

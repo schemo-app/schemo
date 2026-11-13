@@ -285,13 +285,13 @@ function giveUp() {
 }
 
 .server-field {
-  @apply flex-1 min-w-0 h-7.5 px-2.5 border border-border-strong rounded-[0.3rem] bg-bg-panel
+  @apply flex-1 min-w-0 h-7.5 px-2.5 border border-border-strong rounded-[0.3125rem] bg-bg-panel
          text-12 text-text-secondary;
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 }
 
 .server-apply {
-  @apply flex-none h-7.5 px-2.5 border border-border-strong rounded-[0.3rem] bg-bg-panel
+  @apply flex-none h-7.5 px-2.5 border border-border-strong rounded-[0.3125rem] bg-bg-panel
          text-text text-13 cursor-pointer;
   font-family: inherit;
 }
@@ -319,7 +319,7 @@ function giveUp() {
 
 .device-code {
   @apply flex flex-col items-center;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .device-code-label {

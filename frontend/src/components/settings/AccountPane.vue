@@ -316,7 +316,7 @@ watch(signOutOpen, (leaving) => {
 
 .out-intro {
   @apply flex flex-col;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   max-width: 32.5rem;
 }
 
@@ -378,7 +378,7 @@ watch(signOutOpen, (leaving) => {
 }
 
 .addr-field {
-  @apply flex-1 min-w-0 h-7.5 px-2.5 border border-border-strong rounded-[0.3rem] bg-bg-panel
+  @apply flex-1 min-w-0 h-7.5 px-2.5 border border-border-strong rounded-[0.3125rem] bg-bg-panel
          text-12 text-text;
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 }

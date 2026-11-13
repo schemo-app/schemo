@@ -116,7 +116,7 @@ const groups = computed(() => {
 
 .empty {
   @apply flex flex-col items-center text-center;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   padding: 3.75rem 1.5rem;
 }
 

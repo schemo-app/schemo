@@ -100,6 +100,8 @@ frontend/src/
   picked by `Intl.PluralRules`, English fallback. See [TRANSLATIONS.md](TRANSLATIONS.md).
 - Use reka-ui for focus, escape, positioning and ARIA. Icons come from `@lucide/vue` via `Icon.vue`.
   Do not add color tokens where the palette in `style.css` covers the need.
+- Specify fixed UI sizes in whole pixels on the 16px design baseline. Center overlays with CSS
+  layout.
 
 ## Requests
 

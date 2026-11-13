@@ -3,9 +3,9 @@ import { computed, ref, watch } from 'vue'
 import Icon from '../ui/Icon.vue'
 import DialogButton from '../ui/DialogButton.vue'
 import TransferCheck from './TransferCheck.vue'
-import TransferDialog from './TransferDialog.vue'
 import TransferField from './TransferField.vue'
 import TransferRow from './TransferRow.vue'
+import Modal from '../ui/Modal.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { useTransferStore } from '../../stores/transfer'
 import { findCollection, requestCount } from '../../lib/collectionTree'
@@ -95,7 +95,7 @@ async function primary() {
 </script>
 
 <template>
-  <TransferDialog :open="transfer.exportOpen" :title @close="transfer.closeTransfer()">
+  <Modal :open="transfer.exportOpen" :title @close="transfer.closeTransfer()">
     <TransferField v-if="!fixed" v-model="colId" :label="t('transfer.collection')" :options />
 
     <TransferField :label="fixed ? '' : t('transfer.format')">
@@ -128,7 +128,7 @@ async function primary() {
         {{ format === 'curl' ? t('transfer.copy') : t('transfer.save') }}
       </DialogButton>
     </template>
-  </TransferDialog>
+  </Modal>
 </template>
 
 <style scoped>

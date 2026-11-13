@@ -292,7 +292,7 @@ async function undo() {
 }
 
 .name-box {
-  @apply flex items-center gap-0.5 rounded-[0.3rem] px-2.5 text-13;
+  @apply flex items-center gap-0.5 rounded-[0.3125rem] px-2.5 text-13;
   height: 1.875rem;
   font-family: var(--mono);
   background: var(--bg-inset);
@@ -323,7 +323,7 @@ async function undo() {
 }
 
 .toggle-hint {
-  @apply text-11-5 leading-[1.4] text-text-tertiary;
+  @apply text-12 leading-[1.4] text-text-tertiary;
 }
 
 .preview {
@@ -341,7 +341,7 @@ async function undo() {
 }
 
 .done {
-  @apply flex items-center gap-2 rounded-lg px-2.5 py-2 text-12-5 bg-green-soft;
+  @apply flex items-center gap-2 rounded-lg px-2.5 py-2 text-13 bg-green-soft;
 }
 
 .done-icon {

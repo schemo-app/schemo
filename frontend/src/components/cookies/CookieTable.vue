@@ -108,7 +108,7 @@ const workspaces = useWorkspacesStore()
 
 .cell-text {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .cell-text.mono {

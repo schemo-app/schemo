@@ -402,7 +402,7 @@ function useMissingVars(source: RequestSource) {
   @apply flex-1 min-h-0;
 }
 
-.request-block-expanded .bar-row {
+.bar-row {
   @apply flex-none;
 }
 
@@ -587,7 +587,7 @@ function useMissingVars(source: RequestSource) {
 .var-mark {
   @apply flex-none inline-flex items-center justify-center w-6 h-6 rounded-[0.25rem] cursor-pointer
          border-0 bg-transparent;
-  margin-left: 0.3rem;
+  margin-left: 0.3125rem;
   color: var(--red-text);
   --wails-draggable: no-drag;
 }

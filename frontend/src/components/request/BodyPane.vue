@@ -298,7 +298,7 @@ function baseName(path: string): string {
 
 .body-type {
   @apply whitespace-nowrap text-text-tertiary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .body-spacer {
@@ -313,11 +313,11 @@ function baseName(path: string): string {
   @apply flex items-center gap-2 cursor-pointer border-0;
   height: 1.75rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: inherit;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   --wails-draggable: no-drag;
 }
 
@@ -336,10 +336,10 @@ function baseName(path: string): string {
   margin-right: 0.25rem;
   padding: 0 0.5rem;
   border: 1px solid var(--border-strong);
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: var(--bg-inset);
   color: var(--text);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .find-input:focus {
@@ -384,10 +384,10 @@ function baseName(path: string): string {
   @apply inline-flex items-center gap-2 cursor-pointer min-w-0 text-text-tertiary;
   height: 1.625rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   border: 1px dashed var(--border-strong);
   background: transparent;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .file:hover {

@@ -193,7 +193,7 @@ onMounted(() => {
   @apply flex flex-col flex-none;
   gap: 0.3125rem;
   width: calc(30% + 0.75rem);
-  padding: 0.5rem 0.3rem;
+  padding: 0.5rem 0.3125rem;
 }
 
 .preview-body {
@@ -263,7 +263,7 @@ onMounted(() => {
   width: 0.875rem;
   height: 0.875rem;
   box-sizing: border-box;
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   background: var(--bg-panel);
 }
 
@@ -295,7 +295,7 @@ onMounted(() => {
 }
 
 .stepper {
-  @apply inline-flex items-center h-7.5 flex-none rounded-[0.3rem];
+  @apply inline-flex items-center h-7.5 flex-none rounded-[0.3125rem];
   border: 1px solid var(--border-strong);
   background: var(--bg-inset);
 }

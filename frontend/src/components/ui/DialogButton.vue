@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { useTemplateRef } from 'vue'
 
-// The two buttons a modal's foot holds: the plain chip, and the accent one that commits.
-const { primary = false } = defineProps<{ primary?: boolean }>()
-
-// A foot may want the focus on one of them when it opens — Enter on a question about unsaved work
-// should keep it, not throw it away.
+const { primary = false, danger = false } = defineProps<{ primary?: boolean; danger?: boolean }>()
 const el = useTemplateRef<HTMLButtonElement>('el')
 defineExpose({ focus: () => el.value?.focus() })
 </script>
 
 <template>
-  <button ref="el" type="button" :class="primary ? 'primary' : 'chip'">
+  <button ref="el" type="button" :class="danger ? 'danger' : primary ? 'primary' : 'chip'">
     <slot />
   </button>
 </template>
@@ -20,7 +16,8 @@ defineExpose({ focus: () => el.value?.focus() })
 @reference "../../style.css";
 
 .chip,
-.primary {
+.primary,
+.danger {
   @apply border-0 cursor-pointer;
   height: 2rem;
   border-radius: 0.5rem;
@@ -37,24 +34,39 @@ defineExpose({ focus: () => el.value?.focus() })
   background: var(--bg-hover);
 }
 
-.primary {
+.primary,
+.danger {
   padding: 0 1rem;
-  background: var(--accent);
   color: #fff;
   font-weight: 600;
 }
 
-.primary:disabled {
+.primary {
+  background: var(--accent);
+}
+
+.danger {
+  background: var(--red);
+}
+
+.primary:disabled,
+.danger:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.primary:not(:disabled):hover {
+.primary:not(:disabled):hover,
+.danger:not(:disabled):hover {
   filter: brightness(1.06);
 }
 
 .primary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.danger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--red-soft);
 }
 </style>

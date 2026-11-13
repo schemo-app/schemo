@@ -8,6 +8,9 @@ import { clientComponent, vite } from './vite.mjs'
 
 globalThis.window = Object.assign(new EventTarget(), { setTimeout, clearTimeout })
 globalThis.document = Object.assign(new EventTarget(), { createElement: () => ({}), body: {style: {}} })
+class ElementStub {}
+globalThis.Element = ElementStub
+globalThis.HTMLInputElement = class extends ElementStub {}
 const resizeObservers = new Set()
 class ResizeObserverFake {
   constructor(callback) {
@@ -380,7 +383,7 @@ test('rail name edits validate, save and cancel without opening the sidebar', as
   })
   const root = mount(context, components.AppSidebarRail)
   const menu = rendered(root, 'TreeRowMenu')
-  const dialog = rendered(root, 'Dialog')
+  const dialog = rendered(root, 'Modal')
   const input = rendered(root, 'Input')
   const form = withClass(root, 'rail-name-form')
   const submit = () => form.props.onSubmit({ preventDefault() {} })
@@ -406,7 +409,7 @@ test('rail name edits validate, save and cancel without opening the sidebar', as
   await settle()
   menu.props.onRename()
   await settle()
-  dialog.props['onUpdate:open'](false)
+  dialog.props.onClose()
   await settle()
   assert.equal(dialog.props.open, false)
   assert.deepEqual(saved, [
@@ -673,6 +676,32 @@ test('another close cannot replace an unanswered dialog, and dropping the tab ca
   content.dropContent('request')
   assert.equal(await first, false)
   assert.equal(content.leavePending.value, null)
+})
+
+test('a new request is asked about once it has an address, and a preview never is', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] })
+  ports.services.Draft.Open = id => CancellablePromise.resolve({ id, url: '', body: '' })
+  const draft = await content.warmContent({
+    id: 'new', kind: TabKind.TabKindRequest, draftId: 'draft-new', preview: false,
+  })
+  assert.equal(draft.node.value, null)
+  assert.equal(await content.askUnsaved('new'), true)
+  draft.draft.setUrl('https://example.test')
+  const leaving = content.askUnsaved('new')
+  assert.equal(content.leavePending.value?.draft, true)
+  await content.answerUnsaved('save')
+  assert.equal(await leaving, false)
+  assert.equal(content.leavePending.value, null)
+
+  const again = content.askUnsaved('new')
+  await content.answerUnsaved('discard')
+  assert.equal(await again, true)
+
+  const preview = await content.warmContent({
+    id: 'preview', kind: TabKind.TabKindRequest, draftId: 'draft-preview', preview: true,
+  })
+  preview.draft.setUrl('https://example.test')
+  assert.equal(await content.askUnsaved('preview'), true)
 })
 
 test('a node saved while its tab closes is not adopted by the closed tab', async (context) => {

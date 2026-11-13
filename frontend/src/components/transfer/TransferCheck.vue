@@ -19,7 +19,7 @@ defineProps<{ on: boolean }>()
   height: 0.875rem;
   border-radius: 0.25rem;
   background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
 }
 
 .box.on {

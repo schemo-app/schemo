@@ -139,7 +139,7 @@ function overview(): void {
   @apply flex items-center flex-none;
   height: 2.25rem;
   padding: 0 0.25rem 0 0.75rem;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .gs-title {
@@ -147,7 +147,7 @@ function overview(): void {
 }
 
 .gs-count {
-  @apply flex-none text-text-tertiary text-11-5;
+  @apply flex-none text-text-tertiary text-12;
 }
 
 .gs-chev {
@@ -165,7 +165,7 @@ function overview(): void {
   width: 1.5rem;
   height: 1.5rem;
   border: 0;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
 }
 
@@ -201,7 +201,7 @@ function overview(): void {
 .gs-rows {
   @apply flex-1 min-h-0 overflow-auto flex flex-col;
   gap: 1px;
-  padding: 0.3rem 0.25rem 0.125rem;
+  padding: 0.3125rem 0.25rem 0.125rem;
 }
 
 .gs-row {
@@ -210,7 +210,7 @@ function overview(): void {
   padding: 0 0.5rem;
   gap: 0.5625rem;
   border: 0;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: var(--text);
   font-family: inherit;
@@ -240,7 +240,7 @@ function overview(): void {
 
 .gs-ring {
   box-sizing: border-box;
-  border: 1.5px solid var(--text-tertiary);
+  border: 1px solid var(--text-tertiary);
 }
 
 .gs-label {
@@ -249,7 +249,7 @@ function overview(): void {
 
 .gs-link {
   @apply self-start cursor-pointer text-accent text-12;
-  padding: 0.3rem 0.5rem 0.5rem;
+  padding: 0.3125rem 0.5rem 0.5rem;
   border: 0;
   background: transparent;
   font-family: inherit;

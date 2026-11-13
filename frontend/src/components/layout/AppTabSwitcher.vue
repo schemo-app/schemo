@@ -139,8 +139,8 @@ useEventListener(window, 'keyup', (event: KeyboardEvent) => {
 .tab-overflow {
   @apply flex items-center flex-none border-0 cursor-default;
   height: 1.625rem;
-  margin-left: 0.3rem;
-  padding: 0 0.3rem 0 0.5rem;
+  margin-left: 0.3125rem;
+  padding: 0 0.3125rem 0 0.5rem;
   gap: 0.25rem;
   border-radius: 0.4375rem;
   background: var(--chip);

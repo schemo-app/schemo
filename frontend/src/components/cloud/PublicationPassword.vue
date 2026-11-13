@@ -46,14 +46,14 @@ function generate() {
 
 .publication-password {
   @apply flex;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   padding: 0.125rem 0 0.25rem;
 }
 
 .password-input {
   @apply flex items-center flex-1 min-w-0;
   height: 1.875rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   background: var(--bg-inset);
   box-shadow: inset 0 0 0 1px var(--border-strong);
@@ -72,7 +72,7 @@ input {
   @apply flex items-center justify-center flex-none border-0 bg-transparent text-text-secondary cursor-pointer;
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .password-input button:hover {
@@ -96,7 +96,7 @@ input {
 
 .tools input {
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .tools .save-password {

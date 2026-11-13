@@ -67,42 +67,30 @@ function count(chip: ChipName): number {
 const tabsEl = useTemplateRef<HTMLElement>('tabsEl')
 const { style: markStyle, ready: markReady } = useSlidingPill(tabsEl, '.req-tab.active', () => open.value)
 
-// The cap is rounded down to a whole pixel in the stylesheet: one that lands on a fraction puts
-// the answer under it — its row, its glyphs — on a fraction too, and they blur.
-
-// The chrome the window draws above and below the pane — the header with its tab strip, and the
-// status bar. A share is taken of what is left of the window, which is the page's own column.
-const CHROME_HEIGHT = 72
-
-// Zero is not a height: it is the pane as tall as what it holds, where a double click on the edge
-// puts it back. Go clamps what is stored; the pair here is what the drag stops at, and it is Go's
-// own pair.
-//
-// The smaller of the two limits is the share the stylesheet caps the pane at: a height dragged on a
-// tall window must stop there, or the answer under it disappears on a short one. The window is
-// measured in screen pixels and the drag counts in layout units, hence the scale.
-function tallestHeight(): number {
-  return Math.min(REQUEST.max, Math.round(((window.innerHeight - CHROME_HEIGHT) / unitScale()) * 0.42))
-}
-
 const stored = useSetting('requestHeight')
 const height = ref(stored.value)
+const defaultHeight = computed(() => !expanded && height.value === 0)
 
 const paneEl = useTemplateRef<HTMLElement>('paneEl')
 const toolbar = useTemplateRef<HTMLElement>('toolbar')
 
-// The pane is as tall as what it holds until it is dragged, and the drag counts from the height it
-// has on screen rather than from the ref, which is zero until somebody has dragged it.
+// Start at the rendered height, which can be limited by the available workspace.
 const { startDrag, dragging } = useResizeDrag(height, {
   axis: 'y',
   side: 'top',
   min: REQUEST.min,
-  max: tallestHeight,
+  max: REQUEST.max,
   from: () => {
     const shown = paneEl.value?.offsetHeight
     return shown ? shown / unitScale() : height.value
   },
-  onEnd: () => setLayout({ requestHeight: Math.round(height.value) }),
+  onEnd: () => {
+    const shown = paneEl.value?.offsetHeight
+    if (height.value && shown && height.value !== stored.value) {
+      height.value = Math.min(REQUEST.max, Math.max(REQUEST.min, Math.round(shown / unitScale())))
+      setLayout({ requestHeight: height.value })
+    }
+  },
 })
 
 watch(stored, (now) => {
@@ -137,7 +125,7 @@ function resetPaneHeight() {
     <div ref="toolbar" class="req-toolbar"></div>
   </div>
 
-  <div v-if="open" class="req-pane-wrap" :class="{ expanded }">
+  <div v-if="open" class="req-pane-wrap" :class="{ 'default-height': defaultHeight }">
     <div
       ref="paneEl"
       class="req-pane"
@@ -224,22 +212,12 @@ function resetPaneHeight() {
   line-height: normal;
 }
 
-.req-pane-wrap.expanded {
-  @apply flex flex-col flex-1 min-h-0;
-}
-
-.expanded .req-pane {
-  @apply flex-1 min-h-0;
-  max-height: none;
-}
-
 .req-pane-wrap {
-  @apply relative;
+  @apply relative flex flex-col flex-auto min-h-0;
 }
 
 .req-pane {
-  @apply relative flex flex-col bg-bg overflow-y-auto;
-  max-height: round(down, calc((100vh - 4.5rem) * 0.42), 1px);
+  @apply relative flex flex-col flex-auto min-h-0 max-h-full bg-bg overflow-y-auto;
 }
 
 .req-grip {

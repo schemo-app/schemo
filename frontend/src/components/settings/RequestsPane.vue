@@ -229,7 +229,7 @@ onMounted(() => {
 }
 
 .number {
-  @apply inline-flex items-center h-7.5 rounded-[0.3rem] flex-none;
+  @apply inline-flex items-center h-7.5 rounded-[0.3125rem] flex-none;
   border: 1px solid var(--border-strong);
   background: var(--bg-inset);
 }

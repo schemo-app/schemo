@@ -46,7 +46,7 @@ const envDotStyle = computed(() => {
 .env-btn {
   @apply flex items-center flex-none cursor-pointer border-0;
   height: 1.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   gap: 0.5rem;
   border-radius: 0.4375rem;
   background: transparent;

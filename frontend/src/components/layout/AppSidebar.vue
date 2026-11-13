@@ -186,12 +186,12 @@ function openSettings() {
 
 .sidebar-head-custom {
   @apply justify-start gap-0.5;
-  padding: 0 0.5rem 0 0.6rem;
+  padding: 0 0.5rem 0 0.625rem;
 }
 
 .sidebar-head-custom .side-btn {
   width: 2rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .side-btn-mac {

@@ -268,7 +268,7 @@ useEventListener(window, 'keydown', onRecordKey, { capture: true })
   @apply grid items-center gap-3;
   grid-template-columns: minmax(0, 1fr) auto 1.75rem;
   min-height: 2.75rem;
-  padding: 0.3rem 0.625rem 0.3rem 1rem;
+  padding: 0.3125rem 0.625rem 0.3125rem 1rem;
 }
 
 .text {
@@ -308,7 +308,7 @@ useEventListener(window, 'keydown', onRecordKey, { capture: true })
 .combo {
   @apply inline-flex items-center gap-1 rounded-[0.4375rem] cursor-pointer;
   min-height: 1.875rem;
-  padding: 0.1875rem 0.3rem;
+  padding: 0.1875rem 0.3125rem;
   border: 1px solid transparent;
   background: transparent;
   font-family: inherit;
@@ -333,7 +333,7 @@ useEventListener(window, 'keydown', onRecordKey, { capture: true })
   @apply inline-flex items-center justify-center text-12 text-text-secondary whitespace-nowrap;
   min-width: 1.375rem;
   height: 1.375rem;
-  padding: 0 0.3rem;
+  padding: 0 0.3125rem;
   border: 1px solid var(--border-strong);
   border-bottom-width: 2px;
   border-radius: 0.3125rem;

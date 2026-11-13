@@ -112,7 +112,7 @@ async function save() {
 
 .notice {
   @apply text-13;
-  padding: 0.3rem 0.625rem 0;
+  padding: 0.3125rem 0.625rem 0;
   color: var(--red-text);
 }
 </style>

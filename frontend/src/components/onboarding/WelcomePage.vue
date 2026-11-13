@@ -144,7 +144,7 @@ function start(): void {
 
 .card {
   @apply flex flex-col;
-  padding: 0.3rem;
+  padding: 0.3125rem;
   border-radius: 0.875rem;
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -171,16 +171,16 @@ function start(): void {
 }
 
 .card-title {
-  @apply text-13-5 font-semibold;
+  @apply text-14 font-semibold;
 }
 
 .card-desc {
-  @apply text-text-secondary text-12-5;
+  @apply text-text-secondary text-13;
   line-height: 1.5;
   text-wrap: pretty;
 }
 
 .welcome-foot {
-  @apply text-text-tertiary text-12-5;
+  @apply text-text-tertiary text-13;
 }
 </style>

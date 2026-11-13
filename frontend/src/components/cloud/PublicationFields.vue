@@ -133,7 +133,7 @@ function pick(key: string, value: string) {
   @apply flex items-center;
   height: auto;
   gap: 0.5rem;
-  padding: 0.3rem 0.5rem;
+  padding: 0.3125rem 0.5rem;
 }
 
 .option-mark {
@@ -147,6 +147,6 @@ function pick(key: string, value: string) {
 }
 
 .option-hint {
-  @apply truncate text-text-tertiary text-11-5;
+  @apply truncate text-text-tertiary text-12;
 }
 </style>

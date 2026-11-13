@@ -25,31 +25,33 @@ function onEscape(event: KeyboardEvent) {
   <DialogRoot :open="true" @update:open="onOpenChange">
     <DialogPortal>
       <DialogOverlay class="sheet-overlay" />
-      <DialogContent
-        class="sheet"
-        :style="{ maxWidth: `${width}px` }"
-        :aria-describedby="undefined"
-        @escape-key-down="onEscape"
-        @pointer-down-outside.prevent
-      >
-        <div class="sheet-head">
-          <DialogTitle class="sheet-title">{{ title }}</DialogTitle>
-          <button
-            type="button"
-            class="sheet-close"
-            :title="`${t('common.close')} · Esc`"
-            @click="emit('close')"
-          >
-            <Icon name="X" :size="14" :stroke-width="2.5" />
-          </button>
-        </div>
+      <div class="sheet-layout">
+        <DialogContent
+          class="sheet"
+          :style="{ maxWidth: `${width}px` }"
+          :aria-describedby="undefined"
+          @escape-key-down="onEscape"
+          @pointer-down-outside.prevent
+        >
+          <div class="sheet-head">
+            <DialogTitle class="sheet-title">{{ title }}</DialogTitle>
+            <button
+              type="button"
+              class="sheet-close"
+              :title="`${t('common.close')} · Esc`"
+              @click="emit('close')"
+            >
+              <Icon name="X" :size="14" :stroke-width="2.5" />
+            </button>
+          </div>
 
-        <div class="sheet-body">
-          <slot />
-        </div>
+          <div class="sheet-body">
+            <slot />
+          </div>
 
-        <slot name="over" />
-      </DialogContent>
+          <slot name="over" />
+        </DialogContent>
+      </div>
     </DialogPortal>
   </DialogRoot>
 </template>
@@ -62,9 +64,12 @@ function onEscape(event: KeyboardEvent) {
   background: rgba(0, 0, 0, 0.28);
 }
 
+.sheet-layout {
+  @apply fixed inset-0 z-1500 flex items-center justify-center pointer-events-none;
+}
+
 .sheet {
-  @apply fixed left-1/2 top-1/2 z-1500 flex flex-col overflow-hidden;
-  transform: translate(-50%, -50%);
+  @apply relative flex flex-col overflow-hidden pointer-events-auto;
   width: calc(100vw - 3.5rem);
   height: min(39rem, calc(100vh - 3.5rem));
   border-radius: 0.875rem;

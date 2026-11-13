@@ -61,7 +61,7 @@ kbd {
   padding: 0 0.375rem;
   border-radius: 0.375rem;
   background: var(--chip);
-  box-shadow: inset 0 0 0 0.5px var(--border-strong), 0 0.5px 0 var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong), 0 1px 0 var(--border-strong);
   font: inherit;
   font-size: var(--text-12);
 }

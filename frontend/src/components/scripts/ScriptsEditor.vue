@@ -109,7 +109,7 @@ const postLines = computed(() => lines(post.value))
   border-radius: 0.625rem;
   background: var(--raise);
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   line-height: 22px;
 }
 

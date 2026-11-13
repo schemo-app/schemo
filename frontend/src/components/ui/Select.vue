@@ -33,7 +33,7 @@ const model = defineModel<string>({ required: true })
 }
 
 select {
-  @apply h-7 rounded-[0.3rem] text-13 text-text cursor-pointer appearance-none;
+  @apply h-7 rounded-[0.3125rem] text-13 text-text cursor-pointer appearance-none;
   font: inherit;
   font-size: var(--text-13);
   min-width: 8.75rem;

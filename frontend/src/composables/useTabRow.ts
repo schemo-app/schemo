@@ -52,8 +52,7 @@ export function useTabRow(opts: {
   const hiddenCount = computed(() => layout.value.hidden)
 
   useResizeObserver(stripEl, () => {
-    const width = stripEl.value?.clientWidth ?? 0
-    if (Math.abs(width - stripW.value) > 2) stripW.value = width
+    stripW.value = stripEl.value?.clientWidth ?? 0
   })
 
   watch(() => opts.tabs().length, (count, before) => {

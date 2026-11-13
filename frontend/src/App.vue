@@ -11,7 +11,7 @@ import { callOrToast } from './lib/calls'
 import { useAppEvents } from './composables/useAppEvents'
 import { useSessionPersistence } from './composables/useSessionPersistence'
 import { useUpdateCheck } from './composables/useUpdateCheck'
-import { focusUrlField } from './lib/intents'
+import { focusUrlField, saveRequest } from './lib/intents'
 import { System } from '../bindings/schemo/internal/app'
 import type { StartupStatus, MenuGroup as NativeMenu } from '../bindings/schemo/internal/desktop'
 import { t, te } from './i18n'
@@ -127,6 +127,17 @@ onMounted(async () => {
 
 function openAbout() {
   System.ShowAbout()
+}
+
+async function answerLeave(action: 'save' | 'discard' | 'cancel') {
+  const pending = leavePending.value
+  if (action === 'save' && pending?.draft) {
+    await answerUnsaved('cancel')
+    await useTabsStore().activate(pending.tabId)
+    void saveRequest.trigger()
+    return
+  }
+  await answerUnsaved(action)
 }
 
 useAppEvents(records, collections, () => startup.value?.ready === true)
@@ -329,12 +340,13 @@ function useNativeMenu() {
   <UnsavedDialog
     v-if="startup?.ready"
     :open="leavePending !== null"
-    :title="t('collections.unsavedTitle', { name: leavePending?.name })"
-    :hint="t('collections.unsavedHint')"
+    :title="t(leavePending?.draft ? 'collections.unsavedDraftTitle' : 'collections.unsavedTitle', { name: leavePending?.name })"
+    :hint="t(leavePending?.draft ? 'collections.unsavedDraftHint' : 'collections.unsavedHint')"
+    :save-label="t(leavePending?.draft ? 'collections.unsavedDraftSave' : 'common.save')"
     can-save
-    @cancel="answerUnsaved('cancel')"
-    @discard="answerUnsaved('discard')"
-    @save="answerUnsaved('save')"
+    @cancel="answerLeave('cancel')"
+    @discard="answerLeave('discard')"
+    @save="answerLeave('save')"
   />
 
   <Toast />

@@ -117,7 +117,7 @@ const tariffNote = computed(() => {
 
 .meter {
   @apply flex flex-col min-w-0;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .meter-line {

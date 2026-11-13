@@ -59,7 +59,7 @@ const { open, groups } = useAppMenu()
   width: 2rem;
   height: 1.75rem;
   border: 0;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: var(--text-secondary);
   cursor: default;

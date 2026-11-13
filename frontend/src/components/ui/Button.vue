@@ -41,10 +41,10 @@ const { variant = 'outline', size = 'md' } = defineProps<{
 }
 
 .btn--md {
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 1.625rem;
   padding: 0 0.75rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-12);
 }
 
@@ -52,12 +52,12 @@ const { variant = 'outline', size = 'md' } = defineProps<{
   gap: 0.25rem;
   height: 1.5rem;
   padding: 0 0.5625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-12);
 }
 
 .btn--lg {
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 2rem;
   padding: 0 0.875rem;
   border-radius: 0.5rem;
@@ -104,13 +104,13 @@ const { variant = 'outline', size = 'md' } = defineProps<{
 .btn--ghost.btn--md,
 .btn--quiet.btn--md {
   padding: 0.25rem 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .btn--quiet {
   @apply text-text-secondary;
   padding: 0.25rem 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .btn--ghost:hover:not(:disabled) {
@@ -126,10 +126,10 @@ const { variant = 'outline', size = 'md' } = defineProps<{
 }
 
 .btn.btn--bar {
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 1.75rem;
-  padding: 0 0.6rem;
-  border-radius: 0.3rem;
+  padding: 0 0.625rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-12);
   font-weight: 500;
   background: var(--bg-inset);
@@ -138,17 +138,17 @@ const { variant = 'outline', size = 'md' } = defineProps<{
 }
 
 .btn.btn--field {
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 1.875rem;
   padding: 0 0.75rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-13);
   font-weight: 500;
   box-shadow: none;
 }
 
 .btn.btn--pane {
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 2.125rem;
   padding: 0 0.875rem;
   border-radius: 0.5rem;

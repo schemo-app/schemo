@@ -18,14 +18,12 @@ const open = defineModel<boolean>('open')
   <DialogRoot v-model:open="open">
     <DialogPortal>
       <DialogOverlay :class="['dialog-overlay', tone]" />
-      <DialogContent
-        :aria-describedby="undefined"
-        v-bind="$attrs"
-        :class="['dialog', tone, { 'dialog-top': placement === 'top' }]"
-      >
-        <DialogTitle v-if="title" class="dialog-title">{{ title }}</DialogTitle>
-        <slot />
-      </DialogContent>
+      <div class="dialog-layout" :class="{ 'dialog-top': placement === 'top' }">
+        <DialogContent :aria-describedby="undefined" v-bind="$attrs" :class="['dialog', tone]">
+          <DialogTitle v-if="title" class="dialog-title">{{ title }}</DialogTitle>
+          <slot />
+        </DialogContent>
+      </div>
     </DialogPortal>
   </DialogRoot>
 </template>
@@ -47,9 +45,17 @@ const open = defineModel<boolean>('open')
   animation: dialog-overlay-out 0.12s ease-in forwards;
 }
 
+.dialog-layout {
+  @apply fixed inset-0 z-1500 flex items-center justify-center pointer-events-none;
+}
+
+.dialog-top {
+  align-items: flex-start;
+  padding-top: 5.75rem;
+}
+
 .dialog {
-  @apply fixed left-1/2 top-1/2 max-w-[90vw] z-1500;
-  transform: translate(-50%, -50%);
+  @apply relative max-w-[90vw] pointer-events-auto;
   background: var(--glass-overlay);
   backdrop-filter: var(--blur-overlay);
   border: 1px solid var(--glass-overlay-border);
@@ -77,38 +83,6 @@ const open = defineModel<boolean>('open')
   animation: dialog-out 0.12s ease-in forwards;
 }
 
-.dialog-top {
-  top: 5.75rem;
-  transform: translateX(-50%);
-  animation: palette-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dialog-top[data-state='closed'] {
-  animation: palette-out 0.12s ease-in forwards;
-}
-
-@keyframes palette-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-0.5rem) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@keyframes palette-out {
-  from {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-0.3rem) scale(0.99);
-  }
-}
-
 @keyframes dialog-overlay-in {
   from {
     opacity: 0;
@@ -130,22 +104,18 @@ const open = defineModel<boolean>('open')
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
 }
 
 @keyframes dialog-out {
   from {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
   }
   to {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.97);
   }
 }
 

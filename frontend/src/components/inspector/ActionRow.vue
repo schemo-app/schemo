@@ -16,7 +16,7 @@ defineProps<{ menu?: boolean }>()
 @reference "../../style.css";
 
 .action {
-  @apply flex w-full items-center justify-between gap-2 cursor-pointer rounded-[0.3rem] border-0 bg-transparent px-2 text-left text-13 text-text;
+  @apply flex w-full items-center justify-between gap-2 cursor-pointer rounded-[0.3125rem] border-0 bg-transparent px-2 text-left text-13 text-text;
   height: 1.875rem;
   --wails-draggable: no-drag;
 }

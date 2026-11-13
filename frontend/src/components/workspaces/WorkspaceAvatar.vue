@@ -30,7 +30,7 @@ const style = computed(() => ({ background: tintOf(workspace.color) }))
 }
 
 .avatar--sm {
-  @apply w-5 h-5 rounded-[0.3rem];
+  @apply w-5 h-5 rounded-[0.3125rem];
 }
 
 .avatar--md {

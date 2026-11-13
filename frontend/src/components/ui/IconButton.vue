@@ -115,7 +115,7 @@ const hintArmed = useHoverArrival(hintEl)
 .icon-btn--md {
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .icon-btn--lg {
@@ -127,19 +127,19 @@ const hintArmed = useHoverArrival(hintEl)
 .icon-btn--xl {
   width: 1.625rem;
   height: 1.625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .icon-btn--bar {
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .icon-btn--tab {
   width: 1.875rem;
   height: 1.875rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .icon-btn--outline {

@@ -140,13 +140,13 @@ watch(customTitlebar, (custom) => custom && refreshMaximised(), { immediate: tru
 
 .header-side.header-side-custom {
   @apply gap-0.5;
-  padding: 0 0.25rem 0 0.1rem;
+  padding: 0 0.25rem 0 0.125rem;
 }
 
 .header-side.header-side-custom .header-btn {
   width: 2rem;
   margin-left: 0;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .header-btn {
@@ -168,7 +168,7 @@ watch(customTitlebar, (custom) => custom && refreshMaximised(), { immediate: tru
 
 .header-actions {
   @apply flex items-center flex-none;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   padding-left: 0.75rem;
   --wails-draggable: no-drag;
 }
@@ -176,7 +176,7 @@ watch(customTitlebar, (custom) => custom && refreshMaximised(), { immediate: tru
 .header-search {
   width: auto;
   padding: 0 0.5625rem;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -184,7 +184,7 @@ watch(customTitlebar, (custom) => custom && refreshMaximised(), { immediate: tru
 .header-key {
   @apply leading-none text-text-tertiary;
   font-size: var(--text-12);
-  padding: 0.1rem 0.3rem;
+  padding: 0.125rem 0.3125rem;
   border-radius: 0.25rem;
   background: var(--chip);
 }

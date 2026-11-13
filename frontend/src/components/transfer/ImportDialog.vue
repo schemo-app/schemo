@@ -5,8 +5,8 @@ import Icon from '../ui/Icon.vue'
 import FileDrop from '../ui/FileDrop.vue'
 import Segment from '../ui/Segment.vue'
 import DialogButton from '../ui/DialogButton.vue'
+import Modal from '../ui/Modal.vue'
 import TransferCheck from './TransferCheck.vue'
-import TransferDialog from './TransferDialog.vue'
 import TransferField from './TransferField.vue'
 import TransferRow from './TransferRow.vue'
 import { useCollectionsStore } from '../../stores/collections'
@@ -295,7 +295,7 @@ async function commit() {
 </script>
 
 <template>
-  <TransferDialog :open="transfer.importOpen" :title @close="transfer.closeTransfer()">
+  <Modal :open="transfer.importOpen" :title @close="transfer.closeTransfer()">
     <template v-if="source" #lead>
       <button type="button" class="back" :title="t('transfer.back')" @click="back">
         <Icon name="ChevronLeft" :size="14" :stroke-width="2.4" />
@@ -403,7 +403,7 @@ async function commit() {
       <DialogButton @click="transfer.closeTransfer()">{{ t('transfer.cancel') }}</DialogButton>
       <DialogButton primary :disabled="!ready" @click="commit">{{ primaryLabel }}</DialogButton>
     </template>
-  </TransferDialog>
+  </Modal>
 </template>
 
 <style scoped>
@@ -427,7 +427,7 @@ async function commit() {
   @apply flex items-center;
   height: 2.25rem;
   gap: 0.625rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.5rem;
   cursor: default;
 }
@@ -451,7 +451,7 @@ async function commit() {
   height: 8.75rem;
   gap: 0.25rem;
   border-radius: 0.625rem;
-  border: 1.5px dashed var(--border);
+  border: 1px dashed var(--border);
   background: var(--bg-panel);
   cursor: default;
 }
@@ -468,7 +468,7 @@ async function commit() {
 .file {
   @apply flex items-center;
   gap: 0.6875rem;
-  padding: 0.625rem 0.3rem 0.625rem 0.75rem;
+  padding: 0.625rem 0.3125rem 0.625rem 0.75rem;
   border-radius: 0.625rem;
   box-shadow: inset 0 0 0 1px var(--border);
 }
@@ -496,7 +496,7 @@ async function commit() {
   @apply flex-none border-0 cursor-pointer;
   height: 1.625rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   color: var(--accent);
   font: inherit;
@@ -513,10 +513,10 @@ async function commit() {
   border-radius: 0.5rem;
   background: var(--bg-panel);
   box-shadow: inset 0 0 0 1px var(--border);
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   color: var(--text);
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   user-select: text;
 }
 

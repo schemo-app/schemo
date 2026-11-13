@@ -93,8 +93,8 @@ function syncScroll(e: Event) {
   @apply w-full;
   height: 1.625rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
-  font-size: var(--text-12-5);
+  border-radius: 0.3125rem;
+  font-size: var(--text-13);
 }
 
 .cell .row-display {

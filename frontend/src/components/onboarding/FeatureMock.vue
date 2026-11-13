@@ -245,7 +245,7 @@ const people = [
 
 .row {
   @apply flex items-center;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .row.wide {
@@ -285,9 +285,9 @@ const people = [
   @apply flex items-center flex-1;
   min-width: 0;
   height: 1.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   gap: 0.5rem;
-  font-size: var(--text-10-5);
+  font-size: var(--text-11);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -295,7 +295,7 @@ const people = [
 .send {
   @apply flex items-center flex-none;
   height: 1.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   background: var(--accent);
   color: var(--accent-text);
@@ -306,7 +306,7 @@ const people = [
   @apply flex flex-col;
   padding: 0.5625rem 0.625rem;
   gap: 0.1875rem;
-  font-size: var(--text-10-5);
+  font-size: var(--text-11);
 }
 
 .row.head {
@@ -315,7 +315,7 @@ const people = [
 }
 
 .pill {
-  padding: 0.0625rem 0.3rem;
+  padding: 0.0625rem 0.3125rem;
   border-radius: 0.25rem;
   font-weight: 600;
 }
@@ -341,7 +341,7 @@ const people = [
 .strip {
   @apply flex items-end;
   gap: 0.125rem;
-  padding: 0 0.3rem;
+  padding: 0 0.3125rem;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
   overflow: hidden;
@@ -350,8 +350,8 @@ const people = [
 .tab {
   @apply flex items-center flex-none;
   height: 1.875rem;
-  padding: 0 0.6rem;
-  gap: 0.3rem;
+  padding: 0 0.625rem;
+  gap: 0.3125rem;
   border-radius: 0.4375rem 0.4375rem 0 0;
   color: var(--text-secondary);
 }
@@ -364,7 +364,7 @@ const people = [
 
 .strip .verb,
 .pillreq .verb {
-  font-size: 0.59375rem;
+  font-size: 0.625rem;
 }
 
 .temp {
@@ -377,8 +377,8 @@ const people = [
 }
 
 .dot {
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   margin-left: 0.125rem;
   border-radius: 50%;
   background: var(--text-tertiary);
@@ -389,7 +389,7 @@ const people = [
   height: 1.375rem;
   padding: 0 0.5rem;
   gap: 0.3125rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: var(--bg);
   box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text-secondary);
@@ -398,8 +398,8 @@ const people = [
 .pillreq {
   @apply flex items-center;
   height: 1.625rem;
-  padding: 0 0.6rem;
-  gap: 0.3rem;
+  padding: 0 0.625rem;
+  gap: 0.3125rem;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -422,34 +422,34 @@ const people = [
   border-radius: 0.3125rem;
   background: var(--chip);
   color: var(--text-secondary);
-  font-size: var(--text-10-5);
+  font-size: var(--text-11);
   white-space: nowrap;
 }
 
 .tree {
   @apply flex flex-col;
-  padding: 0.3rem;
+  padding: 0.3125rem;
   gap: 0.0625rem;
 }
 
 .treehead {
   @apply flex items-center;
   height: 1.5rem;
-  padding: 0 0.3rem;
-  gap: 0.3rem;
+  padding: 0 0.3125rem;
+  gap: 0.3125rem;
   font-weight: 600;
 }
 
 .treerow {
   @apply flex items-center;
   height: 1.375rem;
-  padding: 0 0.3rem 0 1.375rem;
-  gap: 0.3rem;
+  padding: 0 0.3125rem 0 1.375rem;
+  gap: 0.3125rem;
 }
 
 .treerow .verb {
   width: 2.375rem;
-  font-size: 0.59375rem;
+  font-size: 0.625rem;
 }
 
 .faint {
@@ -496,8 +496,8 @@ const people = [
 
 .envdot {
   @apply flex-none;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   border-radius: 50%;
 }
 
@@ -516,7 +516,7 @@ const people = [
   @apply flex items-center;
   height: 1.25rem;
   padding: 0 0.5rem;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   border-radius: 0.625rem;
   background: var(--red-soft);
   color: var(--red);
@@ -525,8 +525,8 @@ const people = [
 
 .capdot {
   @apply flex-none;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   border-radius: 50%;
   background: var(--red);
 }
@@ -541,7 +541,7 @@ const people = [
   grid-template-columns: 2.125rem 2.625rem minmax(0, 1fr) 1.625rem;
   align-items: center;
   height: 1.375rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   font-family: var(--mono);
   font-size: var(--text-10);
 }
@@ -579,7 +579,7 @@ const people = [
 
 .seg.on {
   background: var(--bg);
-  box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   color: var(--text);
   font-weight: 500;
 }
@@ -590,7 +590,7 @@ const people = [
 }
 
 .doctitle {
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   font-weight: 600;
 }
 
@@ -600,7 +600,7 @@ const people = [
 
 .pills {
   @apply flex flex-wrap;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .files {
@@ -625,7 +625,7 @@ const people = [
 .ext {
   @apply flex-none;
   font-family: var(--mono);
-  font-size: 0.59375rem;
+  font-size: 0.625rem;
   color: var(--text-tertiary);
 }
 
@@ -657,7 +657,7 @@ const people = [
 .workspace-row {
   @apply flex items-center;
   height: 1.625rem;
-  padding: 0 0.3rem;
+  padding: 0 0.3125rem;
   gap: 0.5rem;
   border-radius: 0.3125rem;
 }
@@ -690,7 +690,7 @@ const people = [
 
 .workspace-sep {
   height: 1px;
-  margin: 0.1875rem 0.3rem;
+  margin: 0.1875rem 0.3125rem;
   background: var(--border);
 }
 
@@ -711,7 +711,7 @@ const people = [
   margin-right: -0.3125rem;
   border-radius: 50%;
   color: var(--accent-text);
-  font-size: 0.53125rem;
+  font-size: 0.5625rem;
   font-weight: 700;
   box-shadow: 0 0 0 2px var(--raise);
 }

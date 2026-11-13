@@ -216,5 +216,5 @@ test('the takedown dialog retains the page URL after the share popover closes', 
   globalThis.publicationUi.preview = null
   const html = await renderToString(createSSRApp(UnpublishDialog))
   assert.match(html, /publications.unpublishBody:https:\/\/share.example.com\/page/)
-  assert.match(html, /unpublish-button/)
+  assert.match(html, /class="danger"/)
 })

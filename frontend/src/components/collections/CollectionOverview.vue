@@ -234,7 +234,7 @@ function whenOf(at: number): string {
 .desc-link {
   @apply self-start cursor-pointer border-0 bg-transparent p-0 text-accent;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .desc-link.self {
@@ -328,7 +328,7 @@ function whenOf(at: number): string {
   grid-template-columns: 3.5rem minmax(0, 0.6fr) minmax(0, 1fr) 5rem 6rem;
   column-gap: clamp(0.375rem, 2vw, 1.5rem);
   align-items: center;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
 }
 
 .head {
@@ -356,7 +356,7 @@ function whenOf(at: number): string {
 
 .method {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-12);
   font-weight: 700;
 }
 

@@ -203,7 +203,7 @@ function cancel() {
 }
 
 .card-button {
-  @apply flex-none h-7.5 px-3 rounded-[0.3rem] cursor-pointer text-13 font-medium text-text;
+  @apply flex-none h-7.5 px-3 rounded-[0.3125rem] cursor-pointer text-13 font-medium text-text;
   font-family: inherit;
   background: var(--bg-panel);
   border: 1px solid var(--border-strong);

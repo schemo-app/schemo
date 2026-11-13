@@ -33,7 +33,7 @@ const choices = computed(() => [
   @apply flex items-center flex-wrap;
   min-height: 2.5rem;
   gap: 0.625rem;
-  padding: 0.3rem 0;
+  padding: 0.3125rem 0;
   border-top: 1px solid var(--line2);
 }
 
@@ -43,18 +43,18 @@ const choices = computed(() => [
 
 .option-chips {
   @apply flex flex-wrap justify-end;
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .option-chip {
   @apply flex items-center border-0 bg-transparent text-text-secondary cursor-pointer;
   height: 1.75rem;
-  padding: 0 0.6rem;
+  padding: 0 0.625rem;
   border-radius: 0.4375rem;
   gap: 0.3125rem;
   box-shadow: inset 0 0 0 1px var(--border);
   font: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .option-chip.selected {

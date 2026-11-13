@@ -48,9 +48,9 @@ function tone(kind: NodeKind): string {
   @apply grid w-full cursor-pointer items-center gap-2.5 border-0 bg-transparent px-1.5 text-left;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 0.625rem;
   height: 1.875rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   --wails-draggable: no-drag;
 }
 

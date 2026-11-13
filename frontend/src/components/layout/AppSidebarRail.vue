@@ -13,8 +13,8 @@ import { useWorkspacesStore } from '../../stores/workspaces'
 import { t } from '../../i18n'
 import PopoverContent from '../ui/PopoverContent.vue'
 import { PopoverRoot as Popover, PopoverTrigger, ContextMenuRoot as ContextMenu, ContextMenuTrigger } from 'reka-ui'
-import Dialog from '../ui/Dialog.vue'
-import Button from '../ui/Button.vue'
+import DialogButton from '../ui/DialogButton.vue'
+import Modal from '../ui/Modal.vue'
 import Input from '../ui/Input.vue'
 import TreeRowMenu from '../collections/TreeRowMenu.vue'
 import DeleteNodeDialog from '../collections/DeleteNodeDialog.vue'
@@ -187,11 +187,10 @@ watch(() => collections.tree, (tree) => {
       <AccountButton compact />
     </div>
   </nav>
-  <Dialog
+  <Modal
     :open="!!renamingId || !!creatingIn"
     :title="editingTitle"
-    class="w-90 p-4.5"
-    @update:open="(value) => !value && cancelTop()"
+    @close="cancelTop"
   >
     <form class="rail-name-form" @submit.prevent="saveName">
       <Input
@@ -200,12 +199,12 @@ watch(() => collections.tree, (tree) => {
         :aria-label="editingTitle"
         :aria-invalid="renaming ? renameInvalid : creatingInvalid"
       />
-      <div class="rail-name-actions">
-        <Button type="button" @click="cancelTop">{{ t('common.cancel') }}</Button>
-        <Button type="submit" variant="primary">{{ t('common.save') }}</Button>
-      </div>
     </form>
-  </Dialog>
+    <template #foot>
+      <DialogButton @click="cancelTop">{{ t('common.cancel') }}</DialogButton>
+      <DialogButton primary @click="saveName">{{ t('common.save') }}</DialogButton>
+    </template>
+  </Modal>
   <DeleteNodeDialog
     :open="!!confirming"
     :row="confirming"
@@ -222,7 +221,7 @@ watch(() => collections.tree, (tree) => {
   z-index: 26;
   width: 3.375rem;
   gap: 0.1875rem;
-  padding: 0.3rem 0 0.5rem;
+  padding: 0.3125rem 0 0.5rem;
   background: var(--chrome);
   border-right: 1px solid var(--border);
   --wails-draggable: no-drag;
@@ -252,7 +251,7 @@ watch(() => collections.tree, (tree) => {
   @apply flex items-center justify-center;
   width: 1.375rem;
   height: 1.375rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: color-mix(in srgb, var(--rail-ink) 20%, transparent);
   color: var(--rail-ink);
   font-size: var(--text-12);
@@ -263,7 +262,7 @@ watch(() => collections.tree, (tree) => {
   width: 1.5rem;
   height: 1px;
   flex: none;
-  margin: 0.3rem 0;
+  margin: 0.3125rem 0;
   background: var(--border);
 }
 
@@ -280,10 +279,10 @@ watch(() => collections.tree, (tree) => {
 
 .rail-dot {
   position: absolute;
-  top: 0.3rem;
+  top: 0.3125rem;
   right: 0.4375rem;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   border-radius: 50%;
 }
 
@@ -296,10 +295,6 @@ watch(() => collections.tree, (tree) => {
 }
 
 .rail-name-form {
-  @apply flex flex-col gap-4 mt-3;
-}
-
-.rail-name-actions {
-  @apply flex justify-end gap-2;
+  @apply flex flex-col;
 }
 </style>

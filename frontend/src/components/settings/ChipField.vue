@@ -54,9 +54,9 @@ function onKey(event: KeyboardEvent) {
 @reference "../../style.css";
 
 .chips {
-  @apply flex flex-wrap items-center gap-1.5 w-full rounded-[0.3rem];
+  @apply flex flex-wrap items-center gap-1.5 w-full rounded-[0.3125rem];
   min-height: 2.125rem;
-  padding: 0.25rem 0.3rem;
+  padding: 0.25rem 0.3125rem;
   border: 1px solid var(--border-strong);
   background: var(--bg-inset);
 }

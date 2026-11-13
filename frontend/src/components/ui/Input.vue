@@ -55,7 +55,7 @@ defineExpose({ focus: () => el.value?.focus(), select: () => el.value?.select() 
 .inp--field.inp--sm {
   height: 1.75rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-size: var(--text-12);
 }
 

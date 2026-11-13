@@ -375,17 +375,17 @@ defineExpose({ cancelTop })
 }
 
 .cell-name {
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .cell-value {
-  gap: 0.3rem;
+  gap: 0.3125rem;
 }
 
 .cell-text {
   @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .cell-name .cell-text {
@@ -401,9 +401,9 @@ defineExpose({ cancelTop })
   box-sizing: border-box;
   height: 1.875rem;
   padding: 0 0.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   background: var(--bg-inset);
   border: 1px solid var(--accent);
 }

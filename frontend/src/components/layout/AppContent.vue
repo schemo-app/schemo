@@ -118,7 +118,17 @@ async function openCapturedInRequest() {
 }
 
 .work-area > .request-block:not(.request-block-expanded):has(.req-pane-wrap) {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  max-height: 80%;
+  max-height: round(down, 80%, 1px);
   border-bottom: 1px solid var(--border);
+}
+
+.work-area > .request-block:has(.req-pane-wrap.default-height) {
+  height: 50%;
+  height: round(down, 50%, 1px);
 }
 
 .work-empty {

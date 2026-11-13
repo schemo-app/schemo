@@ -257,7 +257,7 @@ function patchValue(id: string, value: string) {
 
 .rows-pane {
   @apply relative flex flex-col;
-  padding: 0.5rem 1.1rem 0.5rem 1.1rem;
+  padding: 0.5rem 1.125rem 0.5rem 1.125rem;
   --key-width: min(13.75rem, 40%);
 }
 
@@ -336,7 +336,7 @@ function patchValue(id: string, value: string) {
   @apply flex items-center min-w-0 text-text-secondary;
   gap: 0.5rem;
   padding: 0 0.5rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .header-auto-badge {
@@ -360,7 +360,7 @@ button.header-auto-badge:hover {
 .header-auto-value {
   @apply truncate text-text-tertiary;
   padding: 0 0.5rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .auto {
@@ -370,14 +370,14 @@ button.header-auto-badge:hover {
 
 .auto-toggle {
   @apply flex items-center self-start cursor-pointer border-0 text-text-secondary;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   height: 1.75rem;
   padding: 0 0.5rem 0 0.25rem;
   margin-left: -0.25rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   background: transparent;
   font-family: inherit;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   font-weight: 500;
 }
 
@@ -415,7 +415,7 @@ button.header-auto-badge:hover {
 .auto-name {
   @apply truncate text-text-secondary;
   padding: 0 0.5rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .auto-value {
@@ -425,7 +425,7 @@ button.header-auto-badge:hover {
 
 .auto-text {
   @apply min-w-0 truncate text-text-secondary;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .auto-link {

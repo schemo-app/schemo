@@ -50,7 +50,7 @@ function capture(header: { name: string; value: string }) {
 
 .header-table {
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .header-row {
@@ -99,7 +99,7 @@ function capture(header: { name: string; value: string }) {
 .header-row :deep(.capture-btn) {
   width: 1.5rem;
   height: 1.5rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
   opacity: 0;
 }
 

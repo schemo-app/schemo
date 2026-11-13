@@ -54,39 +54,41 @@ const describedBy = computed(() => (sub ? {} : { 'aria-describedby': undefined }
   <DialogRoot :open="open" @update:open="onOpenChange">
     <DialogPortal>
       <DialogOverlay class="sheet-overlay" />
-      <DialogContent class="sheet" v-bind="describedBy">
-        <div class="sheet-head">
-          <div class="sheet-titles">
-            <DialogTitle class="sheet-title">{{ title }}</DialogTitle>
-            <DialogDescription v-if="sub" class="sheet-sub">{{ sub }}</DialogDescription>
+      <div class="sheet-layout">
+        <DialogContent class="sheet" v-bind="describedBy">
+          <div class="sheet-head">
+            <div class="sheet-titles">
+              <DialogTitle class="sheet-title">{{ title }}</DialogTitle>
+              <DialogDescription v-if="sub" class="sheet-sub">{{ sub }}</DialogDescription>
+            </div>
+            <button class="sheet-close" :title="t('common.close')" @click="emit('close')">
+              <Icon name="X" :size="14" :stroke-width="2.2" />
+            </button>
           </div>
-          <button class="sheet-close" :title="t('common.close')" @click="emit('close')">
-            <Icon name="X" :size="14" :stroke-width="2.2" />
-          </button>
-        </div>
 
-        <div class="sheet-body">
-          <div v-if="rows.length" class="sheet-rows">
-            <SheetRow v-for="row in rows" :key="row.label" v-bind="row" />
+          <div class="sheet-body">
+            <div v-if="rows.length" class="sheet-rows">
+              <SheetRow v-for="row in rows" :key="row.label" v-bind="row" />
+            </div>
+            <slot />
           </div>
-          <slot />
-        </div>
 
-        <div v-if="cancel || action" class="sheet-foot">
-          <button v-if="cancel" class="sheet-cancel" @click="emit('cancel')">
-            {{ cancel }}
-          </button>
-          <button
-            v-if="action"
-            class="sheet-action"
-            :class="{ danger: actionTone === 'danger' }"
-            :disabled="actionDisabled"
-            @click="emit('action')"
-          >
-            {{ action }}
-          </button>
-        </div>
-      </DialogContent>
+          <div v-if="cancel || action" class="sheet-foot">
+            <button v-if="cancel" class="sheet-cancel" @click="emit('cancel')">
+              {{ cancel }}
+            </button>
+            <button
+              v-if="action"
+              class="sheet-action"
+              :class="{ danger: actionTone === 'danger' }"
+              :disabled="actionDisabled"
+              @click="emit('action')"
+            >
+              {{ action }}
+            </button>
+          </div>
+        </DialogContent>
+      </div>
     </DialogPortal>
   </DialogRoot>
 </template>
@@ -99,9 +101,12 @@ const describedBy = computed(() => (sub ? {} : { 'aria-describedby': undefined }
   background: rgba(0, 0, 0, 0.22);
 }
 
+.sheet-layout {
+  @apply fixed inset-0 z-1500 flex items-center justify-center pointer-events-none;
+}
+
 .sheet {
-  @apply fixed left-1/2 top-1/2 max-w-[92vw] w-140 z-1500 flex flex-col rounded-xl;
-  transform: translate(-50%, -50%);
+  @apply relative max-w-[92vw] w-140 flex flex-col rounded-xl pointer-events-auto;
   max-height: calc(100vh - 6rem);
   padding: 1.125rem;
   gap: 1rem;
@@ -128,7 +133,7 @@ const describedBy = computed(() => (sub ? {} : { 'aria-describedby': undefined }
 }
 
 .sheet-close {
-  @apply flex-none inline-flex items-center justify-center w-7 h-7 rounded-[0.3rem] border-0
+  @apply flex-none inline-flex items-center justify-center w-7 h-7 rounded-[0.3125rem] border-0
          bg-transparent text-text-tertiary cursor-pointer;
   --wails-draggable: no-drag;
 }

@@ -6,16 +6,21 @@ const { message, kind } = useToast()
 
 <template>
   <transition name="fade">
-    <div v-if="message" class="toast" :class="kind">{{ message }}</div>
+    <div v-if="message" class="toast-layout">
+      <div class="toast" :class="kind">{{ message }}</div>
+    </div>
   </transition>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
+.toast-layout {
+  @apply fixed inset-x-0 bottom-4 z-2000 flex justify-center pointer-events-none;
+}
+
 .toast {
-  @apply fixed bottom-4 left-1/2 px-4 py-2 rounded-lg text-12 z-2000 max-w-[80%];
-  transform: translateX(-50%);
+  @apply px-4 py-2 rounded-lg text-12 max-w-[80%] pointer-events-auto;
   background: var(--glass-overlay);
   backdrop-filter: var(--blur-overlay);
   border: 1px solid var(--glass-overlay-border);

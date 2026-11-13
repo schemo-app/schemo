@@ -90,7 +90,7 @@ function openFirst() {
 }
 
 .peek-row.folder {
-  padding-left: calc(0.3rem + var(--peek-depth) * 1.0625rem);
+  padding-left: calc(0.3125rem + var(--peek-depth) * 1.0625rem);
 }
 
 .peek-row:hover,
@@ -103,7 +103,7 @@ function openFirst() {
 }
 
 .peek-method {
-  min-width: 1.8rem;
+  min-width: 1.8125rem;
   flex: none;
   font-family: var(--mono);
   font-size: var(--text-12);

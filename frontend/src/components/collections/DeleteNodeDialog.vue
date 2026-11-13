@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Dialog from '../ui/Dialog.vue'
-import Button from '../ui/Button.vue'
+import Modal from '../ui/Modal.vue'
+import DialogButton from '../ui/DialogButton.vue'
+import { useShownWhileOpen } from '../../composables/useShownWhileOpen'
 import { t } from '../../i18n'
 import type { TreeRow } from '../../lib/treeRows'
 
@@ -9,9 +10,11 @@ const props = defineProps<{ row: TreeRow | null; open: boolean }>()
 
 const emit = defineEmits<{ (e: 'cancel'): void; (e: 'confirm'): void }>()
 
-const isCollection = computed(() => props.row?.kind === 'collection')
-const count = computed(() => props.row?.count ?? 0)
-const name = computed(() => props.row?.name || t('collections.unnamedRequest'))
+const shown = useShownWhileOpen(() => props.open, () => props.row)
+
+const isCollection = computed(() => shown.value?.kind === 'collection')
+const count = computed(() => shown.value?.count ?? 0)
+const name = computed(() => shown.value?.name || t('collections.unnamedRequest'))
 
 const title = computed(() => {
   if (!isCollection.value) return t('collections.deleteRequest')
@@ -30,31 +33,21 @@ const body = computed(() => {
 </script>
 
 <template>
-  <Dialog
-    :open
-    :title
-    class="w-110 p-4.5"
-    @escape-key-down.prevent
-    @update:open="emit('cancel')"
-  >
-    <div class="body">
-      {{ body }}
-    </div>
-    <div class="actions">
-      <Button @click="emit('cancel')">{{ t('common.cancel') }}</Button>
-      <Button variant="primary" @click="emit('confirm')">{{ t('common.delete') }}</Button>
-    </div>
-  </Dialog>
+  <Modal :open :title variant="ask" @close="emit('cancel')">
+    <div class="body">{{ body }}</div>
+    <template #foot>
+      <DialogButton @click="emit('cancel')">{{ t('common.cancel') }}</DialogButton>
+      <DialogButton danger @click="emit('confirm')">{{ t('common.delete') }}</DialogButton>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
 .body {
-  @apply mt-3 mb-4 text-13 text-text-secondary;
-}
-
-.actions {
-  @apply flex justify-end gap-2;
+  @apply text-13 text-text-secondary;
+  line-height: 1.5;
+  text-wrap: pretty;
 }
 </style>

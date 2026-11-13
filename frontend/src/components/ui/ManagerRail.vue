@@ -135,7 +135,7 @@ const emit = defineEmits<{ (e: 'select', id: string | null): void; (e: 'create')
 
 .side-foot {
   @apply flex-none;
-  padding: 0.2rem 0;
+  padding: 0.1875rem 0;
 }
 
 .side-new {

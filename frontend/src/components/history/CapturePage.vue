@@ -417,7 +417,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 }
 
 .cap-status {
-  @apply flex flex-none items-center whitespace-nowrap text-12-5 text-text-tertiary;
+  @apply flex flex-none items-center whitespace-nowrap text-13 text-text-tertiary;
   gap: 0.4375rem;
 }
 
@@ -545,11 +545,11 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 }
 
 .cap-chip-state {
-  @apply flex-none text-11-5 text-text-tertiary;
+  @apply flex-none text-12 text-text-tertiary;
 }
 
 .cap-link {
-  @apply flex-none border-none bg-transparent text-accent cursor-pointer whitespace-nowrap text-12-5 p-0;
+  @apply flex-none border-none bg-transparent text-accent cursor-pointer whitespace-nowrap text-13 p-0;
 }
 
 .cap-link:hover {
@@ -618,7 +618,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 }
 
 .cap-address {
-  @apply min-w-0 truncate font-mono text-12-5;
+  @apply min-w-0 truncate font-mono text-13;
 }
 
 .cap-num {
@@ -631,7 +631,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 }
 
 .cap-rules {
-  @apply flex items-center flex-none text-text-tertiary text-12-5 min-w-0;
+  @apply flex items-center flex-none text-text-tertiary text-13 min-w-0;
   height: 2.5rem;
   gap: 1.375rem;
   padding: 0 1.5rem;
@@ -674,7 +674,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 .intro-text {
   @apply flex flex-col flex-1 min-w-0;
   max-width: 38.75rem;
-  gap: 0.2rem;
+  gap: 0.1875rem;
 }
 
 .intro-title {
@@ -734,7 +734,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 
 .intro-step-note {
   color: var(--text-tertiary);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -748,14 +748,14 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 
 .intro-also {
   color: var(--text-tertiary);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .intro-wait {
   @apply flex items-center;
   gap: 0.5625rem;
   color: var(--text-tertiary);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 </style>

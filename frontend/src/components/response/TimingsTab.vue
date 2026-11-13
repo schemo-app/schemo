@@ -155,7 +155,7 @@ const connectionNote = computed(() => {
 .timing-value {
   @apply text-right text-text;
   font-family: var(--mono);
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   font-variant-numeric: tabular-nums;
 }
 

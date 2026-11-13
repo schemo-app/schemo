@@ -119,7 +119,7 @@ function openMcp() {
 .status-btn {
   @apply flex items-center gap-1.5 flex-none;
   height: 1.375rem;
-  padding: 0 0.3rem;
+  padding: 0 0.3125rem;
   border: 0;
   border-radius: 0.3125rem;
   background: transparent;
@@ -178,7 +178,7 @@ function openMcp() {
   width: 1px;
   height: 0.75rem;
   background: var(--border);
-  margin: 0 0.3rem;
+  margin: 0 0.3125rem;
 }
 
 .status-spacer {

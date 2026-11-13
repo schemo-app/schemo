@@ -220,13 +220,13 @@ function openManager() {
   @apply min-w-0 truncate;
   padding-left: 0.5rem;
   padding-right: 0.625rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
 }
 
 .c-value {
   @apply min-w-0 truncate;
   padding-right: 0.75rem;
-  font-size: var(--text-12-5);
+  font-size: var(--text-13);
   color: var(--tok-str);
 }
 
@@ -246,7 +246,7 @@ function openManager() {
 
 .c-state {
   @apply flex items-center min-w-0;
-  gap: 0.3rem;
+  gap: 0.3125rem;
   font-size: var(--text-12);
 }
 
@@ -271,8 +271,8 @@ function openManager() {
 
 .c-state .dot {
   @apply flex-none rounded-full;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem;
+  height: 0.3125rem;
   background: currentColor;
 }
 

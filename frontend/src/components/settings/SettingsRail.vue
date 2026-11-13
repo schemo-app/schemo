@@ -197,13 +197,13 @@ onMounted(() => {
 .rows {
   @apply flex-1 min-h-0 overflow-y-auto flex flex-col;
   gap: 0.125rem;
-  padding: 0.3rem 0 0.75rem;
+  padding: 0.3125rem 0 0.75rem;
 }
 
 .row {
   @apply flex items-center gap-3 text-left border-0 rounded-lg bg-transparent cursor-pointer;
   font: inherit;
-  padding: 0.3rem 0.5rem;
+  padding: 0.3125rem 0.5rem;
   color: var(--text);
   --wails-draggable: no-drag;
 }

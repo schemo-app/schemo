@@ -2,9 +2,12 @@
 // scale moves the whole window together.
 
 const BASE = 16
+export const supportsLengthRounding = typeof CSS !== 'undefined'
+  && CSS.supports('width', 'round(nearest, 1rem, 1px)')
 
 export function rem(units: number): string {
-  return `${units / BASE}rem`
+  const length = `${units / BASE}rem`
+  return supportsLengthRounding ? `round(nearest, ${length}, 1px)` : length
 }
 
 // The inverse of the above: what one pixel of the screen is worth, which a drag delta comes in.

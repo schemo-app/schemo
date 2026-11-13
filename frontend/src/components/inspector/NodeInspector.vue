@@ -158,7 +158,7 @@ async function copyValue() {
 .inspector-head {
   @apply flex-none flex items-center;
   height: 2.5rem;
-  padding: 0 0.3rem 0 0.875rem;
+  padding: 0 0.3125rem 0 0.875rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -169,7 +169,7 @@ async function copyValue() {
 .inspector-head :deep(button.icon-btn) {
   width: 1.625rem;
   height: 1.625rem;
-  border-radius: 0.3rem;
+  border-radius: 0.3125rem;
 }
 
 .inspector-body {

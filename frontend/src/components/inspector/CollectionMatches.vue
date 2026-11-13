@@ -64,7 +64,7 @@ async function open(one: Suggestion) {
 @reference "../../style.css";
 
 .request {
-  @apply flex w-full cursor-pointer items-baseline gap-2 rounded-[0.3rem] border-0 bg-transparent px-2 text-left text-13 text-text;
+  @apply flex w-full cursor-pointer items-baseline gap-2 rounded-[0.3125rem] border-0 bg-transparent px-2 text-left text-13 text-text;
   min-height: 1.875rem;
   --wails-draggable: no-drag;
 }
