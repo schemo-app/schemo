@@ -805,7 +805,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
 .body-bar {
   @apply flex items-center flex-none gap-2.5;
   height: 2.5rem;
-  padding: 0 0.75rem 0 1.25rem;
+  padding: 0.6rem 0.8rem 0.6rem 0.8rem;
   overflow: hidden;
 }
 

@@ -1013,10 +1013,6 @@ html.window-translucent.dark body {
   color: var(--text-secondary);
 }
 
-.tree-menu .menu-item.armed {
-  background: var(--red-soft);
-}
-
 .tree-menu .menu-item[data-disabled],
 .tree-submenu .menu-item[data-disabled],
 .tab-menu .menu-item[data-disabled] {

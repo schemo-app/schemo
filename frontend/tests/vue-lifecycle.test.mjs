@@ -302,6 +302,13 @@ test('rail collection previews ignore hover and close for the context menu', asy
   items.props.onExport()
   await items.props.onDuplicate()
   await items.props.onRemove()
+  await settle()
+  assert.ok(!actions.some(([action]) => action === 'remove'), 'The removal waits for the dialog')
+  const dialog = rendered(root, 'DeleteNodeDialog')
+  assert.equal(dialog.props.open, true)
+  assert.equal(dialog.props.row.id, 'collection')
+  dialog.props.onConfirm()
+  await settle()
   assert.deepEqual(actions, [
     ['mark', 'collection'], ['open', 'collection'], ['open', 'collection'],
     ['share', 'collection'], ['import', 'collection'], ['export', 'collection'],

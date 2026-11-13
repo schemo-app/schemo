@@ -368,7 +368,7 @@ defineExpose({ cancelTop })
     <DeleteNodeDialog
       v-if="confirming"
       :open="true"
-      :count="confirming?.count ?? 0"
+      :row="confirming"
       @cancel="confirming = null"
       @confirm="confirming && remove(confirming)"
     />

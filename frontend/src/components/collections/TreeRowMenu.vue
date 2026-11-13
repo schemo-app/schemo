@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { injectContextMenuRootContext, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from 'reka-ui'
+import { computed, ref } from 'vue'
+import { ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from 'reka-ui'
 import ContextMenuContent from '../ui/ContextMenuContent.vue'
 import ContextMenuItem from '../ui/ContextMenuItem.vue'
 import ContextMenuSeparator from '../ui/ContextMenuSeparator.vue'
@@ -57,10 +57,6 @@ const removeKey = computed(() => removeChord(mac.value))
 const isCollection = computed(() => row.kind === 'collection')
 const otherCollections = computed(() => targets.filter((target) => target.id !== row.id))
 
-// Removing a collection takes its contents with it, so the menu asks twice: the second click is the
-// only one that removes, and the row says in as many words what goes.
-const armed = ref(false)
-
 // The closing menu keeps focus until its animation ends; opening the popover sooner dismisses it.
 const sharing = ref(false)
 
@@ -70,31 +66,10 @@ function afterClose() {
   emit('share')
 }
 
-// A menu that closes forgets the question it asked: a reopened row must not remove on its first click.
-const menu = injectContextMenuRootContext()
-watch(menu.open, (open) => {
-  if (!open) armed.value = false
-})
-
-function remove(event: Event) {
-  // A request goes on its own; a collection takes whatever is inside it, so only it asks twice.
-  if (!isCollection.value) {
-    emit('remove')
-    return
-  }
-  if (!armed.value) {
-    armed.value = true
-    // The first click only asks; reka closes the menu on any select it is not told to keep open.
-    event.preventDefault()
-    return
-  }
-  emit('remove')
-}
-
-const removeLabel = computed(() => {
-  if (!armed.value) return isCollection.value ? t('collections.deleteCollection') : t('common.delete')
-  return t('collections.deleteConfirm', { n: row.count })
-})
+// The menu only points at the removal: the dialog says what goes and asks for the answer.
+const removeLabel = computed(() =>
+  isCollection.value ? t('collections.deleteCollection') : t('common.delete')
+)
 
 const head = computed(() =>
   isCollection.value ? t('collections.headCollection', { name: row.name, n: row.count }) : row.name
@@ -220,13 +195,12 @@ const head = computed(() =>
     <ContextMenuSeparator />
     <ContextMenuItem
       class="danger"
-      :class="{ armed }"
       :disabled="!writable"
-      @select="remove"
+      @select="emit('remove')"
     >
       <span class="menu-mark"><Icon name="Trash2" :size="14" :stroke-width="1.8" /></span>
       <span class="menu-label-text cap-line">{{ removeLabel }}</span>
-      <span v-if="!armed" class="menu-key">{{ removeKey }}</span>
+      <span class="menu-key">{{ removeKey }}</span>
     </ContextMenuItem>
   </ContextMenuContent>
 </template>

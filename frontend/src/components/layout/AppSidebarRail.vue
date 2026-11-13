@@ -208,7 +208,7 @@ watch(() => collections.tree, (tree) => {
   </Dialog>
   <DeleteNodeDialog
     :open="!!confirming"
-    :count="confirming?.count ?? 0"
+    :row="confirming"
     @cancel="cancelTop"
     @confirm="confirming && remove(confirming)"
   />
