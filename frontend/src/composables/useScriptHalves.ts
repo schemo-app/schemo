@@ -1,11 +1,7 @@
 import { ref } from 'vue'
 import type { Scripts } from '../../bindings/schemo/internal/domain'
 
-/**
- * The two halves of code a level runs around its requests, as the boxes hold them. A half can be
- * switched off without being emptied: the code stays, and what changes is whether it runs. `hold`
- * puts a level's scripts into the boxes, and nothing at all is the empty ones.
- */
+/** The pre- and post-request script boxes; a half can be switched off without losing its code. */
 export function useScriptHalves() {
   const pre = ref('')
   const post = ref('')

@@ -26,9 +26,7 @@ export function ApplyCaptureFilters(filters: domain$0.CaptureFilters): $Cancella
 }
 
 /**
- * ApplyExtensionSettings hands the two switches of the extension section to every connected
- * extension. The extension carries them out (which tabs to arm, whether to come up on its own); the
- * app only says what was chosen.
+ * ApplyExtensionSettings sends the extension switches to every connected extension, which applies them.
  */
 export function ApplyExtensionSettings(settings: domain$0.ExtensionSettings): $CancellablePromise<void> {
     return $Call.ByID(603973081, settings);
@@ -63,9 +61,8 @@ export function SetTabCapture(tabID: number, browser: string, paused: boolean): 
 }
 
 /**
- * Status is whether a browser is connected right now, and what it last said about itself. A client
- * that has said nothing does not count: the extension's popup probes the socket and goes away
- * without a word, and a probe is not a connection.
+ * Status reports the connected browser. A client that never spoke is the popup probing the socket,
+ * not a connection.
  */
 export function Status(): $CancellablePromise<$models.ExtensionStatus> {
     return $Call.ByID(3620337047);

@@ -57,9 +57,7 @@ func (s *Extension) ApplyCaptureFilters(filters domain.CaptureFilters) error {
 	return nil
 }
 
-// ApplyExtensionSettings hands the two switches of the extension section to every connected
-// extension. The extension carries them out (which tabs to arm, whether to come up on its own); the
-// app only says what was chosen.
+// ApplyExtensionSettings sends the extension switches to every connected extension, which applies them.
 func (s *Extension) ApplyExtensionSettings(settings domain.ExtensionSettings) error {
 	frame, err := json.Marshal(SettingsFrame{
 		Type:         "settings",
@@ -73,8 +71,7 @@ func (s *Extension) ApplyExtensionSettings(settings domain.ExtensionSettings) er
 	return nil
 }
 
-// Open registers the native messaging host and starts listening. Neither failure stops the app:
-// the window stays usable, capture is what is lost.
+// Open registers the native messaging host and starts listening. A failure only loses capture.
 //
 //wails:ignore
 func (s *Extension) Open() {

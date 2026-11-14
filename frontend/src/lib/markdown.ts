@@ -1,9 +1,7 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
-// A description is markdown, and the window draws it. `marked` writes the HTML and the allow-list
-// below keeps a description to what a description is: marked has no switch that turns raw HTML off,
-// so the list is the switch, and it holds exactly what GFM itself writes.
+// marked cannot turn raw HTML off, so this allow-list does, holding exactly what GFM writes.
 const ALLOWED_TAGS = [
   'p',
   'br',

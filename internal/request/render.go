@@ -25,40 +25,35 @@ func partsOf(draft domain.Draft, inherits *domain.Auth, cookie string) parts {
 
 func (s *Drafts) prepare(
 	ctx context.Context,
+	workspace string,
 	draft domain.Draft,
 	inherits *domain.Auth,
 	above []domain.Variable,
-	cookie string,
-) (Prepared, error) {
+) (SendInput, error) {
+	resolve, err := s.vars.Resolver(ctx, workspace, above, draft.EnvironmentID)
+	if err != nil {
+		return SendInput{}, err
+	}
+	rules := protocols[draft.Protocol]
+	cookie := ""
+	if !rules.metadata {
+		url, _ := resolve(domain.FillPath(draft.URL, draft.PathParams))
+		cookie, err = s.jar.CookieHeader(ctx, workspace, rules.httpURL(url))
+		if err != nil {
+			return SendInput{}, err
+		}
+	}
 	raw := partsOf(draft, inherits, cookie)
 	texts := raw.texts()
-
-	live, err := s.vars.SubstituteTexts(ctx, above, texts, false, draft.EnvironmentID)
-	if err != nil {
-		return Prepared{}, err
+	live, hidden := make([]string, len(texts)), make([]string, len(texts))
+	for i, value := range texts {
+		live[i], hidden[i] = resolve(value)
 	}
-	hidden, err := s.vars.SubstituteTexts(ctx, above, texts, true, draft.EnvironmentID)
-	if err != nil {
-		return Prepared{}, err
+	prepared, err := s.assemble(ctx, draft, raw.putBack(live), raw.putBack(hidden))
+	if err == nil && rules.resolveFrame {
+		prepared.message = resolve
 	}
-
-	return s.assemble(ctx, draft, raw.putBack(live), raw.putBack(hidden))
-}
-
-// maskedRequest renders a request that has already been filled in (a script handed it back and the
-// written-down copy is made from it). Nothing is resolved: its braces are its own text by now, and
-// reading them again would eat a value that happens to carry one. Only the secrets a value carries
-// are hidden; the sent side is the text as it came.
-func (s *Drafts) maskedRequest(ctx context.Context, draft domain.Draft) (Prepared, error) {
-	raw := partsOf(draft, nil, "")
-	texts := raw.texts()
-
-	hidden, err := s.vars.MaskTexts(ctx, nil, texts, draft.EnvironmentID)
-	if err != nil {
-		return Prepared{}, err
-	}
-
-	return s.assemble(ctx, draft, raw.putBack(texts), raw.putBack(hidden))
+	return prepared, err
 }
 
 // assemble is the request built from its two renderings: what goes out, and the copy that is
@@ -67,62 +62,74 @@ func (s *Drafts) assemble(
 	ctx context.Context,
 	draft domain.Draft,
 	sent, stored parts,
-) (Prepared, error) {
-	kind := domain.KindOf(draft.BodyKind)
-
-	// The body is rendered twice from one encoding. The boundary is minted by the first rendering
-	// and handed to the second, because a differing boundary would make the written-down copy
-	// describe a request that was never sent.
-	body, boundary, err := s.renderBody(kind, sent.body, draft.BodyFile, sent.form, "", false)
-	if err != nil {
-		return Prepared{}, err
+) (SendInput, error) {
+	protocol := draft.Protocol
+	if !protocol.Valid() {
+		return SendInput{}, fmt.Errorf("unknown request protocol %q", protocol)
 	}
-	masked, _, err := s.renderBody(kind, stored.body, draft.BodyFile, stored.form, boundary, true)
+	method := protocol.HTTPMethod(draft.Method)
+	rules := protocols[protocol]
+	kind := requestBodyKind(draft)
+
+	// The first rendering mints the multipart boundary and the second reuses it, so the stored copy
+	// matches what was sent.
+	body, boundary, err := s.renderRequestBody(draft, sent, kind, "", false)
 	if err != nil {
-		return Prepared{}, err
+		return SendInput{}, err
+	}
+	masked, _, err := s.renderRequestBody(draft, stored, kind, boundary, true)
+	if err != nil {
+		return SendInput{}, err
 	}
 
-	// The authorization is worked out from each rendering of the fields, so the written-down copy
-	// carries masked credentials rather than the ones that went out. A scheme that holds a
-	// conversation to answer (a token to fetch, a challenge to meet) must recognise the second call
-	// as the same one and not hold it twice: same scheme, same answers, same request.
+	// Rendered per copy, so the stored one carries masked credentials. Stateful schemes (token
+	// fetch, challenges) must treat the second call as the same request.
 	sentAuth, err := s.auth.Materialize(ctx, sent.auth,
-		authRequest(draft.Method, sent.url, sent.headers, body))
+		authRequest(method, rules.httpURL(sent.url), sent.headers, body))
 	if err != nil {
-		return Prepared{}, err
+		return SendInput{}, err
 	}
 	storedAuth, err := s.auth.Materialize(ctx, stored.auth,
-		authRequest(draft.Method, stored.url, stored.headers, masked))
+		authRequest(method, rules.httpURL(stored.url), stored.headers, masked))
 	if err != nil {
-		return Prepared{}, err
+		return SendInput{}, err
 	}
 
-	// A credential that cannot be put on the request yet goes to the engine instead, unless the
-	// user wrote an Authorization row themselves: that is the more precise answer, and not one a
-	// challenge should be answered over.
+	// A credential that needs a challenge goes to the engine, unless the user wrote Authorization.
 	digest := sentAuth.Digest
 	if digest != nil && hasHeader(sent.headers, "Authorization") {
 		digest = nil
+	}
+	if rules.metadata && (len(sentAuth.Query) != 0 || digest != nil) {
+		return SendInput{}, fmt.Errorf("gRPC authorization must use request metadata")
 	}
 
 	sentURL, sentHeaders := withAuth(sent.url, sent.headers, sentAuth)
 	storedURL, storedHeaders := withAuth(stored.url, stored.headers, storedAuth)
 
-	return Prepared{
-		Method: draft.Method,
-		URL:    sentURL,
-		Headers: withContentType(withCookie(sentHeaders, sent.cookie), kind, draft.BodyFile,
-			boundary),
-		Body:      body,
-		BodyKind:  kind,
-		Form:      sent.form,
-		BodyFile:  draft.BodyFile,
-		MaskedURL: storedURL,
-		MaskedHeaders: withContentType(withCookie(storedHeaders, stored.cookie), kind, draft.BodyFile,
-			boundary),
-		MaskedBody: masked,
-		Digest:     digest,
-	}, nil
+	prepared := SendInput{
+		Protocol:      protocol,
+		Method:        method,
+		URL:           sentURL,
+		Headers:       requestHeaders(draft, kind, boundary, withCookie(sentHeaders, sent.cookie)),
+		Body:          body,
+		BodyKind:      kind,
+		MaskedURL:     storedURL,
+		MaskedHeaders: requestHeaders(draft, kind, boundary, withCookie(storedHeaders, stored.cookie)),
+		MaskedBody:    masked,
+		Digest:        digest,
+	}
+	if rules.metadata {
+		prepared.rpc = rpcCall{method: sent.options.RPCMethod, descriptors: sent.options.Descriptors}
+	}
+	if protocol == "" {
+		prepared.Form = sent.form
+		prepared.BodyFile = draft.BodyFile
+	}
+	if rules.replay != nil {
+		prepared.RecordOptions = rules.replay(stored.options)
+	}
+	return prepared, nil
 }
 
 func authRequest(
@@ -133,12 +140,8 @@ func authRequest(
 	return domain.AuthRequest{Method: method, URL: rawURL, Headers: headers, Body: []byte(body)}
 }
 
-// authToApply is the authorization this request goes out with: the one the draft chose or, when it
-// chose "Inherit", the one the levels above answered with, which the caller resolved. Nothing above
-// a request is "None": a request that inherits from nothing sends no credentials.
-//
-// It is normalized here, where every reader takes it: a scheme's default answers (Bearer's prefix)
-// count even when the window never wrote them down.
+// authToApply is the draft's auth or, for "Inherit", what the levels above resolved to; inheriting
+// from nothing sends no credentials. Normalized so scheme defaults apply.
 func authToApply(chosen domain.Auth, inherits *domain.Auth) domain.Auth {
 	if chosen.Type != domain.AuthInherit {
 		return chosen.Normalized()
@@ -149,9 +152,8 @@ func authToApply(chosen domain.Auth, inherits *domain.Auth) domain.Auth {
 	return inherits.Normalized()
 }
 
-// A row of the same name the user wrote wins: an explicit row is the more precise answer, and two
-// Authorization headers are a request no server reads the way the window drew it. The query side
-// works on the URL being sent, since a projection into the draft's rows dies on the next keystroke.
+// withAuth adds the scheme's rows unless the user wrote one of the same name. The query side edits
+// the URL being sent, not the draft's rows.
 func withAuth(
 	rawURL string,
 	headers []domain.HeaderPair,
@@ -206,10 +208,8 @@ func withCookie(headers []domain.HeaderPair, cookie string) []domain.HeaderPair 
 	return append(headers, domain.HeaderPair{Name: "Cookie", Value: cookie})
 }
 
-// withContentType is where the format chosen in the Body popover becomes the header that declares
-// it. A row of the same name the user wrote wins, as it does over the Auth chip, and also because a
-// written Content-Type is the only way to send a type the kind cannot name (this app's own Accept
-// is a vendor one, so that is the expected case).
+// withContentType adds the body format's header unless the user wrote one, which is also how a type
+// the kind cannot name is sent.
 func withContentType(
 	headers []domain.HeaderPair,
 	kind domain.BodyKind,
@@ -226,9 +226,8 @@ func withContentType(
 	return append(headers, domain.HeaderPair{Name: "Content-Type", Value: value})
 }
 
-// Raw answers with nothing on purpose: a raw body is text this app does not interpret, so it
-// declares nothing about itself and the server reads it as it will. Naming a type would be guessing
-// what the user meant. A written header wins, so a text/plain typed once sticks.
+// contentTypeFor declares nothing for raw bodies, which the app does not interpret; a written header
+// still wins.
 func contentTypeFor(kind domain.BodyKind, file string, boundary string) (string, bool) {
 	switch kind {
 	case domain.BodyJSON:
@@ -246,56 +245,18 @@ func contentTypeFor(kind domain.BodyKind, file string, boundary string) (string,
 	}
 }
 
-// Prepared is a request ready to go out: its variables filled in, and beside it the masked copy
-// that outlives the send (the record, a preview). Only this side ever sees the first one.
-type Prepared struct {
-	Method  string
-	URL     string
-	Headers []domain.HeaderPair
-	Body    string
-	// The format and what the body was rendered from travel beside the text: a masked copy of a form
-	// or of a file cannot be made from the text.
-	BodyKind domain.BodyKind
-	Form     []domain.FormRow
-	BodyFile string
-
-	MaskedURL     string
-	MaskedHeaders []domain.HeaderPair
-	MaskedBody    string
-
-	// Digest is a credential the request cannot carry: it goes to the engine, the only side that is
-	// there when the server says how.
-	Digest *domain.DigestCredentials
-}
-
-// SendInput is the prepared request as history sends it.
-func (p Prepared) SendInput() SendInput {
-	return SendInput{
-		Method:        p.Method,
-		URL:           p.URL,
-		Headers:       p.Headers,
-		Body:          p.Body,
-		BodyKind:      p.BodyKind,
-		Form:          p.Form,
-		BodyFile:      p.BodyFile,
-		MaskedURL:     p.MaskedURL,
-		MaskedHeaders: p.MaskedHeaders,
-		MaskedBody:    p.MaskedBody,
-		Digest:        p.Digest,
-	}
-}
-
-// Seed is a whole request from outside a draft: a run's request, a followed link, a pasted
-// command, a request a script handed back. Headers are pairs because a request can carry the same
-// name twice.
+// Seed is a whole request from outside a draft (a run, a link, a command, a script's answer).
+// Headers are pairs because names repeat.
 type Seed struct {
-	Method   string              `json:"method"`
-	URL      string              `json:"url"`
-	Body     string              `json:"body"`
-	BodyKind domain.BodyKind     `json:"bodyKind,omitempty"`
-	Form     []domain.FormRow    `json:"form,omitempty"`
-	BodyFile string              `json:"bodyFile,omitempty"`
-	Headers  []domain.HeaderPair `json:"headers,omitempty"`
+	Protocol domain.Protocol         `json:"protocol,omitempty"`
+	Options  *domain.ProtocolOptions `json:"options,omitempty"`
+	Method   string                  `json:"method"`
+	URL      string                  `json:"url"`
+	Body     string                  `json:"body"`
+	BodyKind domain.BodyKind         `json:"bodyKind,omitempty"`
+	Form     []domain.FormRow        `json:"form,omitempty"`
+	BodyFile string                  `json:"bodyFile,omitempty"`
+	Headers  []domain.HeaderPair     `json:"headers,omitempty"`
 	// Auth travels resolved: whoever builds a seed knows where the request came from.
 	Auth *domain.Auth `json:"auth,omitempty"`
 	// EnvironmentID is the environment this one request resolves its `{{tokens}}` in, when it is
@@ -303,8 +264,7 @@ type Seed struct {
 	EnvironmentID string `json:"environmentId,omitempty"`
 }
 
-// Prepared fills in a draft. inherits is what its "Inherit" resolves to and above is what the
-// collections around it answer for its tokens; both are nil for a draft in no tree.
+// Prepared fills in a draft; inherits and above are nil for a draft in no tree.
 //
 //wails:ignore
 func (s *Drafts) Prepared(
@@ -312,30 +272,44 @@ func (s *Drafts) Prepared(
 	d domain.Draft,
 	inherits *domain.Auth,
 	above []domain.Variable,
-) (Prepared, error) {
-	// The jar is read once for both renderings: they describe the same request.
-	cookie, err := s.jarCookies(ctx, d)
+) (SendInput, error) {
+	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
-		return Prepared{}, err
+		return SendInput{}, err
 	}
-	return s.prepare(ctx, d, inherits, above, cookie)
+	return s.prepare(ctx, workspace, d, inherits, above)
 }
 
-// Prepare fills in a request that is not a draft (a run's, a followed link) the same way a draft
-// is, so there is one answer to what a request looks like when it leaves.
+// Prepare fills in a run's or a followed link's request the same way as a draft.
 //
 //wails:ignore
-func (s *Drafts) Prepare(ctx context.Context, seed Seed, above []domain.Variable) (Prepared, error) {
+func (s *Drafts) Prepare(ctx context.Context, seed Seed, above []domain.Variable) (SendInput, error) {
 	return s.Prepared(ctx, s.draftOfSeed(seed), nil, above)
 }
 
-// Mask re-renders a request a script handed back, for its written-down copy. It has been resolved
-// once already: its braces are its own text now, so nothing is resolved again and the jar is not
-// asked (the request carries the `Cookie` header it went out with).
+// Mask re-renders a script-modified request for storage without resolving again or asking the jar.
 //
 //wails:ignore
-func (s *Drafts) Mask(ctx context.Context, seed Seed) (Prepared, error) {
-	return s.maskedRequest(ctx, s.draftOfSeed(seed))
+func (s *Drafts) Mask(ctx context.Context, seed Seed) (SendInput, error) {
+	workspace, err := s.scope.ActiveWorkspace(ctx)
+	if err != nil {
+		return SendInput{}, err
+	}
+	return s.MaskIn(ctx, workspace, seed, nil)
+}
+
+// MaskIn masks an already resolved request within the workspace that sent it.
+//
+//wails:ignore
+func (s *Drafts) MaskIn(ctx context.Context, workspace string, seed Seed, above []domain.Variable) (SendInput, error) {
+	draft := s.draftOfSeed(seed)
+	raw := partsOf(draft, nil, "")
+	texts := raw.texts()
+	hidden, err := s.vars.MaskTextsIn(ctx, workspace, above, texts, draft.EnvironmentID)
+	if err != nil {
+		return SendInput{}, err
+	}
+	return s.assemble(ctx, draft, raw, raw.putBack(hidden))
 }
 
 // draftOfSeed is a seed seen as a draft.
@@ -345,6 +319,8 @@ func (s *Drafts) draftOfSeed(seed Seed) domain.Draft {
 		auth = seed.Auth.Normalized()
 	}
 	return s.withRowIDs(domain.Draft{
+		Protocol:      seed.Protocol,
+		Options:       seed.Options,
 		Method:        seed.Method,
 		URL:           seed.URL,
 		Body:          seed.Body,
@@ -374,6 +350,7 @@ func seedOf(req command.Request) Seed {
 // parts are the texts of a request that variables are resolved in, gathered so all of them are
 // resolved in one call and put back in place.
 type parts struct {
+	options domain.ProtocolOptions
 	url     string
 	body    string
 	form    []domain.FormRow
@@ -382,13 +359,12 @@ type parts struct {
 	auth    domain.Auth
 }
 
-// collectParts is what goes out of a draft: enabled, named headers, and the path values written
-// into the address before anything is resolved (a value may carry a `{{token}}` of its own). The
-// jar's cookie wins over a written `Cookie` row.
+// collectParts gathers enabled named headers and writes path values into the address before
+// resolution; the jar's cookie beats a written Cookie row.
 func collectParts(d domain.Draft, cookie string) parts {
 	out := parts{
 		url: domain.FillPath(d.URL, d.PathParams), body: d.Body, form: d.Form, auth: d.Auth,
-		cookie: cookie,
+		cookie: cookie, options: optionsOf(d.Options),
 	}
 	for _, row := range d.Headers {
 		if !row.Enabled || strings.TrimSpace(row.Name) == "" {
@@ -404,8 +380,8 @@ func collectParts(d domain.Draft, cookie string) parts {
 
 func (p parts) texts() []string {
 	keys := domain.FieldKeys(p.auth.Type)
-	out := make([]string, 0, 4+3*len(p.form)+2*len(p.headers)+len(keys))
-	out = append(out, p.url, p.body)
+	out := make([]string, 0, 6+3*len(p.form)+2*len(p.headers)+len(keys))
+	out = append(out, p.url, p.body, p.options.Variables, p.options.OperationName, p.options.RPCMethod)
 	for _, row := range p.form {
 		out = append(out, row.Name, row.Value, row.Src)
 	}
@@ -427,6 +403,7 @@ func (p parts) putBack(resolved []string) parts {
 	}
 	p.url = next()
 	p.body = next()
+	p.options.Variables, p.options.OperationName, p.options.RPCMethod = next(), next(), next()
 
 	form := make([]domain.FormRow, len(p.form))
 	for i := range p.form {
@@ -450,20 +427,26 @@ func (p parts) putBack(resolved []string) parts {
 	return p
 }
 
-// jarCookies is the cookie header this request goes out with: what the jar holds for its address.
-// The address is resolved first, because its host is usually a `{{token}}`; the levels above are
-// not asked, the same answer the window's preview gets.
+// jarCookies resolves the address (its host is usually a token) and reads the jar for it, as the
+// preview does.
 func (s *Drafts) jarCookies(ctx context.Context, d domain.Draft) (string, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return "", err
 	}
-	raw := collectParts(d, "").url
-	if answers, err := s.vars.SubstituteTexts(ctx, nil, []string{raw}, false,
-		d.EnvironmentID); err == nil && len(answers) == 1 {
-		raw = answers[0]
+	return s.cookiesIn(ctx, workspace, d)
+}
+
+func (s *Drafts) cookiesIn(ctx context.Context, workspace string, d domain.Draft) (string, error) {
+	rules := protocols[d.Protocol]
+	if rules.metadata {
+		return "", nil
 	}
-	return s.jar.CookieHeader(ctx, workspace, raw)
+	raw := collectParts(d, "").url
+	if resolve, err := s.vars.Resolver(ctx, workspace, nil, d.EnvironmentID); err == nil {
+		raw, _ = resolve(raw)
+	}
+	return s.jar.CookieHeader(ctx, workspace, rules.httpURL(raw))
 }
 
 // held is the state of the token the applied authorization fetches, for schemes that fetch one.
@@ -477,13 +460,17 @@ func (s *Drafts) held(d domain.Draft, inherits *domain.Auth) *domain.AuthToken {
 	return &token
 }
 
-// projected is what the authorization adds to the parameter and header lists, drawn beside the
-// rows a person wrote; a written row of the same name drops it, as sending does. Fields stay as
-// typed: nothing is resolved for a preview.
+// projected is the rows the auth adds, shown beside the written ones; a written row of the same name
+// drops it. Fields stay unresolved.
 func (s *Drafts) projected(d domain.Draft, inherits *domain.Auth) ([]domain.ProjectedRow, error) {
 	sent := collectParts(d, "")
+	rules := protocols[d.Protocol]
 	auth := authToApply(d.Auth, inherits)
-	out, err := s.auth.Project(auth, authRequest(d.Method, sent.url, nil, d.Body))
+	body := d.Body
+	if d.Protocol != "" {
+		body, _ = rules.body(sent, true)
+	}
+	out, err := s.auth.Project(auth, authRequest(d.Protocol.HTTPMethod(d.Method), rules.httpURL(sent.url), sent.headers, body))
 	if err != nil {
 		return nil, err
 	}
@@ -494,6 +481,9 @@ func (s *Drafts) projected(d domain.Draft, inherits *domain.Auth) ([]domain.Proj
 				Target: domain.RowHeaders, Name: pair.Name, Value: pair.Value, From: auth.Type,
 			})
 		}
+	}
+	if rules.metadata {
+		return rows, nil
 	}
 	for _, pair := range out.Query {
 		if !hasParam(d.URL, pair.Name) {
@@ -522,6 +512,15 @@ func (s *Drafts) autoRows(
 	masked := raw.putBack(hidden)
 
 	rows := []domain.ProjectedRow{}
+	rules := protocols[d.Protocol]
+	if rules.metadata {
+		return rows, nil
+	}
+	for _, header := range rules.headers {
+		if !hasHeader(masked.headers, header.Name) {
+			rows = append(rows, domain.ProjectedRow{Target: domain.RowHeaders, Name: header.Name, Value: header.Value})
+		}
+	}
 	add := func(name, value string) {
 		rows = append(rows, domain.ProjectedRow{Target: domain.RowHeaders, Name: name, Value: value})
 	}
@@ -553,7 +552,7 @@ func (s *Drafts) sentLength(
 	d domain.Draft,
 ) (int, bool) {
 	kind := domain.KindOf(d.BodyKind)
-	if kind == domain.BodyBinary || formCarriesFile(raw.form) {
+	if d.Protocol.Live() || (d.Protocol == "" && (kind == domain.BodyBinary || formCarriesFile(raw.form))) {
 		return 0, false
 	}
 	live, err := s.vars.SubstituteTexts(ctx, above, raw.texts(), false, d.EnvironmentID)
@@ -561,7 +560,7 @@ func (s *Drafts) sentLength(
 		return 0, false
 	}
 	sent := raw.putBack(live)
-	body, _, err := s.renderBody(kind, sent.body, d.BodyFile, sent.form, "", false)
+	body, _, err := s.renderRequestBody(d, sent, kind, "", false)
 	if err != nil || body == "" {
 		return 0, false
 	}

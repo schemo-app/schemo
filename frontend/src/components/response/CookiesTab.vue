@@ -25,9 +25,6 @@ const { record, host: keeper = null, query = '' } = defineProps<{
 
 const cookies = useCookiesStore()
 
-// What the answer wrote, when it wrote: the tab is about this response first, and the jar is what
-// it has to say about a response that wrote nothing. Every line of a write carries what a row
-// shows: its value, domain, expiry and what became of it in the cookies.
 const writes = computed(() => record.cookieWrites)
 
 // The jar's own cookies for the address, read only for the answer that set none: a person looking at

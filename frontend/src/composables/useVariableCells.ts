@@ -109,9 +109,7 @@ export function useVariableCells(
         setNotice(ed.scope === null ? t('environments.nameTakenGlobals') : t('environments.nameTakenHere'))
         return false
       }
-      // A refusal from Go is shown like one of ours: the write is where a name the database already
-      // holds is caught, and a rejected call would otherwise leave the row looking at its old name
-      // with nothing to say about why.
+      // Duplicate names are caught by the write, so Go's refusal is shown like a local one.
       void environments.updateVar(ed.scope, v.id, { name }).catch(refused)
     } else {
       void environments.updateVar(ed.scope, v.id, { value: draft.value }).catch(refused)

@@ -10,10 +10,7 @@ interface NameFieldOptions {
   save: (id: string, wanted: string) => Promise<unknown>
 }
 
-/**
- * The name field of a detail pane: Enter and leaving the field both commit, Escape puts the stored
- * name back, and a refused one keeps the field — with what was typed still in it — so it can be fixed.
- */
+/** Enter or blur commits, Escape restores; a refused name stays in the field to be fixed. */
 export function useNameField({ input, target, save }: NameFieldOptions) {
   const { setNotice, clearNotice } = useSheetNotice()
   const name = ref('')

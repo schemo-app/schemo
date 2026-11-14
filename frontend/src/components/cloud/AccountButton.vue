@@ -8,6 +8,7 @@ import { t } from '../../i18n'
 import PopoverContent from '../ui/PopoverContent.vue'
 import { PopoverRoot as Popover, PopoverTrigger, PopoverClose } from 'reka-ui'
 import Icon from '../ui/Icon.vue'
+import { metaLine } from '../../lib/format'
 
 const { compact = false } = defineProps<{ compact?: boolean }>()
 const sync = useSyncStore()
@@ -17,9 +18,7 @@ const { state, serverDown, syncing, lastReach, checkServer, openSignIn, openSign
 const account = computed(() => state.value?.account ?? null)
 const signedIn = computed(() => state.value?.signedIn === true)
 const accountMeta = computed(() =>
-  [account.value?.server ?? '', syncLine(sync.workspaces, workspaces.activeId, sync.waitingCount)]
-    .filter(Boolean)
-    .join(' · ')
+  metaLine(account.value?.server, syncLine(sync.workspaces, workspaces.activeId, sync.waitingCount))
 )
 
 function onAccountOpen(open: boolean) {

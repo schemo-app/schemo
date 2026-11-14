@@ -1,9 +1,5 @@
-// Package command is a request as a command line: reading one back out of a pasted curl and writing
-// one as any of the notations beside this file. It is a format, not a feature: what a request is
-// for is the draft's business.
-//
-// Request is the package's own shape, so the reader and the renderers depend on the format alone;
-// the calling feature maps it onto what it stores.
+// Package command reads a request from a pasted curl and writes one in each supported notation.
+// Request is the package's own shape; callers map it onto what they store.
 package command
 
 import (
@@ -30,9 +26,7 @@ const (
 	ReasonUnsupportedMultipart Reason = "unsupported-multipart"
 )
 
-// Request is one request as the format sees it: the address, what it carries and how it authorizes
-// itself. It is a draft's seed without the environment; where tokens resolve is the window's to
-// add.
+// Request is a request as the format sees it: a draft's seed without the environment.
 type Request struct {
 	Method  string              `json:"method"`
 	URL     string              `json:"url"`
@@ -100,9 +94,7 @@ func Parse(text string) Reading {
 	}
 
 	req := parsed.request()
-	// An ok result promises a request can be built from it, so an empty URL (it would paste an
-	// empty field) and an empty method (it would render an empty chip) are answered here. Pinned by
-	// TestEveryOKResultIsUsable.
+	// An ok result must be usable: no empty URL or method. Pinned by TestEveryOKResultIsUsable.
 	if req.Method == "" {
 		req.Method = "GET"
 	}

@@ -71,9 +71,7 @@ async function choose(next: Language) {
 export async function startLocale(): Promise<void> {
   await choose(language.value)
 
-  // The settings window can rebind a combination and the system menu is drawn once, so every window
-  // hands them over again, the one owning the menu for all of them. Watching from here, with the
-  // first catalogue in, keeps an early change from reading a word no catalogue holds.
+  // Rebinding changes the system menu's chords, so every window resends it.
   watch(() => settings.value?.shortcuts, () => applyLanguage(), { deep: true })
 
   // The stored language follows changes made in any window.

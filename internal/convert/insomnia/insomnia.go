@@ -1,6 +1,5 @@
-// Package insomnia reads an Insomnia export (the v4 `resources` shape) as collections and
-// environments. The v5 document is refused rather than read as v4. It is a pure package, with no
-// window or network, so an export is read in a test.
+// Package insomnia reads Insomnia v4 exports (`resources`) as collections and environments; v5 is
+// refused.
 package insomnia
 
 import (
@@ -172,9 +171,8 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 	}
 }
 
-// environments reads the environments of one workspace. Insomnia's base environment always applies
-// but this app resolves against the active environment alone, so the base values are folded into
-// every named environment.
+// environments folds Insomnia's always-applied base environment into every named one, since this app
+// resolves against one environment.
 func (r *reader) environments(parent string, out *domain.Document) {
 	var base []domain.Variable
 	named := []domain.EnvironmentDraft{}
@@ -324,7 +322,7 @@ func (r *reader) body(node *domain.CollectionNode, from *body, out *domain.Docum
 	if from == nil {
 		return
 	}
-	mime := mimeOf(from.MimeType)
+	mime := domain.MediaTypeOf(from.MimeType)
 	switch {
 	case strings.HasPrefix(mime, domain.MediaMultipart):
 		node.BodyKind = domain.BodyForm
@@ -365,9 +363,7 @@ func (r *reader) body(node *domain.CollectionNode, from *body, out *domain.Docum
 	}
 }
 
-// auth maps what an export declares onto this app's authorization. A scheme with no shape here is
-// counted and becomes `none`, since inheriting the collection's would send credentials the file
-// never asked for.
+// auth maps an export's scheme; an unknown one is counted and becomes `none`, not inherited credentials.
 func (r *reader) auth(from *auth, out *domain.Document) *domain.Auth {
 	if from == nil || from.Disabled {
 		return nil
@@ -421,9 +417,3 @@ func templated(text string) string {
 }
 
 // mimeOf is the media type without its parameters: `application/json; charset=utf-8` is json.
-func mimeOf(value string) string {
-	if at := strings.Index(value, ";"); at >= 0 {
-		value = value[:at]
-	}
-	return strings.ToLower(strings.TrimSpace(value))
-}

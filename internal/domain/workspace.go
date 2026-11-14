@@ -1,6 +1,5 @@
-// Package domain holds the app's entities and their rules, with no database, window or HTTP. Every
-// type that crosses the IPC boundary is declared here so the binding generator emits one model
-// file.
+// Package domain holds the entities and their rules, free of database, window and HTTP. Every IPC
+// type is declared here so the bindings are one model file.
 package domain
 
 import (
@@ -21,9 +20,8 @@ func (k WorkspaceKind) Valid() bool {
 	return k == WorkspacePersonal || k == WorkspaceTeam
 }
 
-// WorkspaceAccess is what the account says this person may do in a workspace: the role and the three
-// acts the window draws a control for. It is the account's answer, never this device's, so only the
-// round that reads the account's list writes it. The server judges every change itself.
+// WorkspaceAccess is the account's word on what this person may do; only the account round writes it,
+// and the server still judges every change.
 type WorkspaceAccess struct {
 	RoleName string `json:"roleName,omitempty"`
 	Update   bool   `json:"update"`
@@ -33,8 +31,7 @@ type WorkspaceAccess struct {
 	Write bool `json:"write"`
 }
 
-// OwnAccess is a workspace nobody else answers for: one this device holds alone or one the account has
-// not described. Every act is allowed, since holding work back on an answer that never came would
+// OwnAccess allows everything, for workspaces no account describes; denying on a missing answer would
 // silently stop syncing.
 func OwnAccess() WorkspaceAccess {
 	return WorkspaceAccess{Update: true, Delete: true, Write: true}
@@ -157,9 +154,8 @@ func IsTabDraft(id DraftID) bool {
 	return strings.HasPrefix(string(id), TabDraftPrefix)
 }
 
-// A team is the people in a workspace and the links waiting to let more in. It is the cloud's side of a
-// workspace, never stored in the local database. A personal workspace has a team of one and no way to
-// invite; the server refuses every put.
+// Teams are the cloud's side of a workspace and never stored locally. A personal workspace has a team
+// of one and cannot invite.
 
 // Member is one person in a workspace.
 type Member struct {

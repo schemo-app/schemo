@@ -16,6 +16,7 @@ import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
 import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
 import type { PaneSource } from '../../stores/content'
 import { METHODS, methodInkClass } from '../../lib/format'
+import { protocolOf, PROTOCOLS, requestLabel } from '../../lib/protocol'
 import { useRequestSave } from '../../composables/useRequestSave'
 import { useRequestSend } from '../../composables/useRequestSend'
 import { useCommands } from '../../composables/useCommands'
@@ -35,11 +36,7 @@ const SUDO = /^sudo\s+/
 // Matches curl CLI execution (including curl.exe for Windows)
 const COMMAND = /^curl(?:\.exe)?\b/i
 
-/**
- * Fast synchronous check to determine if pasted text resembles a curl command.
- * Strips leading shell prompts/sudo before matching. Used in paste handlers to
- * decide whether to call event.preventDefault() for async backend parsing.
- */
+/** A cheap sync check, so the paste handler knows whether to preventDefault before the async parse. */
 function looksLikeCommand(text: string): boolean {
   let rest = text.trimStart()
   for (;;) {
@@ -60,9 +57,12 @@ const { matches } = useCommands()
 
 const toast = useToast()
 
-function selectMethod(m: string) {
-  void source.setMethod(m)
-}
+const methodLabel = computed(() => requestLabel(source))
+const protocol = computed(() => protocolOf(source.protocol))
+const live = computed(() => !!protocol.value.stream)
+const splitSend = computed(() => !!protocol.value.copyCommands)
+const hasOperations = computed(() => protocol.value.chips.includes('schema'))
+const placeholder = computed(() => t(protocol.value.address))
 
 const {
   open: helpOpen,
@@ -74,12 +74,13 @@ const {
   add,
 } = useMissingVars(source)
 
-const { label: sendLabel, key: sendKey, disabled: sendDisabled, send, onSend } = useRequestSend(source)
+const { label: sendLabel, key: sendKey, disabled: sendDisabled, messaging, onSend } = useRequestSend(source)
 
 const sendBtn = useTemplateRef<HTMLElement>('sendBtn')
 useWholeWidth(sendBtn, () => [sendLabel.value, sendKey.value, source.loading])
 
 const urlInputRef = useTemplateRef<HTMLInputElement>('urlInputRef')
+const methodSlot = useTemplateRef<HTMLElement>('methodSlot')
 
 onMounted(() => onBeforeUnmount(registerUrlField(() => urlInputRef.value?.focus())))
 
@@ -128,14 +129,14 @@ function onWindowKeydown(e: KeyboardEvent) {
   }
   if (matches('send', e)) {
     e.preventDefault()
-    if (!e.repeat) void send()
+    if (!e.repeat) onSend()
   }
 }
 
 async function onUrlPaste(e: ClipboardEvent) {
   const input = e.target as HTMLInputElement
   const text = e.clipboardData?.getData('text/plain') ?? ''
-  if (!looksLikeCommand(text)) return
+  if (source.protocol || !looksLikeCommand(text)) return
 
   e.preventDefault()
   const reading = await source.pasteCommand(text)
@@ -166,9 +167,7 @@ function insertAtCaret(input: HTMLInputElement, text: string) {
 
 useEventListener(window, 'keydown', onWindowKeydown)
 
-// A box as wide as its text is a fraction of a pixel wide, and what is laid out after it stands on
-// that fraction, which blurs a glyph. The box is held to the next whole pixel through
-// `--whole-width`, which its stylesheet reads as a minimum; `redo` is whatever changes its text.
+// A fractional width blurs the glyphs laid out after the box, so `--whole-width` rounds it up.
 function useWholeWidth(target: MaybeRefOrGetter<HTMLElement | null | undefined>, redo: () => unknown) {
   function hold() {
     const box = toValue(target)
@@ -232,13 +231,14 @@ function useMissingVars(source: RequestSource) {
 </script>
 
 <template>
-  <div class="request-block" :class="{ 'request-block-expanded': expanded }">
+  <div class="request-block" :class="{ 'request-block-expanded': expanded, 'request-block-protocol': source.protocol }">
     <div class="bar-row">
       <div class="url-field">
         <DropdownMenu>
           <DropdownMenuTrigger as-child>
-            <button type="button" class="method-btn" :class="methodInkClass(source.method)">
-              <span class="cap-line">{{ source.method }}</span>
+            <button type="button" class="method-btn" :class="methodInkClass(methodLabel)"
+              :disabled="source.loading">
+              <span class="cap-line">{{ methodLabel }}</span>
               <Icon name="ChevronDown" :size="9" :stroke-width="3" class="text-text-tertiary" />
             </button>
           </DropdownMenuTrigger>
@@ -247,9 +247,19 @@ function useMissingVars(source: RequestSource) {
               v-for="m in METHODS"
               :key="m"
               :class="methodInkClass(m)"
-              @select="selectMethod(m)"
+              @select="source.setMethod(m)"
             >
               {{ m }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              v-for="item in PROTOCOLS"
+              :key="item.value"
+              :class="methodInkClass(item.label)"
+              @select="source.setMethod(source.method, item.value)"
+            >
+              <span class="protocol-label">{{ item.label }}</span>
+              <span class="text-text-secondary">{{ t(`request.protocol.${item.value}`) }}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -262,11 +272,11 @@ function useMissingVars(source: RequestSource) {
             :value="source.url"
             class="url-input mono"
             :class="{ 'url-input-veiled': showUrlDisplay }"
-            :placeholder="t('request.urlPlaceholder')"
-            :aria-label="t('request.urlPlaceholder')"
+            :placeholder="placeholder"
+            :aria-label="placeholder"
             spellcheck="false"
             @input="source.setUrl(($event.target as HTMLInputElement).value); syncUrlScroll()"
-            @keydown.enter.exact="send"
+            @keydown.enter.exact="!$event.repeat && onSend()"
             @blur="source.flush()"
             @paste="onUrlPaste"
             @scroll="syncUrlScroll"
@@ -335,6 +345,7 @@ function useMissingVars(source: RequestSource) {
             </template>
           </PopoverContent>
         </Popover>
+        <div v-if="hasOperations" ref="methodSlot" class="operation-slot"></div>
         <RequestEnvironment :source="source" />
       </div>
 
@@ -361,7 +372,8 @@ function useMissingVars(source: RequestSource) {
         />
       </span>
 
-      <div class="send-group" :class="{ sending: source.loading, disabled: sendDisabled }">
+      <div class="send-group"
+        :class="{ sending: source.loading && !messaging, disabled: sendDisabled, single: !splitSend, live }">
         <button
           ref="sendBtn"
           type="button"
@@ -370,11 +382,11 @@ function useMissingVars(source: RequestSource) {
           :title="`${sendLabel} · ${sendKey}`"
           @click="onSend"
         >
-          <Spinner v-if="source.loading" />
+          <Spinner v-if="source.loading && (!live || !source.record?.active)" />
           <span>{{ sendLabel }}</span>
-          <span v-if="source.loading" class="send-hint">{{ sendKey }}</span>
+          <span v-if="source.loading && !live" class="send-hint">{{ sendKey }}</span>
         </button>
-        <CopyRequestMenu :source="source">
+        <CopyRequestMenu v-if="splitSend" :source="source">
           <template #trigger="{ copied }">
             <button type="button" class="send-more" :disabled="sendDisabled || source.loading" :title="t('request.moreActions')" :aria-label="t('request.moreActions')">
               <Icon :name="copied ? 'Check' : 'ChevronDown'" :size="10" :stroke-width="2.8" />
@@ -391,7 +403,7 @@ function useMissingVars(source: RequestSource) {
       </div>
     </div>
 
-    <RequestPane :source="source" :expanded="expanded" />
+    <RequestPane :source="source" :expanded="expanded" :method-slot="methodSlot" />
   </div>
 </template>
 
@@ -417,6 +429,12 @@ function useMissingVars(source: RequestSource) {
   --wails-draggable: no-drag;
 }
 
+.protocol-label {
+  min-width: 3rem;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
 .method-btn:hover {
   background: var(--bg-hover);
 }
@@ -429,12 +447,23 @@ function useMissingVars(source: RequestSource) {
 }
 
 .url-field {
+  min-width: 0;
   padding-right: 0;
+}
+
+.operation-slot {
+  @apply shrink-0 min-w-0;
+  max-width: min(18.75rem, 38%);
+  margin-right: 0.25rem;
 }
 
 .url-text {
   @apply relative flex-1 flex items-center min-w-0;
   margin: 0 0.75rem;
+}
+
+.url-text > .url-input {
+  width: 100%;
 }
 
 .url-input {
@@ -549,6 +578,16 @@ function useMissingVars(source: RequestSource) {
 
 .send-group.sending {
   background: var(--red);
+}
+
+.send-group.single .send-btn {
+  border-radius: inherit;
+}
+
+.send-group.live.sending {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .send-more {

@@ -2,6 +2,7 @@ package request
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"schemo/internal/db"
@@ -10,16 +11,13 @@ import (
 	"schemo/internal/platform"
 )
 
-// Event topics. A record appearing and a send finishing are different things: the first is one the
-// app was told about, the second is an answer to something the window asked for. There is no
-// "started" topic: the caller gets the id from Send itself.
+// Event topics. There is no "started" topic: Send returns the id.
 const (
 	TopicRecordAdded     = "record:added"
 	TopicRequestFinished = "request:finished"
 	TopicRequestFailed   = "request:failed"
-	// A whole history going, which happens in the settings window and is drawn in the main one: a
-	// list told about every record one by one has to be told about this too, or it goes on drawing
-	// rows that are no longer there.
+	TopicStreamOpened    = "request:stream-opened"
+	// The settings window clears history; the main window's list must drop its rows too.
 	TopicHistoryCleared = "history:cleared"
 )
 
@@ -38,10 +36,11 @@ type History struct {
 	build     platform.BuildInfo
 	host      *desktop.Host
 
-	// sincePrune counts saves between two looks at the retention rules. It is atomic because a
-	// window's send and a collection run save from goroutines of their own, and two sends landing
-	// on the same counter would be a data race on a number that decides when history is trimmed.
+	// sincePrune counts saves between retention checks; atomic because sends and runs save concurrently.
 	sincePrune atomic.Int32
+	attemptMu  sync.Mutex
+	attempts   map[string]*attempt
+	stopping   bool
 }
 
 // HistoryDeps is what history is assembled from. Jar, Source, Screen, Mask, Retention and Host may be nil
@@ -66,6 +65,7 @@ func NewHistory(d HistoryDeps) *History {
 		store: d.Store, scope: d.Scope, jar: d.Jar, executor: d.Executor, notifier: d.Notifier,
 		retention: d.Retention, source: d.Source, screen: d.Screen, mask: d.Mask, ids: d.IDs,
 		build: d.Build, host: d.Host,
+		attempts: make(map[string]*attempt),
 	}
 }
 
@@ -83,9 +83,7 @@ type RequestFinished struct {
 type RequestFailed struct {
 	ID    string `json:"id"`
 	Error string `json:"error"`
-	// Failure is the same news in the window's terms (the code and the values its sentence needs)
-	// when the app is the side that refused. An error from the network has none, and the window
-	// shows the message beside it.
+	// Failure is the app's own refusal in the window's terms; network errors have none.
 	Failure *domain.Failure `json:"failure,omitempty"`
 }
 
@@ -121,8 +119,11 @@ type HistoryCleared struct {
 	Removed     int    `json:"removed"`
 }
 
-// Request represents an outgoing HTTP execution request.
+// Request is the prepared exchange passed to the engine.
 type Request struct {
+	Protocol domain.Protocol
+	rpc      rpcCall
+	Stream   *Stream
 	// ID uniquely identifies the request attempt and is used for cancellation.
 	ID      string
 	Method  string
@@ -132,15 +133,15 @@ type Request struct {
 
 	// Workspace specifies the cookie jar scope for the request chain.
 	Workspace string
+	Jar       EngineJar
 
 	// Digest holds credentials passed directly to the HTTP engine.
 	Digest *domain.DigestCredentials
 }
 
-// Executor handles sending HTTP requests and canceling running attempts.
+// Executor sends a request with the attempt's context.
 type Executor interface {
 	Execute(ctx context.Context, req Request) (*domain.Response, error)
-	Cancel(id string) bool
 }
 
 // Screener runs collection pre/post-request scripts for an attempt.
@@ -149,17 +150,21 @@ type Screener interface {
 	After(ctx context.Context, workspace string, pass domain.ScriptPass)
 }
 
-// SendInput is one attempt: the request ready to go and the masked copy history keeps. Both exist
-// because the draft is still the window's: it holds the tokens, so only it can say what a secret
-// was.
+// SendInput is the request to send and the masked copy for history; only the draft knows what a
+// secret was, so it supplies both.
 type SendInput struct {
-	Method  string              `json:"method"`
-	URL     string              `json:"url"`
-	Headers []domain.HeaderPair `json:"headers"`
-	Body    string              `json:"body"`
-	// BodyKind and the two below it are what the body was rendered FROM. They travel beside the
-	// text because a masked copy of a form or a file cannot be made from the text: it has to be
-	// rendered again out of what the request is made of.
+	Protocol      domain.Protocol `json:"-"`
+	rpc           rpcCall
+	message       messageResolver
+	EnvironmentID string                `json:"-"`
+	Variables     []domain.Variable     `json:"-"`
+	RecordOptions *domain.ReplayOptions `json:"-"`
+	Method        string                `json:"method"`
+	URL           string                `json:"url"`
+	Headers       []domain.HeaderPair   `json:"headers"`
+	Body          string                `json:"body"`
+	// BodyKind and the next two are what the body was rendered from: forms and files must be
+	// re-rendered to mask, not read from text.
 	BodyKind domain.BodyKind  `json:"bodyKind,omitempty"`
 	Form     []domain.FormRow `json:"form,omitempty"`
 	BodyFile string           `json:"bodyFile,omitempty"`
@@ -171,27 +176,22 @@ type SendInput struct {
 	// Digest is a credential the request cannot carry and the engine has to: see Prepared.
 	Digest *domain.DigestCredentials `json:"-"`
 
-	// Node is the request this came from, when it came from a collection, and Run is the scope the
-	// run's own variables live in: a collection run's id, or the send itself for a request sent on
-	// its own. Both are what the scripts around the attempt are found by, and both are empty for a
-	// request composed on the command line, which has nothing above it.
+	// Node is the source request and Run the scope of the run's variables; both find the scripts
+	// around the attempt and are empty for a command-line request.
 	Node string `json:"node,omitempty"`
 	Run  string `json:"run,omitempty"`
 
-	// Agent is who sent this through the MCP server, when it was not the person. Empty for every
-	// send the window, a run or the command line makes: it lets history tell the agent's doing from
-	// the person's, and is the only place that difference is written down.
+	// Agent names the MCP agent that sent this; empty for the person's own sends.
 	Agent string `json:"agent,omitempty"`
 }
 
 // Masker masks sensitive values in requests modified by scripts, and in the texts a capture brought
 // in from outside the app.
 type Masker interface {
-	Mask(ctx context.Context, in SendInput, sent domain.ScriptRequest) (Masked, error)
+	Mask(ctx context.Context, workspace string, in SendInput, sent domain.ScriptRequest) (Masked, error)
 
-	// MaskTexts leaves a secret's value as its mask wherever it sits in one of the texts, and
-	// returns them in the order they came. The workspace is named because the values a mask is made of
-	// are its own: a record is filed under the workspace it was captured in, not the one on screen.
+	// MaskTexts masks secret values in the texts, keeping order. The workspace is the record's, not
+	// necessarily the one on screen.
 	MaskTexts(ctx context.Context, workspace string, texts []string) ([]string, error)
 }
 

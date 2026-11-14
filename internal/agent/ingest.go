@@ -85,9 +85,8 @@ func (c capture) Captured(req CapturedRequest) {
 		TabURL:          req.TabURL,
 		FavIconURL:      req.FavIconURL,
 	}); err != nil {
-		// A capture that cannot be stored is a gap in the list, not a reason to drop the socket:
-		// the extension cannot retry it and the next request is already on its way. The address is
-		// left out of the line, since a captured URL carries whatever the page had in it.
+		// The extension cannot retry, so a failed store is logged and the socket stays. The URL is
+		// left out of the log since it may carry anything.
 		log.Printf("[capture] storing a request: %v", err)
 	}
 }

@@ -424,8 +424,9 @@ type fakeSyncServer struct {
 	// runOutcomes is what the server says of the runs of one Append, beside the records' own.
 	runOutcomes []domain.RecordVerdict
 
-	pushErr error
-	pullErr error
+	pushErr      error
+	maxPushItems int
+	pullErr      error
 	// recordsErr is the history call failing whole, which is what a batch the server will not take
 	// whole comes back as.
 	recordsErr error
@@ -535,6 +536,9 @@ func (f *fakeSyncServer) Push(
 	}
 	f.namedPush = append(f.namedPush, workspaceID)
 	f.pushed = append(f.pushed, entities)
+	if f.maxPushItems > 0 && len(entities) > f.maxPushItems {
+		return nil, domain.Refuse(domain.CodeServerRefused, nil, domain.Args{"reason": domain.ArgTooLarge})
+	}
 	if f.pushErr != nil {
 		return nil, f.pushErr
 	}
@@ -1033,6 +1037,20 @@ func TestARecordTheServerWillNotTakeForItsSizeIsParked(t *testing.T) {
 	}
 	if len(store.failed) != 0 {
 		t.Errorf("failed = %v, want nothing left to retry", store.failed)
+	}
+}
+
+func TestOversizedRequestBatchRetriesWithSmallerBatches(t *testing.T) {
+	engine, store, server, _ := newEngine()
+	store.owed = []domain.PendingChange{change(domain.EntityRequest, "rpc"), change(domain.EntityRequest, "graphql")}
+	server.maxPushItems = 1
+	server.verdicts = []domain.Verdict{
+		{EntityID: "rpc", Status: domain.PushStored},
+		{EntityID: "graphql", Status: domain.PushStored},
+	}
+	round(t, engine)
+	if len(server.pushed) != 3 || len(store.accepted) != 2 || len(store.parked) != 0 {
+		t.Fatalf("pushes = %v, accepted = %v, parked = %v", server.pushed, store.accepted, store.parked)
 	}
 }
 

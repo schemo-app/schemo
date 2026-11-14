@@ -6,9 +6,7 @@
 import * as domain$0 from "../domain/models.js";
 
 /**
- * Preview is what a source turned out to hold, before anything is written. The counters are what
- * the dialog says before the person commits: a file card reads "48 KB · 9 requests in 3 folders",
- * and the button says how many it will write.
+ * Preview is what a source holds before anything is written, with the counts the dialog shows.
  */
 export interface Preview {
     /**

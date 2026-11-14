@@ -14,6 +14,7 @@ import { isContainer, type Inspection } from '../../composables/useInspection'
 import { useCopyFeedback } from '../../composables/useCopyFeedback'
 import { formatBytes, textOf, t } from '../../i18n'
 import type { RequestSource } from '../../lib/requestSource'
+import { metaLine } from '../../lib/format'
 
 const {
   inspection,
@@ -49,7 +50,7 @@ const summary = computed(() => {
   const view = node.value
   if (!view) return ''
   const key = COUNTED[view.kind]
-  return [key ? textOf(key, view.count) : '', formatBytes(view.bytes)].filter(Boolean).join(' · ')
+  return metaLine(key ? textOf(key, view.count) : '', formatBytes(view.bytes))
 })
 
 const emptyString = computed(() => node.value?.kind === NodeKind.NodeString && node.value.count === 0)

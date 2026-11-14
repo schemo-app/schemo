@@ -104,7 +104,8 @@ func Assemble(cfg Config) (*Services, error) {
 	})
 	collections := workspace.NewCollections(store, store, ids)
 	drafts := request.NewDrafts(request.DraftDeps{
-		Store: store, Scope: store, Vars: environments, Jar: cookieSwitch{cookies: cookies, policy: policy},
+		Engine: engine,
+		Store:  store, Scope: store, Vars: environments, Jar: cookieSwitch{cookies: cookies, policy: policy},
 		Files: reader, Auth: auth, Net: engine, IDs: ids, Collections: collections, History: history,
 		Host: host,
 	})

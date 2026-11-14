@@ -46,13 +46,8 @@ func NewWorkspaces(
 	}
 }
 
-// Start points the app at the workspace it opens in: the one it was left in, or the oldest one when the
-// user has turned "reopen the last workspace" off.
-//
-// It writes the pointer rather than answering a different one, and runs once at launch. A
-// preference read on every resolve would follow the whole session: everything that asks which workspace
-// is on screen (the list, the history, the pruning, the imports) would be answered with the oldest
-// one, and a window that switched away would be switched back.
+// Start points the app at the last workspace, or the oldest when "reopen the last workspace" is off.
+// It runs once at launch, so a switch later is not undone.
 //
 //wails:ignore
 func (s *Workspaces) Start(ctx context.Context) error {
@@ -77,9 +72,7 @@ func (s *Workspaces) Start(ctx context.Context) error {
 	return s.store.SetActiveWorkspace(ctx, list[0].ID)
 }
 
-// Snapshot is every workspace and the pointer to the one on screen, the whole of what the switcher
-// draws in one answer, with what each of them holds, because the window draws the counts in the
-// same rows as the names.
+// Snapshot is every workspace with its counts and the active pointer: everything the switcher draws.
 func (s *Workspaces) Snapshot(ctx context.Context) (domain.WorkspaceState, error) {
 	list, err := s.store.Workspaces(ctx)
 	if err != nil {
@@ -112,9 +105,7 @@ func (s *Workspaces) Switch(ctx context.Context, id string) (domain.WorkspaceSta
 	return s.Snapshot(ctx)
 }
 
-// Create makes a workspace and leaves the app where it was: a new workspace is empty, and moving the
-// window into it without being asked would look like the app had lost its data. The switcher's
-// caller switches explicitly.
+// Create makes a workspace without switching to it; the caller switches explicitly.
 func (s *Workspaces) Create(ctx context.Context, in WorkspaceInput) (Created, error) {
 	name, err := s.uniqueName(ctx, "", in.Name)
 	if err != nil {
@@ -136,13 +127,8 @@ func (s *Workspaces) Create(ctx context.Context, in WorkspaceInput) (Created, er
 		return Created{}, err
 	}
 
-	// A team's workspace is created in the account before anybody is invited into it, and it is created
-	// now rather than by the engine's next round: the form is showing people to invite, and there
-	// is nothing to invite them into until the account has the workspace.
-	//
-	// A workspace that could not be created there is not kept: it would be a row that never links,
-	// drawn in the switcher for ever. The one case that repairs itself is a lost answer, since the
-	// next round finds the workspace in the account and mirrors it back.
+	// A team workspace is created in the account now, so invitations have somewhere to go. If that
+	// fails the row is dropped, since it would never link.
 	if kind == domain.WorkspaceTeam {
 		if err := s.linker.LinkNow(ctx, created.ID); err != nil {
 			_ = s.store.DeleteWorkspace(ctx, created.ID)
@@ -176,10 +162,7 @@ func (s *Workspaces) inviteAll(ctx context.Context, workspaceID string, invites 
 	return outcomes
 }
 
-// parseKind is what the form chose, kept to the two words there are: an empty one is a workspace that
-// is the person's own, and anything else is a build sending a word this one does not have. It is
-// refused rather than taken as one of the two, since a workspace created with the wrong kind is one
-// somebody has to notice and rename.
+// parseKind accepts "" (personal) and the two kinds; an unknown word is refused rather than guessed.
 func parseKind(kind string) (domain.WorkspaceKind, error) {
 	if kind == "" {
 		return domain.WorkspacePersonal, nil
@@ -201,9 +184,8 @@ func (s *Workspaces) Update(
 		return domain.WorkspaceState{}, err
 	}
 
-	// The workspace the app is born with keeps its name and what it is for: the name is how the
-	// account's own workspace is found across the link, and what it is for is what makes it that workspace.
-	// Its colour is its own to change, since nothing is found by a colour.
+	// The device's own workspace keeps its name and kind, which pair it with the account's; the
+	// colour may change.
 	if domain.IsPersonal(current.ID) && (patch.Name != nil || patch.Kind != nil) {
 		return domain.WorkspaceState{}, domain.Refuse(domain.CodeWorkspacePermanent,
 			domain.ErrNotAllowed, nil)
@@ -224,10 +206,7 @@ func (s *Workspaces) Update(
 		if err != nil {
 			return domain.WorkspaceState{}, err
 		}
-		// What a workspace is for decides who may be in it, so it is the account's answer and not this
-		// device's: only the server can say whether anybody else is in the workspace, and it is the one
-		// that refuses. A workspace that is not in the account has nobody else in it by definition, so
-		// the word is written here.
+		// Only the server knows who else is in a linked workspace, so it decides the kind.
 		if current.RemoteID != "" {
 			if err := s.remote.ChangeKind(ctx, current.RemoteID, kind); err != nil {
 				return domain.WorkspaceState{}, err
@@ -246,14 +225,8 @@ func (s *Workspaces) Update(
 	return s.Snapshot(ctx)
 }
 
-// Delete removes a workspace and everything in it. The last one is refused: every other answer the
-// app gives leans on there being a workspace to keep things in, and which one it is does not matter, so
-// the row the app is born with goes like any other. Deleting the one on screen moves the pointer to
-// the oldest that is left, so the window never points at a row that is gone.
-//
-// A workspace that is also in the account goes from there first. The other order would leave a device
-// with no row and an account with a workspace: the next round would find nothing paired with it and
-// make it again, a deleted workspace coming back empty.
+// Delete removes a workspace; the last one is refused, and deleting the active one moves the pointer
+// to the oldest. A linked workspace is ended in the account first, or the next round would recreate it.
 func (s *Workspaces) Delete(ctx context.Context, id string) (domain.WorkspaceState, error) {
 	target, err := s.removable(ctx, id)
 	if err != nil {
@@ -268,13 +241,8 @@ func (s *Workspaces) Delete(ctx context.Context, id string) (domain.WorkspaceSta
 	return s.removeFromDevice(ctx, target)
 }
 
-// Leave takes this person out of a workspace somebody else's. The account is told first and the row
-// goes after it: a device that dropped the workspace and then failed to leave would find the workspace
-// still there on its next round, the person still in it, and make it again.
-//
-// It is separate from ending one because they are different acts with different rights: whoever
-// created a workspace may end it for everybody, and anybody in it may step out, a member who may not
-// end the workspace having no other way to leave one.
+// Leave takes this person out of someone else's workspace. The account is told first, or the next
+// round would bring the workspace back.
 func (s *Workspaces) Leave(ctx context.Context, id string) (domain.WorkspaceState, error) {
 	target, err := s.removable(ctx, id)
 	if err != nil {
@@ -291,10 +259,8 @@ func (s *Workspaces) Leave(ctx context.Context, id string) (domain.WorkspaceStat
 	return s.removeFromDevice(ctx, target)
 }
 
-// removable is the workspace an ending or a leaving is about. The workspace the app is born with is
-// neither: not because of how many are left, since it is always there and the app always has
-// somewhere to keep things, but because of what it is: a device's own workspace in the account is
-// paired with it, and there is no second one to pair with.
+// removable is the workspace being ended or left; the device's own workspace is paired with the
+// account and cannot be either.
 func (s *Workspaces) removable(ctx context.Context, id string) (domain.Workspace, error) {
 	target, err := s.store.Workspace(ctx, id)
 	if err != nil {
@@ -322,9 +288,7 @@ func (s *Workspaces) removeFromDevice(
 		return domain.WorkspaceState{}, err
 	}
 
-	// The successor is picked here rather than left to the store's fallback, so a reader of this
-	// call can see which workspace the window lands on; the fallback keeps its one job, a pointer that
-	// went stale behind the app's back.
+	// Pick the successor here so it is explicit; the store's fallback is for stale pointers.
 	if active == target.ID {
 		remaining, err := s.store.Workspaces(ctx)
 		if err != nil {
@@ -340,9 +304,7 @@ func (s *Workspaces) removeFromDevice(
 	return s.Snapshot(ctx)
 }
 
-// isAlreadyGone reports an answer of "there is no such workspace" from the account. For an act whose
-// point is that the workspace is no longer the person's, that is the act already done, not a failure to
-// report.
+// isAlreadyGone treats "no such workspace" from the account as the act already done.
 func isAlreadyGone(err error) bool {
 	switch domain.CodeOf(err) {
 	case domain.CodeWorkspaceMissing, domain.CodeNotFound:
@@ -370,34 +332,20 @@ func (s *Workspaces) uniqueName(ctx context.Context, except string, raw string) 
 	return name, nil
 }
 
-// Remote is the account's side of a workspace that lives there. Ending one is not this device's to do
-// alone: a copy deleted only here would be handed back by the next round, empty, with the person's
-// work gone from where they deleted it.
-//
-// It is declared here and not taken from the engine because it is not the engine's question: what a
-// workspace is to the account belongs to the workspace, and nothing about it is on the path of a push.
+// Remote is the account's side of a linked workspace; ending one only locally would come back empty
+// on the next round.
 type Remote interface {
-	// Delete ends a workspace in the account. It names the workspace by its id and nothing else: the act is
-	// made deliberate by the sheet that asked for it, and a name travelling with it would be the
-	// one this device happens to draw, which a rename still in flight would be refused over.
+	// Delete ends a workspace in the account by id; a name could be refused mid-rename.
 	Delete(ctx context.Context, workspaceID string) error
-	// ChangeKind asks the account to change what a workspace is for. It is asked rather than decided
-	// because the rule is about who is in the workspace, and only the account knows that: a workspace a
-	// second person works in may not be turned into somebody's own, and the refusal is the server's
-	// to give.
+	// ChangeKind asks the account to change the kind; only it knows who else is in the workspace.
 	ChangeKind(ctx context.Context, workspaceID string, kind domain.WorkspaceKind) error
-	// Leave takes this person out of a workspace somebody else's. It is the one way a member exits: a
-	// member who may not delete the workspace cannot end it for everybody, and a row deleted only here
-	// would be handed back by the next round, with the account still holding their place.
+	// Leave takes this person out of someone else's workspace, the only exit for a member who cannot
+	// delete it.
 	Leave(ctx context.Context, workspaceID string) error
 }
 
-// Linker makes a workspace in the account now and joins this device's row to it. It is the sync
-// engine's own road, asked for rather than copied: a create whose answer was lost is found again by
-// the id the engine names and writes down before the call, and a second implementation would be a
-// second set of ways to go wrong. It is asked only where a workspace has to exist in the account at
-// once, such as a team's, which other people are about to be invited into. A workspace of somebody's
-// own links when the engine next runs.
+// Linker creates the account's copy of a workspace now, through the sync engine's idempotent path.
+// Only team workspaces need it; personal ones link on the next round.
 type Linker interface {
 	LinkNow(ctx context.Context, workspaceID string) error
 }
@@ -410,26 +358,20 @@ type Inviter interface {
 // The shapes that exist only for the window: what making a workspace asks for, what it answers with,
 // an invitation on its way out, and what became of one. A workspace and its members are domain types.
 
-// WorkspaceInput is what the create card sends: what the workspace is called, how it looks, and what it is
-// for. The kind ("Personal" or "Team") is a word this app keeps and travels with the workspace, not a
-// claim about who may enter: who is in a workspace is membership, and membership is the cloud panel's
-// to hand out.
+// WorkspaceInput is what the create card sends. The kind is a label that travels with the workspace;
+// membership is managed in the cloud panel.
 type WorkspaceInput struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
 	// Kind is "personal" or "team", and empty is the personal one: a workspace nobody said anything about
 	// is somebody's own.
 	Kind string `json:"kind,omitempty"`
-	// Invites are the people written in the create form, with the role each is to be given here.
-	// They are sent the moment the workspace exists in the account, because there is nothing to invite
-	// anybody into before that.
+	// Invites go out once the account has the workspace.
 	Invites []Invitation `json:"invites,omitempty"`
 }
 
-// Created is what making a workspace came to: the state a window draws, and what became of each address
-// written in the form. They are one answer rather than two calls, because the workspace exists either
-// way once the account has it: a refused letter does not undo it, and the person is owed the one
-// that failed rather than a sentence about all of them.
+// Created is the new state plus a result per invited address: the workspace exists once the account
+// has it, even if some invitations fail.
 type Created struct {
 	// The state is the whole set as every other call answers it — a window draws the switcher and the
 	// form from one answer — with what became of the invitations beside it.

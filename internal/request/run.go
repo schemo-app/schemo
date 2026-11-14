@@ -219,7 +219,7 @@ func (s *Runs) runOne(
 		result.AssertionsPassed, result.AssertionsTotal = passed, total
 	}
 	result.Error = rec.Error
-	if rec.Status == 0 {
+	if !rec.Protocol.HasStatus(rec.Status, rec.StatusText) {
 		return result
 	}
 	status := rec.Status
@@ -231,7 +231,13 @@ func (s *Runs) runOne(
 // sendOne prepares the request as a draft (tokens filled, secrets masked in the record) and sends
 // it through the history.
 func (s *Runs) sendOne(ctx context.Context, req runRequest) (domain.Record, error) {
-	prepared, err := s.drafts.Prepare(ctx, Seed{
+	if req.Protocol.Live() {
+		return domain.Record{}, domain.Refuse(domain.CodeLiveRequest, domain.ErrNotAllowed, nil)
+	}
+	variables := append(slices.Clone(req.Variables), s.scripts.RunVariables(req.Run)...)
+	seed := Seed{
+		Protocol:      req.Protocol,
+		Options:       req.Options,
 		Method:        req.Method,
 		URL:           req.URL,
 		Body:          req.Body,
@@ -241,13 +247,14 @@ func (s *Runs) sendOne(ctx context.Context, req runRequest) (domain.Record, erro
 		Headers:       req.Headers,
 		Auth:          req.Auth,
 		EnvironmentID: req.EnvironmentID,
-	}, append(slices.Clone(req.Variables), s.scripts.RunVariables(req.Run)...))
+	}
+	prepared, err := s.drafts.prepare(ctx, req.Workspace, s.drafts.draftOfSeed(seed), nil, variables)
 	if err != nil {
 		return domain.Record{}, err
 	}
-	input := prepared.SendInput()
-	input.Node, input.Run, input.Agent = req.NodeID, req.Run, req.Agent
-	return s.history.SendAndWait(ctx, req.Workspace, input)
+	prepared.Node, prepared.Run, prepared.Agent = req.NodeID, req.Run, req.Agent
+	prepared.EnvironmentID, prepared.Variables = req.EnvironmentID, variables
+	return s.history.SendAndWait(ctx, req.Workspace, prepared)
 }
 
 // runRequest is one saved request on its way out, with only its enabled headers.
@@ -257,6 +264,8 @@ type runRequest struct {
 	Workspace string
 	Agent     string // empty when the person sends
 
+	Protocol      domain.Protocol
+	Options       *domain.ProtocolOptions
 	Method        string
 	URL           string
 	Body          string
@@ -276,6 +285,8 @@ func runRequestFrom(workspace string, item domain.ResolvedRequest, runID, agent 
 		NodeID:        node.ID,
 		Workspace:     workspace,
 		Agent:         agent,
+		Protocol:      node.Protocol,
+		Options:       node.Options,
 		Method:        node.Method,
 		URL:           domain.FillPath(node.URL, node.PathParams),
 		Body:          node.Body,

@@ -34,6 +34,7 @@ export const vVarPeek: Directive<HTMLElement, string | undefined> = {
     lifetime.run(() => {
       let under: HTMLElement | null = null
       let shown: HTMLElement | null = null
+      // The card waits for the pointer to rest, so a pass across the field opens none.
       const arrival = useTimeoutFn(() => { hoveredVar.value = shown = under }, 150, { immediate: false })
 
       function hover(token: HTMLElement | null) {

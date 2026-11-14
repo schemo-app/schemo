@@ -4,14 +4,11 @@ import { Settings as SettingsService } from '../../bindings/schemo/internal/work
 import type { Settings } from '../../bindings/schemo/internal/domain'
 import { callOrToast } from '../lib/calls'
 import { DEFAULTS } from '../lib/layout'
-import { Events } from '@wailsio/runtime'
-
-const LAYOUT_DEBOUNCE_MS = 400
+import { useChangedEvent } from './useWailsEvent'
 
 /**
- * A change to the settings: only the fields that change. Nested objects merge field by field,
- * lists replace, and a shortcut set to null goes back to its default (null for all of them resets
- * every one). Go mints the MCP token and keeps the secrets; they are never sent back.
+ * Changed fields only: objects merge, lists replace, a null shortcut resets (null resets them all).
+ * Secrets and the MCP token stay in Go and are never sent back.
  */
 export type SettingsPatch = {
   [K in keyof Settings]?: K extends 'shortcuts'
@@ -39,7 +36,7 @@ const writeLayout = useDebounceFn(() => {
   save(flush).catch(() => {
     // The window keeps the layout it shows; the next change writes again.
   })
-}, LAYOUT_DEBOUNCE_MS)
+}, 400)
 
 /** Reads the settings once; every pane shares the answer and it follows changes from any window. */
 async function loadSettings(): Promise<void> {
@@ -110,11 +107,7 @@ interface Resource<T> {
   set(value: T): void
 }
 
-/**
- * A server-owned value every component of the window shares. It reloads whenever Go publishes
- * `changed` with its kind, so features need no events of their own and no payloads to merge.
- * `adopt` lets the owner keep local edits that are not saved yet on top of what Go answers.
- */
+/** A shared server-owned value, reloaded on Go's `changed` event; `adopt` keeps unsaved local edits on top. */
 function defineResource<T>(
   kind: string,
   fetch: () => Promise<T>,
@@ -143,8 +136,8 @@ function defineResource<T>(
     data.value = adopt(value)
   }
 
-  Events.On('changed', (event) => {
-    if (event.data?.kind === kind && data.value !== null) void reload().catch(() => {})
+  useChangedEvent([kind], () => {
+    if (data.value !== null) void reload().catch(() => {})
   })
 
   return { data, load, reload, set }

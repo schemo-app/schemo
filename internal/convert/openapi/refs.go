@@ -6,9 +6,7 @@ import (
 	"schemo/pkg/jsonpointer"
 )
 
-// resolve splices every local `$ref` into the tree it points at and returns how many references it
-// could not follow. A reference into another file is left as it stands, since this package reads
-// one document.
+// resolve splices local `$ref`s and returns how many it could not follow; other files are not read.
 func resolve(node any, root map[string]any) int {
 	return resolveAt(node, root, 0)
 }
@@ -46,9 +44,7 @@ func resolveAt(node any, root map[string]any, depth int) int {
 	}
 }
 
-// pointer follows a local JSON pointer written as a URI fragment (`#/components/schemas/User`, RFC
-// 6901 §6) and answers a copy of what it found, already spliced. The copy is what keeps a circle
-// from being written into itself.
+// pointer follows a local JSON pointer (RFC 6901 §6) and returns a spliced copy, which keeps cycles out.
 func pointer(root map[string]any, ref string, depth int) (map[string]any, bool) {
 	if !strings.HasPrefix(ref, "#/") {
 		return nil, false

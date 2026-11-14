@@ -8,11 +8,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// LoadUpdateState reads what the last check saw, kept as one JSON value under one key: the store
-// hands it back unchanged, and splitting it would make a half-written state expressible.
-//
-// A value this build cannot read answers as no state at all rather than an error. The state is a
-// cache of somebody else's answer, so dropping it costs one extra check.
+// LoadUpdateState reads the last check's state, stored as one JSON value. An unreadable value is no
+// state rather than an error: it is only a cache.
 func (s *Store) LoadUpdateState(ctx context.Context) (domain.UpdateState, error) {
 	raw, found, err := s.Setting(ctx, domain.SettingUpdateState)
 	if err != nil || !found {

@@ -6,7 +6,9 @@ import TabText from '../ui/TabText.vue'
 import RowsPane from './RowsPane.vue'
 import AuthPane from './AuthPane.vue'
 import BodyPane from './BodyPane.vue'
+import ProtocolSchema from './ProtocolSchema.vue'
 import ScriptsPane from './ScriptsPane.vue'
+import WebSocketComposer from './WebSocketComposer.vue'
 import DescriptionEditor from '../collections/DescriptionEditor.vue'
 import ExamplesPane from './ExamplesPane.vue'
 import { findNode } from '../../lib/collectionTree'
@@ -17,22 +19,24 @@ import { useSetting, useSettings } from '../../composables/useSettings'
 import type { ChipName, RequestSource } from '../../lib/requestSource'
 import { t } from '../../i18n'
 import { rem, unitScale } from '../../lib/units'
+import { protocolOf } from '../../lib/protocol'
 
 // Description and examples fill the workspace; other sections share it with the response.
-const { source, expanded = false } = defineProps<{ source: RequestSource; expanded?: boolean }>()
+const { source, expanded = false, methodSlot = null } = defineProps<{
+  source: RequestSource
+  expanded?: boolean
+  methodSlot?: HTMLElement | null
+}>()
 
 const { setLayout } = useSettings()
 const collections = useCollectionsStore()
 const requests = useSetting('requests')
 const rowsTextMode = ref(false)
 
-const CHIPS: ChipName[] = ['params', 'headers', 'body', 'auth', 'scripts', 'docs', 'examples']
-
-// A description and the saved examples both belong to a row of the tree, so a draft with nothing
-// above it has neither. The examples pane carries the last answer as well, which is why its chip is
-// there for every saved request and not only for ones an import brought examples to.
-const chips = computed(() => CHIPS.filter(chip => {
-  if (chip === 'body') return !['GET', 'HEAD', 'TRACE'].includes(source.method.toUpperCase())
+// A draft has no tree row, so no description or examples.
+const protocol = computed(() => protocolOf(source.protocol))
+const chips = computed(() => protocol.value.chips.filter(chip => {
+  if (!source.protocol && chip === 'body') return !['GET', 'HEAD', 'TRACE'].includes(source.method.toUpperCase())
   if (chip === 'docs' || chip === 'examples') return !!source.nodeId
   return true
 }))
@@ -46,8 +50,12 @@ const open = computed(() => {
   return chip && chips.value.includes(chip) ? chip : null
 })
 
+function chipLabel(chip: ChipName): string {
+  return t(protocol.value.chipLabels?.[chip] ?? `request.chips.${chip}`)
+}
+
 function choose(chip: ChipName) {
-  source.setOpenChip(open.value === chip ? null : chip)
+  source.setOpenChip(!source.protocol && open.value === chip ? null : chip)
 }
 
 // A count is how many rows go out; a section that is not a list says only whether it holds anything.
@@ -69,7 +77,10 @@ const { style: markStyle, ready: markReady } = useSlidingPill(tabsEl, '.req-tab.
 
 const stored = useSetting('requestHeight')
 const height = ref(stored.value)
-const defaultHeight = computed(() => !expanded && height.value === 0)
+const defaultHeight = computed(() => !expanded && !source.protocol && height.value === 0)
+const hasPane = computed(() => open.value !== null)
+const hasSchema = computed(() => chips.value.includes('schema'))
+const protocolEditor = computed(() => hasSchema.value && (open.value === 'body' || open.value === 'schema'))
 
 const paneEl = useTemplateRef<HTMLElement>('paneEl')
 const toolbar = useTemplateRef<HTMLElement>('toolbar')
@@ -104,7 +115,7 @@ function resetPaneHeight() {
 </script>
 
 <template>
-  <div ref="tabsEl" class="req-tabs" :class="{ open: !!open }">
+  <div ref="tabsEl" class="req-tabs" :class="{ open: !!open, 'req-tabs-protocol': source.protocol }">
     <span class="slide-mark tab-mark" :class="{ ready: markReady }" :style="markStyle"></span>
     <div class="req-tab-list">
       <button
@@ -113,10 +124,11 @@ function resetPaneHeight() {
         type="button"
         class="req-tab"
         :class="{ active: open === chip }"
+        :aria-pressed="open === chip"
         @click="choose(chip)"
       >
         <TabText>
-          {{ t(`request.chips.${chip}`) }}
+          {{ chipLabel(chip) }}
           <span v-if="count(chip)" class="req-tab-count">{{ count(chip) }}</span>
           <span v-if="chip === 'docs' && described" class="req-tab-dot"></span>
         </TabText>
@@ -125,17 +137,19 @@ function resetPaneHeight() {
     <div ref="toolbar" class="req-toolbar"></div>
   </div>
 
-  <div v-if="open" class="req-pane-wrap" :class="{ 'default-height': defaultHeight }">
+  <div v-if="hasPane" class="req-pane-wrap" :class="{ 'default-height': defaultHeight }">
     <div
       ref="paneEl"
       class="req-pane"
       :style="!expanded && height > 0 ? { height: rem(height) } : undefined"
     >
+      <ProtocolSchema v-if="hasSchema" :source :section="open" :method-slot="methodSlot" />
       <RowsPane v-if="open === 'params'" v-model:text-mode="rowsTextMode" :source :toolbar kind="params" @open-auth="choose('auth')" />
       <RowsPane v-else-if="open === 'headers'" v-model:text-mode="rowsTextMode" :source :toolbar kind="headers" @open-auth="choose('auth')" />
       <AuthPane v-else-if="open === 'auth'" :source />
-      <BodyPane v-else-if="open === 'body'" :source />
+      <BodyPane v-else-if="open === 'body' && !protocolEditor" :source />
       <ExamplesPane v-else-if="open === 'examples'" :source />
+      <WebSocketComposer v-else-if="open === 'messages'" :source />
       <DescriptionEditor
         v-else-if="open === 'docs' && source.nodeId"
         :key="source.nodeId"
@@ -143,7 +157,7 @@ function resetPaneHeight() {
         :toolbar
         empty-key="request.docs.emptyRequest"
       />
-      <div v-else class="scripts-pane">
+      <div v-else-if="open === 'scripts'" class="scripts-pane">
         <ScriptsPane :source compact />
       </div>
     </div>
@@ -169,6 +183,10 @@ function resetPaneHeight() {
   @apply flex items-end min-w-0 h-full overflow-x-auto;
   gap: 1.25rem;
   scrollbar-width: none;
+}
+
+.req-tabs-protocol .req-tab-list {
+  gap: 0.875rem;
 }
 
 .req-toolbar {
@@ -213,11 +231,11 @@ function resetPaneHeight() {
 }
 
 .req-pane-wrap {
-  @apply relative flex flex-col flex-auto min-h-0;
+  @apply relative flex flex-col flex-auto min-h-0 min-w-0;
 }
 
 .req-pane {
-  @apply relative flex flex-col flex-auto min-h-0 max-h-full bg-bg overflow-y-auto;
+  @apply relative flex flex-col flex-auto min-h-0 min-w-0 max-h-full bg-bg overflow-auto;
 }
 
 .req-grip {

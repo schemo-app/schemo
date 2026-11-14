@@ -1581,9 +1581,21 @@ func TestAHistoryPageIsWrittenUnderTheWorkspaceOfTheDeviceReadingIt(t *testing.T
 	seedTree(t, store)
 	linked(t, store)
 
-	page := []domain.RecordChange{
-		{Seq: 5, RecordID: "rec-1", Record: remoteRecord("rec-1", "manual")},
+	record := remoteRecord("rec-1", "manual")
+	record.ProtocolRecord = domain.ProtocolRecord{
+		Protocol: domain.ProtocolGraphQL, Operation: "Lookup",
+		Options: &domain.ReplayOptions{OperationName: "Lookup", Variables: `{"id":7}`},
 	}
+	data, _, _, err := domain.RecordDocument(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote, err := domain.RecordFromDocument(data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote.WorkspaceID = record.WorkspaceID
+	page := []domain.RecordChange{{Seq: 5, RecordID: "rec-1", Record: remote}}
 	if _, err := store.ApplyHistoryPage(ctx, ws, page, 5); err != nil {
 		t.Fatalf("ApplyHistoryPage: %v", err)
 	}
@@ -1602,6 +1614,10 @@ func TestAHistoryPageIsWrittenUnderTheWorkspaceOfTheDeviceReadingIt(t *testing.T
 	}
 	if !records[0].IsRemote {
 		t.Errorf("record = %+v, want it marked as one that came from another device", records[0])
+	}
+	if records[0].Protocol != record.Protocol || records[0].Operation != record.Operation ||
+		records[0].Options == nil || records[0].Options.Variables != record.Options.Variables {
+		t.Fatalf("protocol data was lost: %+v", records[0].ProtocolRecord)
 	}
 
 	workspaces, err := store.SyncWorkspaces(ctx)

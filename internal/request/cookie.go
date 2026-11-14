@@ -37,12 +37,8 @@ func (s *Cookies) Jar(ctx context.Context) ([]domain.JarDomain, error) {
 	return s.store.Jar(ctx, workspace)
 }
 
-// ForURL is the jar as one address sees it: the cookies that apply to it, whole, with the value and
-// attributes a `Cookie` header never carried. The response tab draws it under an answer, so the
-// table and the next request to that address cannot disagree: they are the same list read twice.
-//
-// It is the active workspace's jar, not a named one; the draft, the only caller that sends for
-// another workspace, asks for the header instead.
+// ForURL lists the active workspace's cookies that apply to an address, with full attributes, using
+// the same matching as a send.
 func (s *Cookies) ForURL(ctx context.Context, rawURL string) ([]domain.JarCookie, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -51,9 +47,7 @@ func (s *Cookies) ForURL(ctx context.Context, rawURL string) ([]domain.JarCookie
 	return s.matchingCookies(ctx, workspace, rawURL)
 }
 
-// CookieHeader is what one address goes out with: the cookies of this workspace that apply to it,
-// as the header carries them. The rule is the matching one (host, path, expiry and scheme), so what
-// a request sends and what the window says it sends cannot disagree.
+// CookieHeader is the Cookie header for an address, by the same matching ForURL uses.
 //
 //wails:ignore
 func (s *Cookies) CookieHeader(
@@ -80,9 +74,7 @@ func (s *Cookies) matchingCookies(
 	return domain.JarCookiesFor(allCookies(domains), asciiURL(rawURL), time.Now()), nil
 }
 
-// cookieHeader is what a `Cookie` header carries: name=value pairs separated by a semicolon.
-// Domain, path and the flags decide whether to send a cookie and are not part of the header. A
-// cookie with no name is skipped.
+// cookieHeader writes name=value pairs joined by "; ", skipping nameless cookies.
 func cookieHeader(cookies []domain.JarCookie) string {
 	parts := make([]string, 0, len(cookies))
 	for _, cookie := range cookies {
@@ -105,12 +97,8 @@ func (s *Cookies) DomainOf(rawURL string) string {
 	return from.host
 }
 
-// Save writes one cookie of the manager's table. The domain is the row's own and the row keeps the
-// identity it was found by: what changes is the value and the attributes.
-//
-// How far the cookie reaches is read off the domain it was written with, as a browser's cookie list
-// writes it: a leading dot means the whole domain, no dot the host alone. A cookie typed by hand is
-// therefore not a third kind, only one nobody spelt out in full.
+// Save writes one cookie from the manager. A leading dot on the domain means the whole domain, none
+// the host alone, as browsers write it.
 func (s *Cookies) Save(ctx context.Context, cookie domain.JarCookie) error {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -166,22 +154,9 @@ func (s *Cookies) SetBlocked(ctx context.Context, host string, blocked bool) err
 	return s.store.SaveJarDomain(ctx, workspace, canonicalDomain(host), blocked)
 }
 
-// Apply puts an answer's cookies into the jar and returns what became of each. A send calls it when
-// the response is in hand, and the record keeps the list: the window draws it as what this answer
-// changed, and Undo reads it backwards.
-//
-// One cookie, one write, and a line that changed nothing writes nothing. An answer may name the
-// same cookie several times (google.com sets one and clears every host variant in the same
-// response), and what matters is the change that came of the answer, not the lines it took. As in a
-// browser, the last line wins, and its write carries the row the first line found: that is the row
-// the jar held before the answer, and the one taking the writes back has to restore.
-//
-// A deletion of a cookie the jar does not hold changed nothing and is not recorded, since a
-// "deleted" row over a cookie nobody had is about nothing.
-//
-// A jar that cannot be written answers with the cookies marked as not saved rather than failing: an
-// answer that arrived is worth a record either way. The one remaining failure is a response with no
-// address, which has nothing to write under.
+// Apply stores an answer's cookies and reports what became of each, for the record and Undo. Lines
+// for one cookie collapse into one write (the last wins, carrying the row the first found); an
+// unwritable jar marks the cookies not saved rather than failing.
 //
 //wails:ignore
 func (s *Cookies) Apply(
@@ -219,10 +194,8 @@ func (s *Cookies) applyCookies(
 	// The write standing for each cookie named so far, by the identity the jar keys one by.
 	writeIndex := map[cookieKey]int{}
 	for _, cookie := range parsed {
-		// A line may only name a domain its own host owns, and never a public suffix: without that,
-		// any response could write a cookie this app would later send to a host that never asked for
-		// it. It is reported rather than dropped, since a server trying to set one for somebody
-		// else's domain is what a person reading this tab wants to see.
+		// A response may only set cookies for its own domain and never a public suffix; others are
+		// reported rather than dropped.
 		domainName, hostOnly, allowed := from.domainOf(cookie.Domain)
 		if !allowed || !from.mayBeSet(cookie) {
 			writes = append(writes, domain.NotSavedWrites([]domain.ResponseCookie{cookie}, from.url)...)
@@ -265,9 +238,7 @@ type cookieKey struct {
 	host, path, name string
 }
 
-// applyCookie is one cookie of an answer going into the jar. A cookie whose life has run out is the
-// server asking for its removal rather than for another value, which is the one write that is a
-// deletion.
+// applyCookie stores one cookie; an expired one is a deletion.
 func (s *Cookies) applyCookie(
 	ctx context.Context,
 	workspace, host string,
@@ -338,11 +309,7 @@ func (s *Cookies) heldCookie(
 	return &held, nil
 }
 
-// Undo takes back what one answer wrote. A cookie the answer added goes; one it replaced or deleted
-// comes back whole, which is why the record keeps the row and not only its value.
-//
-// A row that has changed since is not restored over: the write is a fact about one moment, and
-// putting back what it found would throw away whoever wrote after it.
+// Undo reverts one answer's writes, restoring whole rows. A row changed since is left alone.
 //
 //wails:ignore
 func (s *Cookies) Undo(
@@ -469,9 +436,8 @@ func asciiURL(rawURL string) string {
 	return address.String()
 }
 
-// domainOf is the domain a cookie is kept under and whether only this host is sent it, or false when
-// the response may not set it: a Domain attribute is for the host's own domain or one above it, and
-// never for a public suffix, which would make the cookie everybody's (§5.3 step 5).
+// domainOf is a cookie's domain and host-only flag, or !ok when the Domain is not the host's own or
+// above, or is a public suffix (§5.3 step 5).
 func (from origin) domainOf(attribute string) (name string, hostOnly, ok bool) {
 	attribute = canonicalDomain(attribute)
 	if attribute == "" {

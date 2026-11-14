@@ -12,9 +12,7 @@ import { t } from '../i18n'
 import SettingsRail from '../components/settings/SettingsRail.vue'
 import SettingsHeader from '../components/settings/SettingsHeader.vue'
 import SettingsResults from '../components/settings/SettingsResults.vue'
-// The panes arrive as they are asked for: the window draws one at a time, and somebody who opened it
-// to change the accent has no use for the certificates, the shortcut table and the MCP server being
-// carried in with it.
+// Panes load on demand; one window rarely needs them all.
 const AccountPane = defineAsyncComponent(() => import('../components/settings/AccountPane.vue'))
 const GeneralPane = defineAsyncComponent(() => import('../components/settings/GeneralPane.vue'))
 const AppearancePane = defineAsyncComponent(() => import('../components/settings/AppearancePane.vue'))

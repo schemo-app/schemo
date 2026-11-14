@@ -15,9 +15,7 @@ export interface AccountStatus {
     "account": domain$0.Account;
 
     /**
-     * Address is where the account actually talks: the stored choice, or the app's own server when
-     * nobody chose one. The stored row keeps "" for the default, while a panel link needs the
-     * address itself.
+     * Address is the server actually used: the stored choice, or the default, which the row stores as "".
      */
     "address": string;
 
@@ -39,10 +37,8 @@ export interface AccountStatus {
 }
 
 /**
- * Change is what this device can say about a collection's page without asking the server: the row
- * that answers for it (its own, or one of a folder above it, since a page is a whole tree), whether
- * that page is behind, and which of this collection's requests are. InheritedFrom names that
- * folder.
+ * Change is what this device knows about a collection's page offline: the row that answers for it
+ * (its own or a folder's above, named by InheritedFrom), and whether it and its requests are behind.
  */
 export interface Change {
     "behind": boolean;
@@ -103,9 +99,7 @@ export interface PublishPreview {
 }
 
 /**
- * PublishRequest is what the popover is holding when the button is pressed. It is one value rather
- * than nine arguments because the window sends back exactly what Preview returned, and a call of
- * strings in a row is one transposition away from publishing the wrong environment.
+ * PublishRequest is what Preview returned, sent back whole so arguments cannot be transposed.
  */
 export interface PublishRequest {
     "options": domain$0.PublicationOptions | null;
@@ -131,12 +125,8 @@ export interface PublishResult {
 }
 
 /**
- * Reachability is what the last call to the server came to: whether the other side answered, and
- * when it last did. A failed attempt does not move that moment, since "last contact" is not "last
- * attempt". It is not part of the account, which is a row this app keeps: a server that is down is
- * weather, not a fact about the person.
- * 
- * Checked tells "not asked yet" from "did not answer", which a window words differently.
+ * Reachability is whether the server answered the last call and when it last did; a failed attempt
+ * does not move LastContact. Checked tells "not asked yet" from "did not answer".
  */
 export interface Reachability {
     "checked": boolean;
@@ -188,9 +178,7 @@ export interface SyncStatus {
 }
 
 /**
- * Team is who is in one workspace and what is waiting to let more in. Every change returns the whole of
- * it again, so a window is always drawn from an answer the server has just given rather than a list
- * it patched itself.
+ * Team is a workspace's members and invitations; every change returns it whole from the server.
  */
 export interface Team {
     /**

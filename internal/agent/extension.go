@@ -42,17 +42,13 @@ type Extension struct {
 	mu       sync.Mutex
 	clients  map[*client]struct{}
 	listener net.Listener
-	// state is what the extension last said about itself. It is kept beside the clients because a
-	// window that opens while a browser is connected has to draw it, and frames arrive when
-	// something changes rather than on a schedule.
+	// state is the extension's last report, kept for windows that open while it is connected.
 	state CaptureState
 
 	listening atomic.Bool
 }
 
-// ExtensionStatus is what a window draws about the extension: whether a browser is connected right now and
-// what it last said about itself. The state of a connection that ended describes a browser that is
-// gone, so it is not drawn.
+// ExtensionStatus is whether a browser is connected and its last report; an ended connection reports nothing.
 type ExtensionStatus struct {
 	Connected bool         `json:"connected"`
 	State     CaptureState `json:"state"`
@@ -215,9 +211,8 @@ func (s *Extension) remember(state CaptureState) {
 	s.state = state
 }
 
-// Status is whether a browser is connected right now, and what it last said about itself. A client
-// that has said nothing does not count: the extension's popup probes the socket and goes away
-// without a word, and a probe is not a connection.
+// Status reports the connected browser. A client that never spoke is the popup probing the socket,
+// not a connection.
 func (s *Extension) Status() ExtensionStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()

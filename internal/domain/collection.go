@@ -21,17 +21,16 @@ type Collection struct {
 	Children    []Collection     `json:"children"`
 	Auth        *Auth            `json:"auth,omitempty"`
 	Variables   []Variable       `json:"variables,omitempty"`
-	// A level's own code. It is written only where a whole tree is written (import, duplicate):
-	// SaveCollection works from shallow rows that carry no code, so writing it there would erase
-	// the code on every rename.
+	// Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
 	Scripts *Scripts `json:"scripts,omitempty"`
 }
 
 type LevelRow struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Method string `json:"method,omitempty"`
-	URL    string `json:"url,omitempty"`
+	Protocol Protocol `json:"protocol,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Method   string   `json:"method,omitempty"`
+	URL      string   `json:"url,omitempty"`
 }
 
 type LevelEntry struct {
@@ -55,23 +54,25 @@ func (c *Collection) Level() []LevelEntry {
 }
 
 type CollectionNode struct {
-	ID            string    `json:"id"`
-	CollectionID  string    `json:"collectionId"`
-	Name          string    `json:"name"`
-	Position      int64     `json:"position"`
-	Method        string    `json:"method,omitempty"`
-	URL           string    `json:"url,omitempty"`
-	Params        []Row     `json:"params,omitempty"`
-	Headers       []Row     `json:"headers,omitempty"`
-	PathParams    []Row     `json:"pathParams,omitempty"`
-	Body          string    `json:"body,omitempty"`
-	BodyKind      BodyKind  `json:"bodyKind,omitempty"`
-	Form          []FormRow `json:"form,omitempty"`
-	BodyFile      string    `json:"bodyFile,omitempty"`
-	EnvironmentID string    `json:"environmentId,omitempty"`
-	Auth          *Auth     `json:"auth,omitempty"`
-	Scripts       *Scripts  `json:"scripts,omitempty"`
-	Description   string    `json:"description,omitempty"`
+	Protocol      Protocol         `json:"protocol,omitempty"`
+	Options       *ProtocolOptions `json:"options,omitempty"`
+	ID            string           `json:"id"`
+	CollectionID  string           `json:"collectionId"`
+	Name          string           `json:"name"`
+	Position      int64            `json:"position"`
+	Method        string           `json:"method,omitempty"`
+	URL           string           `json:"url,omitempty"`
+	Params        []Row            `json:"params,omitempty"`
+	Headers       []Row            `json:"headers,omitempty"`
+	PathParams    []Row            `json:"pathParams,omitempty"`
+	Body          string           `json:"body,omitempty"`
+	BodyKind      BodyKind         `json:"bodyKind,omitempty"`
+	Form          []FormRow        `json:"form,omitempty"`
+	BodyFile      string           `json:"bodyFile,omitempty"`
+	EnvironmentID string           `json:"environmentId,omitempty"`
+	Auth          *Auth            `json:"auth,omitempty"`
+	Scripts       *Scripts         `json:"scripts,omitempty"`
+	Description   string           `json:"description,omitempty"`
 	// Responses are example answers carried by a file (a Postman example, a declared response).
 	// They are read-only: a request sent from the app composes its own answer.
 	Responses []ResponseExample `json:"responses,omitempty"`
@@ -181,9 +182,7 @@ const (
 	SearchAction      SearchKind = "action"
 )
 
-// SearchMatch is where the query was found, which orders the results: exact name, then name, then
-// address, then a variable that merely holds the word. It is a tier rather than a score;
-// SearchHit.At breaks ties within a tier.
+// SearchMatch is a result tier: exact name, name, address, value. SearchHit.At breaks ties.
 type SearchMatch int
 
 const (
@@ -214,9 +213,7 @@ type SearchNote struct {
 	Count int            `json:"count,omitempty"`
 }
 
-// SearchTarget names what activating a row does. The window switches on it; a target this build
-// does not know is a row that does nothing, which is what a newer build's answer should be to an
-// older window.
+// SearchTarget is what activating a row does; an unknown target does nothing.
 type SearchTarget string
 
 const (
@@ -235,9 +232,8 @@ type SearchOpen struct {
 	Scope  string       `json:"scope,omitempty"`
 }
 
-// SearchHit is one row of the palette. Everything but the words is decided here: title and path are
-// the user's text and the note is a shape the window words. Only where the query was found is
-// carried, not the matched text, which keeps a variable's value out of the answer.
+// SearchHit is one palette row. Only the match tier is carried, not the matched text, so variable
+// values stay out.
 type SearchHit struct {
 	Kind  SearchKind `json:"kind"`
 	ID    string     `json:"id"`

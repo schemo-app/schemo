@@ -15,9 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// The log: a batch of edits in, and everything this device missed out.
-//
-// The data is bytes here and stays bytes: which fields a collection has is the store's business.
+// The sync log: edits in, missed changes out. Payloads stay bytes; their fields are the store's business.
 
 // Push sends a batch of edits and answers one verdict per entity.
 func (c *Client) Push(
@@ -329,12 +327,8 @@ func (c *Client) ListRecords(
 	return list, nil
 }
 
-// Sent appends history to the remote workspace and returns a verdict for each record and each run.
-// They travel in one call because they are one document set: a record names the run it was sent by,
-// and a run names back the records it produced.
-//
-// A payload this build cannot read is refused rather than skipped: the caller is owed an answer
-// about it, and a body that quietly disappeared between two devices would go unnoticed.
+// Sent appends records and runs in one call, since they reference each other. A payload this build
+// cannot read is refused rather than skipped, so nothing disappears unnoticed.
 func (c *Client) Sent(
 	ctx context.Context,
 	caller domain.Caller,
@@ -476,11 +470,10 @@ func (c *Client) Fetched(
 
 	fetched := domain.RecordFetched{Bodies: map[domain.BodySide]domain.BodyRef{}}
 	for _, body := range answer.GetBodies() {
-		fetched.Bodies[domain.BodySide(db.BodySideIn(body.GetSide()))] = domain.BodyRef{
-			Inline:    string(body.GetContent()),
-			Size:      body.GetSize(),
-			Truncated: body.GetTruncated(),
-		}
+		// The size is what the body weighed when sent, which a truncated copy does not say.
+		ref := domain.BodyOf(string(body.GetContent()), body.GetTruncated())
+		ref.Size = body.GetSize()
+		fetched.Bodies[domain.BodySide(db.BodySideIn(body.GetSide()))] = ref
 	}
 	if scripts := answer.GetScripts(); len(scripts) > 0 {
 		if err := json.Unmarshal(scripts, &fetched.Scripts); err != nil {
@@ -493,9 +486,7 @@ func (c *Client) Fetched(
 		}
 	}
 
-	// The run comes with the record rather than in it: the run is one document however many records
-	// name it. A run the server no longer holds is no reason to refuse the record, which is still
-	// readable.
+	// A run the server no longer holds does not fail the record.
 	if runID := answer.GetRecord().GetRunId(); runID != "" {
 		run, err := c.run(ctx, caller, workspaceID, runID)
 		switch {

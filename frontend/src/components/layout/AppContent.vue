@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RecordSource, TabKind } from '../../../bindings/schemo/internal/domain'
+import { Protocol, RecordSource, TabKind } from '../../../bindings/schemo/internal/domain'
 import { useTabsStore } from '../../stores/tabs'
 import { t } from '../../i18n'
 import { useCommands } from '../../composables/useCommands'
@@ -13,6 +13,8 @@ import RequestBuilder from '../request/RequestBuilder.vue'
 import RequestShortcuts from '../request/RequestShortcuts.vue'
 import CapturedRequestBar from '../response/CapturedRequestBar.vue'
 import ResponseViewer from '../response/ResponseViewer.vue'
+import StreamLog from '../response/StreamLog.vue'
+import { isLiveProtocol } from '../../lib/protocol'
 import Spinner from '../ui/Spinner.vue'
 import { focusUrlField } from '../../lib/intents'
 
@@ -42,6 +44,15 @@ const responseSource = computed<'request' | 'browser' | 'collection'>(() => {
 const capturedRecord = computed(() =>
   responseSource.value === 'browser' ? (tabs.pane?.record ?? null) : null
 )
+
+const response = computed(() => {
+  const pane = tabs.pane
+  const record = pane?.record
+  if (!pane || !record) return null
+  return capturedRecord.value || (record.protocol ?? Protocol.$zero) === pane.protocol ? record : null
+})
+
+const showStream = computed(() => isLiveProtocol(tabs.pane?.protocol))
 
 const requestExpanded = computed(() => {
   const pane = tabs.pane
@@ -78,8 +89,17 @@ async function openCapturedInRequest() {
         :expanded="requestExpanded"
       />
       <template v-if="!requestExpanded">
-        <template v-if="tabs.pane?.record">
-          <ResponseViewer :record="tabs.pane.record" :source="responseSource" :pane="tabs.pane" />
+        <StreamLog
+          v-if="tabs.pane && showStream"
+          :key="tabs.activeId"
+          :protocol="tabs.pane.protocol"
+          :record="tabs.pane.record"
+          :attempt-id="tabs.pane.attemptId"
+          :loading="tabs.pane.loading"
+          @disconnect="tabs.pane.cancel()"
+        />
+        <template v-else-if="response">
+          <ResponseViewer :record="response" :source="responseSource" :pane="tabs.pane" />
         </template>
         <div
           v-else-if="!tabs.pane || tabs.pane.loading || awaiting"
@@ -87,7 +107,7 @@ async function openCapturedInRequest() {
         >
           <Spinner class="text-accent" />
         </div>
-        <RequestShortcuts v-else />
+        <RequestShortcuts v-else :protocol="tabs.pane?.protocol" />
       </template>
     </template>
     <div v-else class="work-empty">
@@ -124,6 +144,10 @@ async function openCapturedInRequest() {
   max-height: 80%;
   max-height: round(down, 80%, 1px);
   border-bottom: 1px solid var(--border);
+}
+
+.work-area > .request-block-protocol:not(.request-block-expanded):has(.req-pane-wrap) {
+  max-height: min(80%, calc(42% + 5.75rem));
 }
 
 .work-area > .request-block:has(.req-pane-wrap.default-height) {

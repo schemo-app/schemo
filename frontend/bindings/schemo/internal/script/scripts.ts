@@ -14,9 +14,7 @@ import * as domain$0 from "../domain/models.js";
 import * as $models from "./models.js";
 
 /**
- * Chain is what runs around a request, outermost first: the collection's scripts, then each
- * collection inside it on the way down, then the request's own. A level with nothing to run is not
- * in it; this is what runs, not the places it could have run from.
+ * Chain is what runs around a request, outermost first; levels with nothing to run are left out.
  */
 export function Chain(nodeID: string): $CancellablePromise<$models.Level[] | null> {
     return $Call.ByID(2890183, nodeID);
@@ -39,18 +37,14 @@ export function SaveCaptures(id: string, captures: domain$0.Capture[] | null): $
 }
 
 /**
- * SaveScripts writes what a level has to say about the requests it runs around, and nil puts it
- * back to "not set here" — the state a level returns to when its code is taken off it. The answer
- * is what was written, so the editor draws the state the database is in.
+ * SaveScripts writes a level's code (nil clears it) and returns what was stored.
  */
 export function SaveScripts(id: string, scripts: domain$0.Scripts | null): $CancellablePromise<domain$0.Scripts | null> {
     return $Call.ByID(1051579673, id, scripts);
 }
 
 /**
- * Scripts is what a level runs of its own: a collection's, a collection's inside it, a request's or
- * a tab's draft. Nil is "not set here", a different answer from a script that is simply empty; a
- * level no row has yet (a tab whose draft was never written) reads the same way.
+ * Scripts reads a level's own code; nil means not set, distinct from empty code.
  */
 export function Scripts(id: string): $CancellablePromise<domain$0.Scripts | null> {
     return $Call.ByID(1840706838, id);

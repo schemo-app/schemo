@@ -14,14 +14,13 @@ import { useIndent } from '../../composables/useIndent'
 import { callOrToast } from '../../lib/calls'
 import { Drafts } from '../../../bindings/schemo/internal/request'
 import { formatBytes, t } from '../../i18n'
-import { BodyKind, type ResponseExample } from '../../../bindings/schemo/internal/domain'
+import { BodyKind, type Protocol, type ResponseExample } from '../../../bindings/schemo/internal/domain'
+import { protocolOf } from '../../lib/protocol'
 
-// An example written by hand: every field of it is a field, because there is nothing to write it
-// with but one's own hands. What is typed is told to the list as it is typed, and the list is the
-// caller's. The caller makes a new one of this for every example, so the rows below are seeded
-// once.
-const { example, fresh = false } = defineProps<{
+// The caller remounts this per example, so the rows are seeded once.
+const { example, protocol, fresh = false } = defineProps<{
   example: ResponseExample
+  protocol?: Protocol
   /** A new example: the name is the first thing to write, so the caret starts in it. */
   fresh?: boolean
 }>()
@@ -33,6 +32,8 @@ const emit = defineEmits<{
 
 
 const pane = defineModel<'body' | 'headers'>('pane', { required: true })
+const rpcStatus = computed(() => protocolOf(protocol).status === 'grpc')
+const statusValue = computed(() => rpcStatus.value ? example.status ?? '' : example.status || '')
 
 const nameEl = useTemplateRef<HTMLInputElement>('nameEl')
 
@@ -137,8 +138,8 @@ async function addHeader() {
       <div class="example-picker">
         <input
           class="example-status"
-          :class="example.status ? statusBadgeClass(example.status) : 'neutral'"
-          :value="example.status || ''"
+          :class="statusBadgeClass(example.status ?? 0, { protocol, answered: statusValue !== '' })"
+          :value="statusValue"
           :aria-label="t('request.examples.statusTitle')"
           :title="t('request.examples.statusTitle')"
           inputmode="numeric"

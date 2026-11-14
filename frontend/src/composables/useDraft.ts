@@ -3,6 +3,8 @@ import { useDebounceFn } from '@vueuse/core'
 import {
   BodyKind,
   RowKind,
+  Protocol,
+  type ProtocolOptions,
   type Auth,
   type Draft,
   type FormRow,
@@ -16,6 +18,7 @@ import {
   Drafts,
   type Copy,
   type Preview,
+  type Seed,
 } from '../../bindings/schemo/internal/request'
 import { Scripts as ScriptsService, type Level } from '../../bindings/schemo/internal/script'
 import { History } from '../../bindings/schemo/internal/request'
@@ -26,6 +29,7 @@ import { takeAnswer } from '../lib/earlyAnswers'
 import { markStep } from './useGettingStarted'
 import { NO_AUTH, type ChipName } from '../lib/requestSource'
 import { callOrToast } from '../lib/calls'
+import { firstChip, isLiveProtocol, protocolOf } from '../lib/protocol'
 
 /** What the editor is told about the tab it edits for. */
 export interface DraftTarget {
@@ -48,13 +52,7 @@ export interface RowPatch {
   file?: boolean
 }
 
-const PREVIEW_MS = 150
-
-/**
- * The request being composed. The window owns the draft: every edit is applied here, at once, and
- * the whole draft goes to Go to be written down (a tab's, after a pause), previewed (what the
- * levels above, the authorization and the app add) or sent.
- */
+/** The request being composed: edits apply here, and Go saves, previews or sends the whole draft. */
 export function useDraft(target: DraftTarget) {
   const current = shallowRef<Draft | null>(null)
   const preview = shallowRef<Preview | null>(null)
@@ -63,6 +61,8 @@ export function useDraft(target: DraftTarget) {
   const url = computed(() => current.value?.url ?? '')
   const body = computed(() => current.value?.body ?? '')
   const method = computed(() => current.value?.method ?? 'GET')
+  const protocol = computed(() => current.value?.protocol ?? Protocol.$zero)
+  const options = computed(() => current.value?.options ?? null)
   const params = computed(() => current.value?.params ?? [])
   const headers = computed(() => current.value?.headers ?? [])
   const pathParams = computed(() => current.value?.pathParams ?? [])
@@ -93,9 +93,7 @@ export function useDraft(target: DraftTarget) {
     }
   })
 
-  // Whether anything changed is asked of the draft itself: what stands now against what stood when
-  // it was opened or last written home. The two texts are compared as they are, since a body can
-  // be megabytes and this is asked on every keystroke; the rest is compared serialised.
+  // Bodies are compared as is (they can be megabytes and this runs per keystroke); the rest serialised.
   interface Standing {
     structure: string
     url: string
@@ -111,6 +109,8 @@ export function useDraft(target: DraftTarget) {
     return {
       structure: JSON.stringify({
         method: d.method,
+        protocol: d.protocol,
+        options: d.options,
         bodyKind: d.bodyKind,
         form: d.form,
         bodyFile: d.bodyFile,
@@ -158,7 +158,7 @@ export function useDraft(target: DraftTarget) {
   // The preview is asked a moment after the edits stop; an answer for a draft that has since moved
   // on is dropped.
   let asked = 0
-  const previewLater = useDebounceFn(() => void refreshPreview(), PREVIEW_MS)
+  const previewLater = useDebounceFn(() => void refreshPreview(), 150)
 
   async function refreshPreview() {
     const d = current.value
@@ -177,7 +177,9 @@ export function useDraft(target: DraftTarget) {
   function load(d: Draft) {
     dirty = false
     asked += 1
+    const previous = current.value?.protocol
     current.value = followUrl(d)
+    if (previous !== d.protocol) openChip.value = firstChip(d.protocol)
     preview.value = null
     remember()
     void refreshPreview()
@@ -185,6 +187,8 @@ export function useDraft(target: DraftTarget) {
 
   /** Forgets the draft: a closed tab writes nothing more and asks for nothing more. */
   function abandon() {
+    closed = true
+    if (loading.value && isLiveProtocol(attemptProtocol)) void cancel()
     dirty = false
     asked += 1
     current.value = null
@@ -205,7 +209,34 @@ export function useDraft(target: DraftTarget) {
 
   const setUrl = (text: string) => edit((d) => followUrl({ ...d, url: text }))
   const setBody = (text: string) => edit((d) => ({ ...d, body: text }))
-  const setMethod = async (value: string) => edit((d) => ({ ...d, method: value.trim() }))
+  function setMethod(method: string, protocol = Protocol.$zero) {
+    if (loading.value) return
+    edit(draft => {
+      const previous = draft.protocol ?? Protocol.$zero
+      if (previous === protocol) return { ...draft, method }
+      openChip.value = firstChip(protocol)
+      const inactive = {
+        ...draft.inactiveProtocols,
+        [previous]: {
+          body: draft.body,
+          bodyKind: draft.bodyKind,
+          form: draft.form ?? [],
+          bodyFile: draft.bodyFile,
+          options: draft.options,
+        },
+      }
+      const next = inactive[protocol] ?? {
+        body: '', form: [], bodyFile: '', options: null,
+        bodyKind: protocolOf(protocol).bodyKind ?? BodyKind.BodyRaw,
+      }
+      delete inactive[protocol]
+      return { ...draft, ...next, method, protocol, inactiveProtocols: Object.keys(inactive).length ? inactive : undefined }
+    })
+  }
+
+  function setOptions(patch: Partial<ProtocolOptions>) {
+    edit(draft => ({ ...draft, options: { ...draft.options, ...patch } }))
+  }
   const setAuth = async (value: Auth) => edit((d) => ({ ...d, auth: value }))
   const setEnvironmentOverride = async (env: string) => edit((d) => ({ ...d, environmentId: env.trim() }))
   const setBodyKind = async (kind: BodyKind) => edit((d) => ({ ...d, bodyKind: kind }))
@@ -284,6 +315,7 @@ export function useDraft(target: DraftTarget) {
     const d = current.value
     if (pasted.draft && d) {
       apply(followUrl({ ...pasted.draft, id: d.id, environmentId: d.environmentId }))
+      openChip.value = firstChip(pasted.draft.protocol)
       target.filled?.()
     }
     return pasted.reading
@@ -312,10 +344,14 @@ export function useDraft(target: DraftTarget) {
   const loading = ref(false)
   const pendingSendId = ref<string | null>(null)
   const sentIds = ref<string[]>([])
+  const stopping = ref(false)
+  let attemptProtocol: Protocol = Protocol.$zero
+  let closed = false
 
   async function send(): Promise<void> {
     const d = current.value
-    if (!d) return
+    if (!d || loading.value || closed) return
+    attemptProtocol = d.protocol ?? Protocol.$zero
     loading.value = true
     let sent: string
     try {
@@ -324,34 +360,63 @@ export function useDraft(target: DraftTarget) {
       failSend()
       throw error
     }
+    if (closed) {
+      if (isLiveProtocol(d.protocol)) await callOrToast(History.Cancel(sent), 'request.sendFailed')
+      return
+    }
     target.sent?.()
+    pendingSendId.value = sent
     claim(sent)
     markStep('send')
-    if (loading.value) pendingSendId.value = sent
   }
 
   function claim(id: string) {
     sentIds.value = [id, ...sentIds.value].slice(0, 20)
     const early = takeAnswer(id)
     if (!early) return
-    if ('failed' in early) failSend()
+    if ('failed' in early || early.record.cancelled) failSend()
+    else if (early.record.active) void target.finished(early.record)
     else void finishSend(early.record)
   }
 
   async function cancel() {
     const id = pendingSendId.value
-    failSend()
-    if (id) await callOrToast(History.Cancel(id), 'request.sendFailed')
+    if (!id || stopping.value) return
+    stopping.value = true
+    const stopped = await callOrToast(History.Cancel(id), 'request.sendFailed')
+    if (id !== pendingSendId.value) return
+    if (stopped === false) failSend(id)
+    else if (stopped === undefined) stopping.value = false
   }
 
-  function failSend() {
+  function failSend(id?: string) {
+    if (id && id !== pendingSendId.value) return
     pendingSendId.value = null
     loading.value = false
+    stopping.value = false
   }
 
   async function finishSend(record: RequestRecord) {
-    failSend()
+    if (pendingSendId.value !== record.id) return
+    failSend(record.id)
     await target.finished(record)
+  }
+
+  async function startSeed(seed: Seed) {
+    if (loading.value || closed) return
+    attemptProtocol = seed.protocol ?? Protocol.$zero
+    loading.value = true
+    const id = await callOrToast(Drafts.SendSeed(seed), 'request.sendFailed')
+    if (closed) {
+      if (id && isLiveProtocol(attemptProtocol)) await callOrToast(History.Cancel(id), 'request.sendFailed')
+      return
+    }
+    if (!id) {
+      failSend()
+      return
+    }
+    pendingSendId.value = id
+    claim(id)
   }
 
   const scriptsFor = ref<string | null>(null)
@@ -446,6 +511,8 @@ export function useDraft(target: DraftTarget) {
     url,
     body,
     method,
+    protocol,
+    options,
     params,
     headers,
     pathParams,
@@ -470,6 +537,7 @@ export function useDraft(target: DraftTarget) {
     copyAs,
     refreshPreview,
     setMethod,
+    setOptions,
     setAuth,
     setEnvironmentOverride,
     obtainAuth,
@@ -485,9 +553,11 @@ export function useDraft(target: DraftTarget) {
     moveRow,
     pasteCommand,
     loading,
+    stopping,
     pendingSendId,
     sentIds,
     send,
+    startSeed,
     claim,
     cancel,
     failSend,

@@ -5,12 +5,13 @@ import { useCaptureStore } from '../../stores/capture'
 import { useRecordsStore } from '../../stores/records'
 import { useHarExport } from '../../composables/useHarExport'
 import { useLoadOlder } from '../../composables/useLoadOlder'
+import { useRecordFilter } from '../../composables/useRecordFilter'
 import { useSetting } from '../../composables/useSettings'
 import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
-import { isHttpError, isSlow, matchesRecord, repeatedRecordsByDay, responseSize } from '../../lib/requestRecord'
+import { durationLabel, isSlow, responseSize } from '../../lib/requestRecord'
 import { methodInkClass } from '../../lib/format'
 import { EXTENSION_STORES } from '../../lib/extensions'
-import { formatClock, formatDuration, t } from '../../i18n'
+import { formatClock, t } from '../../i18n'
 import CaptureFiltersSheet from './CaptureFiltersSheet.vue'
 import TabFavicon from './TabFavicon.vue'
 import Icon from '../ui/Icon.vue'
@@ -29,7 +30,6 @@ const filtersOpen = ref(false)
 const query = ref('')
 const errorsOnly = ref(false)
 const slowOnly = ref(false)
-const expandedRepeats = ref(new Set<string>())
 const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
 const { exportHar } = useHarExport(() => selected.value)
 const { loadIfNearEnd } = useLoadOlder()
@@ -51,21 +51,16 @@ const canToggleSelected = computed(() => !!selectedSession.value?.tab)
 const openTabs = computed(() => capture.tabList)
 const liveTabs = computed(() => openTabs.value.filter(tab => !tab.paused))
 const recording = computed(() => capture.connected && capture.recording)
-const captured = computed(() => records.browserRecords)
-const matching = computed(() => {
-  const needle = query.value.trim().toLowerCase()
-  return captured.value.filter(record =>
-    (!selected.value || tabKeyOf(record) === selected.value) && (!needle || matchesRecord(record, needle))
-  )
+const { errorCount, slowCount, rows, groups, toggleRepeat } = useRecordFilter({
+  records: () => records.browserRecords,
+  query: () => query.value,
+  errorsOnly: () => errorsOnly.value,
+  slowOnly: () => slowOnly.value,
+  keep: record => !selected.value || tabKeyOf(record) === selected.value,
+  scopeOf: tabKeyOf,
 })
-const rows = computed(() => matching.value.filter(record =>
-  (!errorsOnly.value || isHttpError(record)) && (!slowOnly.value || isSlow(record))
-))
-const errorCount = computed(() => matching.value.filter(isHttpError).length)
-const slowCount = computed(() => matching.value.filter(isSlow).length)
 const filtering = computed(() => query.value.trim() || errorsOnly.value || slowOnly.value)
 
-const groups = computed(() => repeatedRecordsByDay(rows.value, expandedRepeats.value, tabKeyOf))
 watch(groups, () => {
   if (scrollEl.value) loadIfNearEnd(scrollEl.value)
 }, { flush: 'post' })
@@ -113,8 +108,7 @@ function openRow(id: string, repeated: boolean, event: MouseEvent) {
     void records.selectRecord(id, event.metaKey || event.ctrlKey)
     return
   }
-  if (expandedRepeats.value.has(id)) expandedRepeats.value.delete(id)
-  else expandedRepeats.value.add(id)
+  toggleRepeat(id)
 }
 
 const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElement)
@@ -197,7 +191,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
           </button>
           <Button
             size="field"
-            :disabled="!captured.length"
+            :disabled="!records.browserRecords.length"
             @click="exportHar()"
           >
             {{ t('files.exportHar') }}
@@ -302,7 +296,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
               <StatusBadge :status="row.record.status" :failed="!!row.record.error" />
             </span>
             <span class="cap-num text-right">
-              <span v-if="!row.expanded" :class="isSlow(row.record) && !row.repeatCount ? 'cap-slow' : 'text-text-secondary'">{{ formatDuration(row.record.durationUs) }}</span>
+              <span v-if="!row.expanded" :class="isSlow(row.record) && !row.repeatCount ? 'cap-slow' : 'text-text-secondary'">{{ durationLabel(row.record) }}</span>
               <span v-if="!row.repeatCount && row.record.responseBody?.size" class="text-text-tertiary"> · {{ responseSize(row.record) }}</span>
             </span>
             <span class="cap-row-tab" :title="row.record.tabTitle || row.record.tabURL">

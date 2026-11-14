@@ -62,9 +62,7 @@ func (s *Store) Workspace(ctx context.Context, id string) (domain.Workspace, err
 	return w, nil
 }
 
-// accessOf reads what the account last said about a workspace. An empty column, or one this build
-// cannot read, is a workspace nobody said anything about and is read as the person's own: the safe
-// direction, since the server refuses what it must regardless.
+// accessOf reads the account's last word on a workspace; empty or unreadable means the person's own.
 func accessOf(raw string) domain.WorkspaceAccess {
 	var held domain.WorkspaceAccess
 	if raw == "" || json.Unmarshal([]byte(raw), &held) != nil {
@@ -73,9 +71,7 @@ func accessOf(raw string) domain.WorkspaceAccess {
 	return held
 }
 
-// accessData is what accessOf reads back. A reading with nothing in it is written as nothing, never
-// as a role that may do none of it. The type is flat and JSON-native, so there is nothing to fail
-// on.
+// accessData writes an empty access as "".
 func accessData(held domain.WorkspaceAccess) string {
 	if held == (domain.WorkspaceAccess{}) {
 		return ""
@@ -84,14 +80,8 @@ func accessData(held domain.WorkspaceAccess) string {
 	return string(raw)
 }
 
-// SaveWorkspace writes a workspace's own row. Position is not in the update list: it keeps the
-// switcher's order and a save never moves a row. Everything else is: renaming, recolouring and the
-// workspace's purpose are all the same write.
-//
-// The row itself travels (name, colour and purpose are what another device draws), so the write is
-// queued like any other. A workspace is made here, not on the server. The account's say about this
-// person's place in the workspace travels neither way; only the round that reads the account's list
-// writes it.
+// SaveWorkspace writes a workspace's row and queues it for sync. Position is never changed by a save;
+// the account's role for this person is written only by the round that reads the account.
 func (s *Store) SaveWorkspace(ctx context.Context, w domain.Workspace) error {
 	return s.inTx(ctx, fmt.Sprintf("saving workspace %s", w.ID), func(tx *writeTx) error {
 		action, err := actionFor(ctx, tx, "workspaces", w.ID)
@@ -112,14 +102,8 @@ func (s *Store) SaveWorkspace(ctx context.Context, w domain.Workspace) error {
 	})
 }
 
-// DeleteWorkspace needs one statement: every table belonging to a workspace carries the foreign
-// key, and the cascade takes history, collections, environments, drafts, script runs and the queue
-// of what the workspace owed the server. The vacuum gives the workspace back, since incremental mode only
-// makes rows reusable.
-//
-// Nothing is queued: this is the workspace leaving this device, and a row marked gone would be one the
-// server never took back. Ending it for the account is the panel's `workspace/v1.Delete`, which
-// knows who else uses it.
+// DeleteWorkspace removes a workspace locally; the foreign-key cascade takes everything in it and the
+// vacuum frees the space. Nothing is queued: ending it in the account is a separate call.
 func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM workspaces WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("deleting workspace %s: %w", id, err)
@@ -130,9 +114,7 @@ func (s *Store) DeleteWorkspace(ctx context.Context, id string) error {
 	return nil
 }
 
-// FirstWorkspace names the workspace that has been there longest: the row the schema writes on a
-// fresh installation, which every fallback points at. An empty table is not a state the app has,
-// since the last workspace may not be deleted.
+// FirstWorkspace is the oldest workspace, the fallback everywhere; the last workspace cannot be deleted.
 func (s *Store) FirstWorkspace(ctx context.Context) (string, error) {
 	visible, args, err := s.visible(ctx)
 	if err != nil {
@@ -174,12 +156,8 @@ func (s *Store) SetContext(ctx context.Context, key string) error {
 	return s.SaveSetting(ctx, domain.SettingAccountContext, key)
 }
 
-// Counts is what each workspace holds, for the switcher's rows and the manager's Contents. It is a
-// query over tables this feature does not own, which is why it is a reading beside the list and not
-// a column on the row.
-//
-// Every row of `collections` counts, folders included: the model calls each one a collection. A run
-// is counted through its collection, since `collection_runs` carries no workspace of its own.
+// Counts reports what each workspace holds. Folders count as collections; runs count through their
+// collection, since collection_runs has no workspace column.
 func (s *Store) Counts(ctx context.Context) (map[string]domain.WorkspaceCounts, error) {
 	out := map[string]domain.WorkspaceCounts{}
 	// One grouped count per kind of thing, each written into its own field: a workspace with no rows of
@@ -227,12 +205,8 @@ func (s *Store) Counts(ctx context.Context) (map[string]domain.WorkspaceCounts, 
 	return out, nil
 }
 
-// ActiveWorkspace is the workspace the window is showing: the stored pointer, or the oldest when
-// the pointer is empty, missing or names a deleted workspace. A stale pointer is not an error.
-//
-// "Reopen the last workspace" is not read here. It decides where the app starts: the service
-// settles it once at launch by pointing the pointer at the oldest workspace. Applying it on every read
-// would snap the window back whenever anyone switched away.
+// ActiveWorkspace returns the stored pointer, or the oldest workspace when it is empty or stale.
+// "Reopen the last workspace" is applied once at launch, not here.
 func (s *Store) ActiveWorkspace(ctx context.Context) (string, error) {
 	pointed, ok, err := s.Setting(ctx, domain.SettingActiveWorkspace)
 	if err != nil {
@@ -256,9 +230,7 @@ func (s *Store) ActiveWorkspace(ctx context.Context) (string, error) {
 	return s.FirstWorkspace(ctx)
 }
 
-// ReopenLast answers whether the app comes back to the workspace it was left in. It is an installation
-// setting rather than workspace data, read here beside the pointer; absent means on, as for every
-// switch the app started with.
+// ReopenLast reads the installation setting beside the pointer; absent means on.
 func (s *Store) ReopenLast(ctx context.Context) (bool, error) {
 	settings, err := s.Preferences(ctx)
 	if err != nil {

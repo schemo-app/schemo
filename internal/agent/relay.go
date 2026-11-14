@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// Relay pipes the browser's stdio to the app's socket until either side closes. The app speaks the
-// native messaging framing, so bytes are copied as is. Without the app it replies "unavailable", so
-// the extension can tell "not running" from "not installed".
+// Relay pipes the browser's stdio to the app's socket until either side closes. Without the app it
+// replies "unavailable", so the extension can tell "not running" from "not installed".
 func Relay(stdin io.Reader, stdout io.Writer, socket string) error {
 	conn, err := net.DialTimeout("unix", socket, 2*time.Second)
 	if err != nil {

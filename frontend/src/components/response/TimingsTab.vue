@@ -15,10 +15,7 @@ interface Phase {
   fill: string
 }
 
-// Only the phases that happened are drawn, and which those are is Go's answer. An absent phase did
-// not take place at all, where a zero would say it was measured and took no time. A request sent
-// with connection reuse has no DNS, TCP or TLS because nothing was dialled; a captured one carries
-// only the two phases a page can time.
+// An absent phase did not happen (a reused connection dials nothing); a zero means it was measured.
 const phases = computed<Phase[]>(() => {
   const all = [
     { label: t('response.timings.dns'), us: record.dnsUs, fill: 'var(--text-tertiary)' },
@@ -57,9 +54,7 @@ const totalNote = computed(() => {
   return t('response.timings.totalNote', { wait: formatMicros(wait) })
 })
 
-// A request that reused a connection has no dial phases to show. The connect phase tells the two
-// apart: a fresh connection always has one, a reused one never does, and a request that never
-// reached a server has neither it nor a wait, so the note above already covers it.
+// A fresh connection always has a connect phase and a reused one never does.
 const reusedConnection = computed(
   () =>
     record.connectUs == null &&

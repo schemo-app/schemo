@@ -7,9 +7,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Import reads a HAR log as one collection with a request per entry. Responses, timings and cookies
-// are counted as left out: a request sent from this app composes its own answer, and a jar cannot
-// be filled from a file.
+// Import reads a HAR log as one collection, a request per entry. Responses, timings and cookies are
+// counted as left out.
 func Import(data []byte) (domain.Document, error) {
 	var file logFile
 	if err := json.Unmarshal(data, &file); err != nil {
@@ -73,7 +72,7 @@ func applyPostData(node *domain.CollectionNode, from *postData, doc *domain.Docu
 		return
 	}
 
-	mime := mimeOf(from.MimeType)
+	mime := domain.MediaTypeOf(from.MimeType)
 	switch {
 	case strings.HasPrefix(mime, domain.MediaMultipart):
 		node.BodyKind = domain.BodyForm
@@ -106,9 +105,3 @@ func applyPostData(node *domain.CollectionNode, from *postData, doc *domain.Docu
 }
 
 // mimeOf is the media type without its parameters: `application/json; charset=utf-8` is json.
-func mimeOf(value string) string {
-	if at := strings.Index(value, ";"); at >= 0 {
-		value = value[:at]
-	}
-	return strings.ToLower(strings.TrimSpace(value))
-}

@@ -67,9 +67,8 @@ type Resolution struct {
 	HasValue bool `json:"hasValue"`
 }
 
-// Scripts is the code that runs around a request: before it goes out and after it comes back. On a
-// node it is a pointer like Auth (nil means not set here), but levels do not override each other:
-// every level with a script runs, outermost first.
+// Scripts run around a request. Nil means not set here; levels do not override each other, every
+// level's script runs, outermost first.
 type Scripts struct {
 	Pre  string `json:"pre,omitempty"`
 	Post string `json:"post,omitempty"`
@@ -133,15 +132,11 @@ type ScriptRequest struct {
 	URL     string       `json:"url"`
 	Headers []HeaderPair `json:"headers"`
 	Body    string       `json:"body"`
-	// BodyKind lets re-masking render the body a script changed: form bodies and file paths cannot
-	// be rebuilt from the text a script saw. The prelude neither reads nor writes it, so a script
-	// can rewrite a JSON body but not change its kind.
+	// BodyKind lets re-masking rebuild form and file bodies; scripts cannot change it.
 	BodyKind BodyKind `json:"bodyKind,omitempty"`
 }
 
-// ScriptPass is one attempt as the scripts around it see it: the run, the record the reports are
-// written against, the originating node and the request, which a pre-request script may change. It
-// has no tags: it is the shape two features hand each other inside the app.
+// ScriptPass is one attempt as its scripts see it; internal only, hence no tags.
 type ScriptPass struct {
 	Run      string
 	RecordID string
@@ -149,9 +144,7 @@ type ScriptPass struct {
 	Request  *ScriptRequest
 	Response *Response
 
-	// Ran carries the pre-request scripts' results to the other half of the same pass. Reports hang
-	// off the record, which is written only after the answer, so they wait here; whoever sends the
-	// request carries them and never reads them.
+	// Ran carries pre-request reports to the post-request half, since the record is written after the answer.
 	Ran []ScriptRun
 }
 
@@ -166,9 +159,8 @@ const (
 	ScopeGlobals     VarScope = "globals"
 )
 
-// VarStore is where a script's variables live. Reading `variables` reads the run scope, then the
-// environment, then the globals; reading either of the other two scopes reads that one alone. Reads
-// return an error rather than nothing: `no value` and `could not be read` are different answers.
+// VarStore holds script variables. `variables` reads run scope, environment, then globals; the others
+// read one scope. Errors are distinct from "no value".
 type VarStore interface {
 	Lookup(scope VarScope, name string) (string, bool, error)
 	Set(scope VarScope, name string, value string) error

@@ -10,9 +10,7 @@ import (
 	"schemo/internal/request"
 )
 
-// System is the app talking about itself: what it is, what its windows do and whether it
-// managed to open its own data. Updating has a service of its own; everything that belongs to no
-// feature in particular stays here.
+// System is the app's own service: info, windows and storage status.
 type System struct {
 	host    *desktop.Host
 	info    platform.BuildInfo
@@ -71,20 +69,15 @@ var signInPagesFallback = domain.SignInPages{
 	Failed: "Could not hand the token to the application.",
 }
 
-// ApplyLanguage is the window handing over the words of the two surfaces Go draws but does not own:
-// the native menu and the pages a sign-in puts in the browser. The catalogue is the window's and Go
-// cannot resolve "system", so this is the one piece of the interface that is sent instead of read.
-// They travel together because they are needed at the same two moments: as the window mounts and
-// whenever the language moves.
+// ApplyLanguage takes the window's words for the native menu and the sign-in pages: the catalogue is
+// the window's, and Go cannot resolve "system".
 func (s *System) ApplyLanguage(labels desktop.MenuLabels, pages domain.SignInPages) {
 	s.host.ApplyMenu(labels)
 	s.auth.SetPages(pages)
 }
 
-// ApplyWindowMenu is the main window handing over the rows of the menu it draws itself, so
-// platforms where the system draws one can carry the same rows. It is called whenever what the menu
-// shows moves (a tab opens, the theme changes, a shortcut is rebound); other windows do not call
-// it, since the rows name the main window's own tabs and stores.
+// ApplyWindowMenu takes the rows of the main window's drawn menu so the system bar can carry them.
+// Only the main window calls it.
 func (s *System) ApplyWindowMenu(groups []desktop.MenuGroup) {
 	s.host.ApplyWindowMenu(groups)
 }
@@ -94,9 +87,7 @@ func (s *System) SetHeaderHeight(height float64) error {
 	return s.host.SetHeaderHeight(height)
 }
 
-// ShowSettings opens the preferences window. The category is the one to show ("account" for the
-// account menu); an empty one leaves the window where it was, which is what the rail's gear asks
-// for.
+// ShowSettings opens the settings window on a category; an empty one keeps the current page.
 func (s *System) ShowSettings(category string) {
 	s.host.ShowSettings(category)
 }

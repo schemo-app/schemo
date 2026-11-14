@@ -12,7 +12,7 @@ func TestAccountAndPlanRoundTrip(t *testing.T) {
 	if err := store.Save(ctx, domain.Account{UserID: "user", Email: "user@example.com"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SavePlan(ctx, domain.Plan{Tier: "team", Seats: 4, Features: []string{"history"}}); err != nil {
+	if err := store.SavePlan(ctx, domain.Plan{Tier: "team", Seats: 4, Features: []domain.Feature{domain.FeatureHistory}}); err != nil {
 		t.Fatal(err)
 	}
 	account, err := store.Account(ctx)
@@ -20,7 +20,7 @@ func TestAccountAndPlanRoundTrip(t *testing.T) {
 		t.Fatalf("account changed: %+v, error=%v", account, err)
 	}
 	plan, err := store.Plan(ctx)
-	if err != nil || plan.Tier != "team" || plan.Seats != 4 || len(plan.Features) != 1 || plan.Features[0] != "history" {
+	if err != nil || plan.Tier != "team" || plan.Seats != 4 || len(plan.Features) != 1 || plan.Features[0] != domain.FeatureHistory {
 		t.Fatalf("plan changed: %+v, error=%v", plan, err)
 	}
 	var unused int

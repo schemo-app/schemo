@@ -20,9 +20,7 @@ import * as domain$0 from "../domain/models.js";
 import * as $models from "./models.js";
 
 /**
- * Invite makes a link for somebody in this workspace. The address is what the letter goes to and the
- * role is what they will hold here: an invitation is the one way a person is given access without
- * being in the organisation already. An empty address makes a link to hand over by hand.
+ * Invite makes an invitation link with a role; an empty address makes a link to share by hand.
  */
 export function Invite(workspaceID: string, email: string, roleID: string): $CancellablePromise<$models.Team> {
     return $Call.ByID(2418726814, workspaceID, email, roleID);
@@ -44,12 +42,8 @@ export function Revoke(workspaceID: string, inviteID: string): $CancellablePromi
 }
 
 /**
- * Roles is the roles that may be handed out in the organisation's workspaces, asked without naming one.
- * 
- * A form needs it while it is still making a workspace: a team's is made with the people to invite
- * already written down, and each role is chosen before the workspace exists. The organisation is the
- * caller's own, read from the account's answer the way `of` reads it for a workspace, since a device
- * holds no id for it.
+ * Roles lists the roles of the caller's organisation, for a form that picks them before the
+ * workspace exists.
  */
 export function Roles(): $CancellablePromise<domain$0.Role[] | null> {
     return $Call.ByID(1099455964);

@@ -15,10 +15,9 @@ import { t } from '../../i18n'
 import { EXTENSION_STORES } from '../../lib/extensions'
 import { Extension, type CaptureState } from '../../../bindings/schemo/internal/agent'
 import { useWailsEvent } from '../../composables/useWailsEvent'
+import { metaLine } from '../../lib/format'
 
-// The browser extension: whether one is connected at the top, how the two sides behave together,
-// and what the extension lets through at the foot. The switches are the extension's to carry out
-// (the app keeps them and hands them over), so each is saved and sent in the same click.
+// The extension carries the switches out, so each is saved and sent in the same click.
 
 const { save } = useSettings()
 
@@ -28,7 +27,7 @@ const { isConnected, browser, version, tabCount, isPaused } = useExtensionStatus
 
 const statusTitle = computed(() =>
   isConnected.value
-    ? [t('extension.connected'), browser.value].filter(Boolean).join(' · ')
+    ? metaLine(t('extension.connected'), browser.value)
     : t('extension.none')
 )
 
@@ -38,9 +37,7 @@ const statusNote = computed(() => {
   const capture = tabCount.value
     ? t('extension.capturing', { tabs: t('counts.tabs', { n: tabCount.value }) })
     : t('extension.idle')
-  return [version.value ? t('extension.version', { version: version.value }) : '', capture]
-    .filter(Boolean)
-    .join(' · ')
+  return metaLine(version.value ? t('extension.version', { version: version.value }) : '', capture)
 })
 
 function openInstall(url: string): void {
@@ -62,10 +59,8 @@ async function saveExtension(patch: { autoConnect?: boolean; rememberTabs?: bool
   await run(() => save({ extension: patch }))
 }
 
-// A missing list of hosts is every site, which is what an empty one means; the extension reads it
-// exactly so. That is why "only the list" picked before a first host is written lives here and not
-// in the settings: an empty list saved as the list would be the same state as "every site", and the
-// segment could never leave it.
+// An empty host list means every site, so "only the list" before the first host is held here and
+// not saved.
 const filters = useSetting('captureFilters')
 const picking = ref(false)
 const listed = computed(() => picking.value || (filters.value.hosts ?? []).length > 0)
@@ -91,9 +86,7 @@ function setHosts(hosts: string[]): void {
   void saveFilters({ hosts })
 }
 
-// What the browser extension last said about itself, as the settings window draws it. The window
-// asks once on open (frames arrive when something changes, so waiting for the next one would wait
-// for nothing) and follows them after that.
+// Asks once on open: frames arrive only on change.
 function useExtensionStatus() {
   const isConnected = ref(false)
   const browser = ref('')

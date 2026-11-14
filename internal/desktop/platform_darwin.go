@@ -47,9 +47,7 @@ import "C"
 // glassShows is the one question the build tag answers: platform_darwin_glass.go under
 // `private_mac_apis`, platform_darwin_opaque.go without it.
 
-// systemIsDark says which way the system's theme points. macOS reads this from its preferences
-// rather than from a window, since the app's own appearance is pinned to its theme. appearanceFor
-// asks, for the window that follows the system.
+// systemIsDark reads the system preference, since the app's appearance is pinned to its theme.
 func systemIsDark() bool {
 	// The app is reached through the global because this function has no window and can be asked
 	// before the app exists.
@@ -60,10 +58,7 @@ func systemIsDark() bool {
 	return app.Env.IsDarkMode()
 }
 
-// appearanceFor is the palette the material behind the window is chosen by. "Follow the system" is
-// resolved here rather than left to AppKit: the material is one of two, so the system's answer has
-// to be known when it is picked, and the window's appearance carries it to the re-tint when the
-// system changes under a running app.
+// appearanceFor resolves "system" here, since the material must be picked as light or dark.
 func appearanceFor(theme domain.Theme) domain.Theme {
 	if theme != domain.ThemeSystem {
 		return theme
@@ -74,10 +69,8 @@ func appearanceFor(theme domain.Theme) domain.Theme {
 	return domain.ThemeLight
 }
 
-// prepareGlassWindow lets the material through: Wails gives a translucent window its vibrancy view
-// but never clears the window's opaque flag (only its "transparent" backdrop does, which this
-// project does not use), and an opaque window flattens the material into a panel. The flag is
-// cleared here, on the main thread like retint.
+// prepareGlassWindow clears the window's opaque flag, which Wails leaves set and which flattens the
+// material. Runs on the main thread.
 func prepareGlassWindow(window *application.WebviewWindow, theme domain.Theme) {
 	if window == nil || !glassShows() {
 		return
@@ -93,10 +86,8 @@ func prepareGlassWindow(window *application.WebviewWindow, theme domain.Theme) {
 	})
 }
 
-// retintWindow moves the material behind an existing window to another palette: macOS takes a
-// window's appearance once, at creation, and this Wails has no setter, so a runtime theme switch
-// would leave the vibrancy tinted the other way until the next launch. The native handle is asked
-// for on the main thread, so a window closed in between cannot dangle.
+// retintWindow re-tints the material on a theme switch: macOS reads the appearance once and Wails
+// has no setter. The handle is taken on the main thread so a closed window cannot dangle.
 func retintWindow(window *application.WebviewWindow, theme domain.Theme) {
 	if window == nil {
 		return

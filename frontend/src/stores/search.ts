@@ -19,8 +19,6 @@ import { useEnvironmentsStore } from './environments'
 import { useRecordsStore } from './records'
 import { useTransferStore } from './transfer'
 
-const QUERY_PAUSE_MS = 120
-
 export interface Command {
   id: string
   label: string
@@ -98,7 +96,7 @@ export const useSearchStore = defineStore('search', () => {
 
   // The pause before a query goes out, and the number of the latest one: an answer to a query that
   // has since been typed over is dropped.
-  const wait = useTimeoutFn(() => void ask(), QUERY_PAUSE_MS, { immediate: false })
+  const wait = useTimeoutFn(() => void ask(), 120, { immediate: false })
   let generation = 0
 
   function openPalette() {

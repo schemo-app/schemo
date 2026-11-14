@@ -6,12 +6,12 @@ import type { InlineReadings } from '../../lib/reading'
 import {
   buildResourceIndex,
   dataResources,
+  resourceKey,
   resourceMatchesQuery,
   type JsonApiDocument,
   type Resource,
 } from '../../lib/jsonapi'
 import ResourceNode from './ResourceNode.vue'
-
 
 const { doc, query = '', highlightKey, readings } = defineProps<{
   doc: JsonApiDocument
@@ -36,12 +36,12 @@ const errors = computed(() => doc.errors ?? [])
 
 const includedFlatIndex = computed(() => {
   const map = new Map<string, number>()
-  included.value.forEach((resource, i) => map.set(resource.type + '/' + resource.id, i))
+  included.value.forEach((resource, i) => map.set(resourceKey(resource.type, resource.id), i))
   return map
 })
 
 function includedPath(r: Resource): string {
-  return '$.included[' + (includedFlatIndex.value.get(r.type + '/' + r.id) ?? 0) + ']'
+  return `$.included[${includedFlatIndex.value.get(resourceKey(r.type, r.id)) ?? 0}]`
 }
 
 const highlightedKey = ref<string | null>(null)
@@ -54,9 +54,7 @@ function toggleTypeFilter(type: string) {
   typeFilter.value = typeFilter.value === type ? null : type
 }
 
-// A group shows its resources only when asked for: a search, a picked type, a click on its head or
-// a jump from a relationship (see `forceExpand`). Otherwise `included` reads as a summary of the
-// document rather than a wall of cards.
+// Groups stay closed unless searched, picked, clicked or jumped to, so `included` reads as a summary.
 function isGroupOpen(type: string): boolean {
   if (query.trim() || typeFilter.value) return true
   return openGroups.value.has(type)
@@ -99,8 +97,8 @@ function jumpTo(key: string) {
   emit('select', key)
 }
 
-function isHighlighted(key: string): boolean {
-  return highlightedKey.value === key
+function isHighlighted(r: Resource): boolean {
+  return highlightedKey.value === resourceKey(r.type, r.id)
 }
 
 const jsonapiVersion = computed(() => {
@@ -185,12 +183,12 @@ const noResults = computed(
       </div>
       <ResourceNode
         v-for="{ resource: r, path } in filteredData"
-        :key="r.type + '/' + r.id"
+        :key="resourceKey(r.type, r.id)"
         :resource="r"
         :resource-index
         :path
         :readings
-        :highlighted="isHighlighted(r.type + '/' + r.id)"
+        :highlighted="isHighlighted(r)"
         @jump="jumpTo"
         @fetch="(url) => emit('fetch', url)"
         @inspect="(path, event) => emit('inspect', path, event)"
@@ -231,12 +229,12 @@ const noResults = computed(
         <div v-if="isGroupOpen(g.type)">
           <ResourceNode
             v-for="r in g.resources"
-            :key="r.type + '/' + r.id"
+            :key="resourceKey(r.type, r.id)"
             :resource="r"
             :resource-index
             :path="includedPath(r)"
             :readings
-            :highlighted="isHighlighted(r.type + '/' + r.id)"
+            :highlighted="isHighlighted(r)"
             @jump="jumpTo"
             @fetch="(url) => emit('fetch', url)"
             @inspect="(path, event) => emit('inspect', path, event)"

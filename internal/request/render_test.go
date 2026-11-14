@@ -268,7 +268,7 @@ func replaced(t *testing.T, drafts *line, kind domain.BodyKind, text string) {
 	drafts.d.BodyKind = kind
 }
 
-func prepared(t *testing.T, drafts *line) Prepared {
+func prepared(t *testing.T, drafts *line) SendInput {
 	t.Helper()
 	return drafts.prepared(t, drafts.d)
 }

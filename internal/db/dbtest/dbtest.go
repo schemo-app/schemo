@@ -1,6 +1,5 @@
-// Package dbtest gives a test a migrated SQLite store in a temporary directory. Tests run against the
-// real store rather than fakes: the rules that matter (unique names, scopes, the sync queue) live
-// in SQL.
+// Package dbtest gives tests a migrated SQLite store in a temp dir: the rules that matter live in SQL,
+// so tests use the real store.
 package dbtest
 
 import (

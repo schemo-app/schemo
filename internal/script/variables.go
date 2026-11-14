@@ -7,9 +7,7 @@ import (
 	"slices"
 )
 
-// maxRuns is how many runs keep a scope at once. Nothing reads a run's own memory once the run is
-// over, so a session of a thousand sends does not have to keep a thousand of them alive for the
-// life of the process.
+// maxRuns is how many run scopes are kept; a finished run's scope is never read again.
 const maxRuns = 32
 
 type scriptVariables struct {
@@ -18,10 +16,8 @@ type scriptVariables struct {
 	run   string
 }
 
-// Lookup answers the run's own scope first, then the environment, then the globals, which is the
-// order a request resolves in, so a script gets what the next request of the run will get. Asking
-// for either of the other two reads that one alone, which is how a script tells where a name is
-// set.
+// Lookup searches the run scope, the environment, then the globals, as a request resolves; a named
+// scope reads only that one.
 func (v scriptVariables) Lookup(scope domain.VarScope, name string) (string, bool, error) {
 	if scope != domain.ScopeRun {
 		return v.owner.vars.Variable(v.ctx, scope, name)
@@ -36,10 +32,7 @@ func (v scriptVariables) Lookup(scope domain.VarScope, name string) (string, boo
 	return v.owner.vars.Variable(v.ctx, domain.ScopeGlobals, name)
 }
 
-// Set writes where the scope says it goes. A value a script puts in the run's own scope is this
-// run's alone: the next request of the same run sees it, another run does not, and a restart
-// forgets it. The other two are stored, which is their point; a secret written there is stored like
-// any other value, because the app has nowhere else to keep it.
+// Set writes to the scope given. Run-scope values last for the run only; the other scopes are stored.
 func (v scriptVariables) Set(scope domain.VarScope, name string, value string) error {
 	if scope != domain.ScopeRun {
 		err := v.owner.vars.SetVariable(v.ctx, scope, name, value)
@@ -49,9 +42,8 @@ func (v scriptVariables) Set(scope domain.VarScope, name string, value string) e
 	return nil
 }
 
-// keptForTheRun turns the refusal of a workspace this person may only read into the run's own scope: a
-// script that records a token for the next request still works, and what the workspace holds is not
-// changed. Any other answer is the store's and goes back as it came.
+// keptForTheRun turns a read-only workspace's refusal into a run-scope write, so a script saving a
+// token still works; other errors pass through.
 func (s *Scripts) keptForTheRun(run, name, value string, err error) error {
 	if domain.CodeOf(err) != domain.CodeWorkspaceReadOnly {
 		return err
@@ -60,8 +52,7 @@ func (s *Scripts) keptForTheRun(run, name, value string, err error) error {
 	return nil
 }
 
-// RunVariables is what the scripts of a run keep for it alone, as the variables its next request is
-// resolved with. They stand innermost, where a value set for one run overrides the workspace's own.
+// RunVariables are a run's script-set variables, innermost when resolving its next request.
 //
 //wails:ignore
 func (s *Scripts) RunVariables(run string) []domain.Variable {

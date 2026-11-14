@@ -44,9 +44,7 @@ function onOpenChange(value: boolean) {
 }
 
 
-// A subtitle is the sheet's description, and a screen reader is handed it as one. A sheet without
-// one has nothing to point at, and reka-ui asks for that to be said; otherwise the content is aimed
-// at an id no element carries.
+// reka-ui wants a missing description said explicitly.
 const describedBy = computed(() => (sub ? {} : { 'aria-describedby': undefined }))
 </script>
 

@@ -20,6 +20,11 @@ export function tryParseJson(text: string): ParsedJson {
   }
 }
 
+/** Whether text typed as JSON fails to parse. */
+export function isBrokenJson(text: string): boolean {
+  return !!text.trim() && !text.includes('{{') && !tryParseJson(text).ok
+}
+
 /** Formats a JS value as an indented JSON string, falling back to string conversion on failure.
  *  The unit is the editor's own answer where an editor asked; the views get two spaces. */
 export function prettyJson(value: unknown, unit: string | number = 2): string {

@@ -1,12 +1,6 @@
 package workspace
 
-// The `{{name}}` grammar: what a token is, which names are worth reading, and what a text comes to
-// once the values are in it.
-//
-// It lives here because it is this feature's rule: a name names a variable of an environment, and
-// "nothing came of it" is what blocks a send. The draft, which paints tokens as it draws an address
-// field, asks through a port it declares for itself instead of reading the grammar, so what a token
-// is stays in one place.
+// The `{{name}}` grammar. Other features ask through a port so the grammar stays in one place.
 
 import (
 	"strings"
@@ -27,12 +21,8 @@ type token struct {
 	raw   string
 }
 
-// tokens finds every `{{name}}` worth resolving in a text. `\{{` is an escape and stays literal,
-// and a `{{` that never closes is text: the rest of the line is read as written.
-//
-// The name is trimmed the way Go trims. A BOM or U+0085 is not something anybody puts inside the
-// braces; the BOM-aware set lives in the command lexer, where a BOM pasted between words really
-// happens.
+// tokens finds every `{{name}}`. `\{{` is literal and an unclosed `{{` is text; names are trimmed
+// with strings.TrimSpace.
 func tokens(text string) []token {
 	out := []token{}
 	i := 0
@@ -65,13 +55,8 @@ func tokens(text string) []token {
 	return out
 }
 
-// interpolate writes a text out with its variables filled in. maskSecrets is the difference between
-// the request that goes out and everything that outlives it (the preview, an export, the record): a
-// secret leaves those as its mask and nothing else does.
-//
-// A name that came to nothing is written as nothing: the window says so beside the request line,
-// and a `{{token}}` carried to a server is just a name in braces. Which names those were is a
-// separate question, asked by `Missing`.
+// interpolate fills a text's variables; with maskSecrets a secret becomes its mask. Unresolved names
+// become empty; `Missing` reports which they were.
 func interpolate(text string, resolve lookup, maskSecrets bool) string {
 	found := tokens(text)
 	if len(found) == 0 {
@@ -96,19 +81,11 @@ func interpolate(text string, resolve lookup, maskSecrets bool) string {
 	return out.String()
 }
 
-// shortestRedacted is the floor under which a value is not searched for. The search replaces plain
-// text written for other reasons, and a value of a character or two occurs in every address: hiding
-// it would leave a record describing a request nobody wrote. Six runes is where a value is long
-// enough to be a credential.
+// shortestRedacted is the shortest value searched for: shorter ones appear in every address.
 const shortestRedacted = 6
 
-// redact replaces a secret's value with its mask wherever the text still carries it. The values
-// arrive longest first, so one that contains another leaves neither half-written.
-//
-// A rewritten request cannot be masked without it: a token is recognised by its braces, but a value
-// already substituted in has none, and a pre-request script is handed the request with its values
-// in it and hands one back. Everything that outlives the send is rendered from that text, so the
-// value is all that is left to find.
+// redact masks secret values a script substituted in, where no braces are left to find. Longest
+// first, so overlapping values are not half-masked.
 func redact(text string, secrets []string) string {
 	for _, secret := range secrets {
 		if utf8.RuneCountInString(secret) < shortestRedacted {

@@ -3,10 +3,11 @@ import { computed, ref } from 'vue'
 import { DropdownMenuRoot, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuItemIndicator } from 'reka-ui'
 import { useCollectionsStore } from '../../stores/collections'
 import { METHODS, methodInkClass } from '../../lib/format'
+import { requestLabel } from '../../lib/protocol'
 import { addressOf } from '../../lib/address'
 import { findCollection } from '../../lib/collectionTree'
 import { urlPieces } from '../../lib/vars'
-import { formatDate, t } from '../../i18n'
+import { formatClock, t } from '../../i18n'
 import MarkdownText from '../ui/MarkdownText.vue'
 import Icon from '../ui/Icon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
@@ -43,7 +44,10 @@ const methods = ref(new Set<string>())
 const methodCounts = computed(() => {
   const counts = new Map<string, number>()
   for (const { row } of rows) {
-    if (row.method) counts.set(row.method, (counts.get(row.method) ?? 0) + 1)
+    if (row.method || row.protocol) {
+      const label = requestLabel(row)
+      counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
   }
   return counts
 })
@@ -60,7 +64,7 @@ const methodLabel = computed(() => {
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase()
   return rows.filter(({ row }) =>
-    (!methods.value.size || methods.value.has(row.method ?? '')) &&
+    (!methods.value.size || methods.value.has(requestLabel(row))) &&
     (!needle || row.name.toLowerCase().includes(needle) || (row.url ?? '').toLowerCase().includes(needle))
   )
 })
@@ -108,10 +112,6 @@ const groups = computed(() => {
 function toggleMethod(method: string, checked: boolean) {
   if (checked) methods.value.add(method)
   else methods.value.delete(method)
-}
-
-function whenOf(at: number): string {
-  return at ? formatDate(at, { hour: '2-digit', minute: '2-digit' }) : ''
 }
 </script>
 
@@ -185,7 +185,7 @@ function whenOf(at: number): string {
           class="row"
           @click="emit('open', item.row)"
         >
-          <span class="method" :class="methodInkClass(item.row.method ?? 'GET')">{{ item.row.method }}</span>
+          <span class="method" :class="methodInkClass(requestLabel(item.row))">{{ requestLabel(item.row) }}</span>
           <span class="name">{{ item.row.name }}</span>
           <span class="path mono" :title="item.row.url">
             <span v-if="paths.prefix" class="text-text-tertiary">{{ paths.prefix }}</span>
@@ -196,11 +196,14 @@ function whenOf(at: number): string {
             >{{ piece.text }}</span>
           </span>
           <span>
-            <StatusBadge :status="item.status.code" :failed="item.bad">
+            <StatusBadge
+              :status="item.status.code" :protocol="item.row.protocol" :failed="item.bad"
+              :status-text="item.status.text === 'OK' ? item.status.text : undefined"
+            >
               {{ item.status.text }}
             </StatusBadge>
           </span>
-          <span class="when">{{ whenOf(item.when) }}</span>
+          <span class="when">{{ item.when ? formatClock(item.when) : '' }}</span>
         </button>
       </template>
 

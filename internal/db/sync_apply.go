@@ -27,10 +27,8 @@ func (s *Store) ApplyPage(
 		if err != nil {
 			return err
 		}
-		// A page is in the order the server last wrote the rows, so a child can precede a parent
-		// edited later and be refused for want of it. What fails is retried after the rest for
-		// as long as a pass writes anything; a row nothing makes writable is skipped and the cursor
-		// moves past it.
+		// A child may arrive before its parent, so failures are retried while a pass writes anything;
+		// a row that never becomes writable is skipped.
 		pending := changes
 		for len(pending) > 0 {
 			var refused []domain.SyncChange
@@ -85,9 +83,8 @@ func (u unsettled) holds(workspaceID string, entity domain.SyncEntity) bool {
 	return held
 }
 
-// unsettledRows reads, once for a page, the rows a pull must leave alone: those whose change was
-// queued by an edit. Parked entries, entries made by offering the workspace again and every entry of a
-// workspace this person may not write in are not held.
+// unsettledRows reads the rows a pull must leave alone: those with an edit queued. Parked, re-offered
+// and read-only workspace entries do not count.
 func unsettledRows(ctx context.Context, tx *writeTx, workspaceID string) (unsettled, error) {
 	var access string
 	err := tx.QueryRowContext(ctx,

@@ -25,9 +25,7 @@ import (
 // sidecarSuffixes contains temporary WAL and SHM file suffixes created alongside SQLite DB.
 var sidecarSuffixes = []string{"", "-wal", "-shm"}
 
-// vacuumPages is how many pages a trim hands back at once. SQLite frees pages only at the end of
-// the file, so a trim naming no count may move the whole file; a page count per call keeps to the
-// tail just emptied.
+// vacuumPages is how many pages one incremental vacuum frees, keeping it to the tail just emptied.
 const vacuumPages = 256
 
 // vacuum is that trim as the statement that runs. It is built once because the count is a SQL
@@ -54,9 +52,8 @@ type Store struct {
 // SetWake sets the workspace change notification callback.
 func (s *Store) SetWake(wake func(workspaceID string)) { s.wake = wake }
 
-// SetNotify is told, after each commit, every kind of entity the transaction changed and in which
-// workspace. It is how a change reaches the window whatever made it: the window, MCP, sync or the
-// extension.
+// SetNotify receives, after each commit, the kinds of entity changed and their workspace, whoever
+// made the change.
 func (s *Store) SetNotify(notify func(domain.Changed)) { s.notify = notify }
 
 // versionUnagreed represents the initial sync version for newly created local rows.
@@ -98,9 +95,7 @@ func (s *Store) Open(ctx context.Context) error {
 //go:embed schema.sql
 var schema string
 
-// schemaVersion is bumped whenever schema.sql changes. Until the first public release there are no
-// upgrades: a database of another version is moved aside and a fresh one is created.
-const schemaVersion = 2
+const schemaVersion = 3
 
 // Migrate creates the schema in a fresh database. It reports the path an incompatible database was
 // moved to, if it had to move one.
@@ -111,6 +106,9 @@ func (s *Store) Migrate(ctx context.Context) (string, error) {
 	}
 	if version == schemaVersion {
 		return "", nil
+	}
+	if version == 2 {
+		return "", s.upgradeRecordProtocols(ctx)
 	}
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM sqlite_schema WHERE type = 'table'`).Scan(&tables); err != nil {
@@ -135,6 +133,21 @@ func (s *Store) Migrate(ctx context.Context) (string, error) {
 		return moved, fmt.Errorf("creating the schema: %w", err)
 	}
 	return moved, tx.Commit()
+}
+
+func (s *Store) upgradeRecordProtocols(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("upgrading record metadata: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE records ADD COLUMN protocol_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+		return fmt.Errorf("upgrading record metadata: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+		return fmt.Errorf("upgrading record metadata: %w", err)
+	}
+	return tx.Commit()
 }
 
 // moveAside renames a database of another schema next to itself and reopens an empty one.
@@ -172,11 +185,8 @@ func (s *Store) Path() string {
 	return s.path
 }
 
-// restrictPermissions limits database file permissions to the current owner (0600).
-//
-// A refusal is reported, not returned: the folder is already 0700 and a filesystem that cannot
-// carry a mode must not stop the app from starting. It is reported because the file holds secret
-// values as plain text. A missing sidecar is not a refusal.
+// restrictPermissions limits the database files to the owner (0600). A refusal is logged, not
+// returned: some filesystems carry no modes, but the file holds secrets in plain text.
 func (s *Store) restrictPermissions() {
 	for _, suffix := range sidecarSuffixes {
 		err := os.Chmod(s.path+suffix, 0o600)

@@ -25,11 +25,8 @@ type FileDrop struct {
 	Target string   `json:"target"`
 }
 
-// NewApp is the application itself: its name, its assets, how a rejected call crosses to the
-// window, and what a second launch does instead of starting another copy.
-//
-// It takes the storage's InitFunc for the order it brings: by the time the app is made the data
-// folder has been made or has failed, and the web view's profile is placed knowing which.
+// NewApp builds the application. It takes the storage's InitFunc so the data folder exists, or has
+// failed, before the web view's profile is placed.
 func NewApp(
 	host *Host,
 	info platform.BuildInfo,
@@ -67,11 +64,8 @@ func NewApp(
 	return app
 }
 
-// webviewDataPath is where the web view keeps its profile on Windows, which otherwise files it in
-// the roaming profile under the executable's name: in the app's own folder, so everything the app
-// keeps is in one place. A folder that could not be made leaves the system's default: a web view
-// whose profile cannot be created ends the app with a message box, and the failure screen that
-// explains the folder would never be drawn.
+// webviewDataPath keeps the Windows web view profile in the app's folder. If the folder cannot be
+// made the system default stays, since a failed profile ends the app before the failure screen.
 func webviewDataPath(status *Status, dir platform.DataDir) string {
 	if failure := status.Failure(); failure != nil && failure.Kind == FailureDataDir {
 		return ""

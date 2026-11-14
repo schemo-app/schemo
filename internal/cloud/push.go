@@ -10,13 +10,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Sending what this device owes. The queue is read oldest first but not sent in that order: a
-// collection has to be on the server before the requests in it, or the server refuses them for a
-// parent it has not seen. Parents first is the one ordering this file imposes; everything else
-// about a push is the entry as it stands.
-//
-// A batch is bounded by what the server takes and answered per entity: one row refused is one row
-// that stays here, and must not cost the ninety-nine beside it.
+// Sending what this device owes. Parents go first, or the server refuses children of a collection it
+// has not seen. Verdicts are per entity, so one refused row does not hold back the batch.
 
 // push sends what a workspace owes.
 func (s *Sync) push(
@@ -25,9 +20,7 @@ func (s *Sync) push(
 	workspace domain.SyncWorkspace,
 	limits domain.Limits,
 ) error {
-	// A batch worth sending, sized by what the server accepts. It is asked for once: what is left
-	// over waits for the next round, because a device that poured its whole queue into one call
-	// would retry the whole of it after one timeout.
+	// One server-sized batch per round, so a timeout retries only that batch.
 	changes, err := s.store.Owed(ctx, workspace, limits.MaxPushBytes)
 	if err != nil {
 		return err
@@ -38,7 +31,7 @@ func (s *Sync) push(
 
 	entities, records := splitBatch(changes)
 	if len(entities) > 0 {
-		if err := s.sendBatch(ctx, caller, workspace, entities); err != nil {
+		if err := s.sendBatches(ctx, caller, workspace, entities); err != nil {
 			return s.releaseInFlight(ctx, err)
 		}
 		s.addProgress(len(entities), 0)
@@ -52,9 +45,22 @@ func (s *Sync) push(
 	return nil
 }
 
-// splitBatch divides a batch between the two doors: history (the records and the runs that produced
-// them) goes through history, and everything else through a push. It is one queue, because a device
-// that has been offline owes both, and two calls because two services answer in two shapes.
+func (s *Sync) sendBatches(ctx context.Context, caller domain.Caller, workspace domain.SyncWorkspace, changes []domain.PendingChange) error {
+	err := s.sendBatch(ctx, caller, workspace, changes)
+	if !domain.RefusedForSize(err) {
+		return err
+	}
+	if len(changes) == 1 {
+		return s.store.Parked(ctx, changes[0], domain.ReasonTooLarge)
+	}
+	middle := len(changes) / 2
+	if err := s.sendBatches(ctx, caller, workspace, changes[:middle]); err != nil {
+		return err
+	}
+	return s.sendBatches(ctx, caller, workspace, changes[middle:])
+}
+
+// splitBatch separates history (records and runs) from everything else: one queue, two services.
 func splitBatch(changes []domain.PendingChange) ([]domain.PendingChange, []domain.PendingChange) {
 	entities := make([]domain.PendingChange, 0, len(changes))
 	records := make([]domain.PendingChange, 0, len(changes))
@@ -88,10 +94,8 @@ func (s *Sync) sendBatch(
 	return s.applyVerdicts(ctx, workspace, changes, verdicts)
 }
 
-// applyVerdicts is the answer, entity by entity. What a verdict does depends on which of the four
-// it is, and the one that matters is the third: an edit that lost is applied whole (the server's
-// row replaces this device's) and remembered, because a person who typed something is owed the
-// sentence that says it was not kept.
+// applyVerdicts applies the per-entity answer. A lost edit is replaced by the server's row and
+// remembered, so the person is told it was not kept.
 func (s *Sync) applyVerdicts(
 	ctx context.Context,
 	workspace domain.SyncWorkspace,
@@ -141,13 +145,8 @@ func (s *Sync) applyVerdicts(
 	return nil
 }
 
-// retryOrPark is what happens to an entry the server did not take, decided by whether trying again
-// could possibly help.
-//
-// A parent that has not arrived is a matter of minutes, and a quota is a matter of somebody paying.
-// A row this server will not store, a role that may not write, and a record with nothing to file it
-// under will not change because a device asked twice: those are parked and stay visible, because a
-// change that quietly disappeared is the one failure nobody would notice.
+// retryOrPark retries what time can fix (a missing parent, a quota) and parks the rest where it
+// stays visible.
 func (s *Sync) retryOrPark(
 	ctx context.Context,
 	change domain.PendingChange,
@@ -164,9 +163,7 @@ func (s *Sync) retryOrPark(
 		// beginning — the row is what it is here, and sending it again sends the same emptiness.
 		return s.store.Parked(ctx, change, reason)
 	default:
-		// No answer, or a refusal this build has no word for: tried again, but not forever. An
-		// entry that keeps coming back unplaced is parked where a person can see it, and not
-		// retried every five minutes for a year.
+		// No answer or an unknown refusal: retried a few times, then parked where it stays visible.
 		if change.Attempts >= unansweredTries {
 			return s.store.Parked(ctx, change, domain.ReasonUnspecified)
 		}
@@ -174,9 +171,7 @@ func (s *Sync) retryOrPark(
 	}
 }
 
-// releaseInFlight puts back what a batch left in flight, because the batch came to nothing. An
-// entry claimed by a round that failed is one nobody is sending, and a round that ends without
-// saying so would leave it in flight until the next start.
+// releaseInFlight requeues what a failed batch left in flight, so it is not stuck until the next start.
 func (s *Sync) releaseInFlight(ctx context.Context, err error) error {
 	// A round that failed because its context ended is the common reason to be here, and a release
 	// that shared the context would fail for the same reason and leave the entries where they were.
@@ -188,11 +183,7 @@ func (s *Sync) releaseInFlight(ctx context.Context, err error) error {
 	return err
 }
 
-// uploadRecords uploads the history a workspace owes: what was sent, what came back, what the scripts
-// around it reported, and the runs that produced them.
-//
-// A record somebody took back is the other half (`history/v1.Delete`), and the two are one call
-// each because they are one shape each: a batch of documents and a list of ids.
+// uploadRecords uploads the history a workspace owes, records and runs, plus the deletions.
 func (s *Sync) uploadRecords(
 	ctx context.Context,
 	caller domain.Caller,
@@ -231,10 +222,8 @@ func (s *Sync) uploadRecords(
 				return err
 			}
 		case domain.RefusedForSize(err) && len(keeping) == 1:
-			// The server refuses a batch it will not take whole, and the queue hands out no more
-			// than the limits allow, so a batch of one is a document larger than that and will not
-			// be smaller next time. It is parked where a person can see it rather than going out
-			// every round and holding the rest of the workspace's history behind it.
+			// A single document over the batch limit will never fit, so it is parked instead of
+			// blocking the rest of the history every round.
 			if err := s.store.Parked(ctx, keeping[0], domain.ReasonTooLarge); err != nil {
 				return err
 			}
@@ -272,10 +261,8 @@ func pushedOf(changes []domain.PendingChange) []domain.Pushed {
 	return out
 }
 
-// applyRecordVerdicts is what became of a batch of records or of runs. Neither has a version and
-// neither conflicts: a reason says it was refused, no reason says it is there. The reasons worth
-// looking at are a body this server will not take, which will not fit next time either, and an
-// answer that never came.
+// applyRecordVerdicts applies a batch's answer; records and runs never conflict, so a reason means
+// refused and none means stored.
 func (s *Sync) applyRecordVerdicts(
 	ctx context.Context,
 	records []domain.PendingChange,

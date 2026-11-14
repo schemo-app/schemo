@@ -17,10 +17,7 @@ export function useSheetNotice() {
     notice.value = ''
   }
 
-  /**
-   * Runs a call and words its refusal in the notice. The sheets' side of `callOrToast` and
-   * `runOrToast`: a control that quietly does nothing looks the same as one that is broken.
-   */
+  /** Runs a call and shows its refusal in the notice, so a failed control never looks inert. */
   async function withNotice(call: () => Promise<unknown>): Promise<boolean> {
     try {
       await call()

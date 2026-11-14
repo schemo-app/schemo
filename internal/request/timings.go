@@ -9,9 +9,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// timeline is what a client trace learns about one request: when each phase began and how long it
-// took. The hooks may run on several goroutines (a dual-stack dial starts two connections), so
-// everything they write, start times included, is behind one lock.
+// timeline records each trace phase's start and duration behind one lock, since hooks run on several
+// goroutines (a dual-stack dial).
 type timeline struct {
 	mu    sync.Mutex
 	began time.Time

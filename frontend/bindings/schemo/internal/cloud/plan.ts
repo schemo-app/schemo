@@ -23,15 +23,8 @@ export function Current(): $CancellablePromise<domain$0.Plan> {
 }
 
 /**
- * Refresh asks the server and keeps the answer. It is asked where the answer may have moved: at
- * startup, when the connection is checked, when a window that draws a control opens, and after the
- * server refuses something for want of a feature. There is no timer: a plan changes when somebody
- * buys one.
- * 
- * A server that does not answer is not a failure: the kept plan stands and is the answer, so
- * nobody gets a window offering less than they paid for because the question could not be asked.
- * A device that is signed out forgets the plan, since the last account's entitlement is not this
- * one's answer.
+ * Refresh asks the server and keeps the answer. There is no timer: a plan changes when somebody buys
+ * one. An unreachable server keeps the stored plan; signing out forgets it.
  */
 export function Refresh(): $CancellablePromise<domain$0.Plan> {
     return $Call.ByID(632780606);

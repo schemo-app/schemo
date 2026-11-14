@@ -40,16 +40,13 @@ const workspaces = useWorkspacesStore()
 const toast = useToast()
 const { copy } = useCopyFeedback()
 
-const INDENT = 8
-const STEP = 22
-
 const shown = computed(() => filterTree(collections.tree, collections.filter))
 const visible = computed(() => flattenTree(shown.value, (id) => !!collections.expanded[id]))
 
 const walkable = computed(() => flattenTree(shown.value, () => true))
 
 function indentDepth(depth: number): string {
-  return rem(INDENT + depth * STEP)
+  return rem(8 + depth * 22)
 }
 
 // A plain click lands in the preview slot; ⌘/Ctrl-click keeps a tab of its own.

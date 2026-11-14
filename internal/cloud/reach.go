@@ -35,12 +35,8 @@ func (r *reach) now() Reachability {
 	return r.state
 }
 
-// watched is the server port with a notebook: every call through it writes down whether the other
-// side answered.
-//
-// Every method is written out here on purpose. Recording the outcome at each call site would let a
-// new call be added without it, and the cost of forgetting is a window that goes on drawing an
-// account nobody can reach.
+// watched records whether the server answered each call. Every method is spelled out so a new call
+// cannot skip the recording.
 type watched struct {
 	AccountServer
 	account *Account

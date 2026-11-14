@@ -1,10 +1,5 @@
-// Two keys of the tree that are not commands of the registry, so they need a home of their own. The
-// chord the menu draws and the key the window answers must not drift apart, which is why both live
-// here.
-//
-// They stay out of `commands.ts` because that registry writes one combination for every platform,
-// while the second is Del on Windows and ⌘⌫ on macOS, and because Go checks a stored combination's
-// shape and knows no `delete` or `backspace`.
+// Tree keys outside the registry, whose combinations are the same on every platform while delete is
+// Del on Windows and ⌘⌫ on macOS. Kept together so the menu chord and the handler never drift.
 
 /** The chord the menu writes beside the item that starts a rename. */
 export const renameChord = 'F2'

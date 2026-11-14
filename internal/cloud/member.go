@@ -47,12 +47,8 @@ func (s *Members) Team(ctx context.Context, workspaceID string) (Team, error) {
 	return held, nil
 }
 
-// Roles is the roles that may be handed out in the organisation's workspaces, asked without naming one.
-//
-// A form needs it while it is still making a workspace: a team's is made with the people to invite
-// already written down, and each role is chosen before the workspace exists. The organisation is the
-// caller's own, read from the account's answer the way `of` reads it for a workspace, since a device
-// holds no id for it.
+// Roles lists the roles of the caller's organisation, for a form that picks them before the
+// workspace exists.
 func (s *Members) Roles(ctx context.Context) ([]domain.Role, error) {
 	caller, err := s.caller.Caller(ctx)
 	if err != nil {
@@ -63,17 +59,13 @@ func (s *Members) Roles(ctx context.Context) ([]domain.Role, error) {
 		return nil, err
 	}
 	if account.OwnOrgID == "" {
-		// The account has no organisation of its own to invite anybody into. That is the ordinary
-		// case for a device that has just signed in, and the round that makes the organisation is
-		// not this call's to wait for.
+		// Normal right after sign-in: the organisation appears with the next round.
 		return nil, domain.Refuse(domain.CodeWorkspaceMissing, domain.ErrNotFound, nil)
 	}
 	return s.server.Roles(ctx, caller, account.OwnOrgID, domain.ScopeWorkspace)
 }
 
-// Invite makes a link for somebody in this workspace. The address is what the letter goes to and the
-// role is what they will hold here: an invitation is the one way a person is given access without
-// being in the organisation already. An empty address makes a link to hand over by hand.
+// Invite makes an invitation link with a role; an empty address makes a link to share by hand.
 func (s *Members) Invite(ctx context.Context, workspaceID, email, roleID string) (Team, error) {
 	asked := domain.Invitation{Email: email, RoleID: roleID}
 	workspace, account, caller, err := s.linked(ctx, workspaceID)
@@ -147,9 +139,7 @@ func (s *Members) Remove(ctx context.Context, workspaceID, userID string) (Team,
 	return held, nil
 }
 
-// of reads one workspace whole: its people, its links and the roles that may be handed out here. They
-// are three questions of one subject, asked together because a window draws them in one block; the
-// invitations are the organisation's, narrowed to the ones that name this workspace.
+// of reads a workspace's members, invitations and roles together; invitations are filtered to this workspace.
 func (s *Members) of(
 	ctx context.Context,
 	caller domain.Caller,
@@ -164,9 +154,7 @@ func (s *Members) of(
 	if err != nil {
 		return Team{}, err
 	}
-	// Which row is the person reading is this device's to say, not the server's: it answers the
-	// people of a workspace and not "you", and a row marked as the reader is one the window does not
-	// offer to remove.
+	// The server does not mark "you", so the reader's row is found here and not offered for removal.
 	mine, err := s.caller.Me(ctx)
 	if err != nil {
 		return Team{}, err
@@ -199,9 +187,7 @@ func (s *Members) of(
 	}, nil
 }
 
-// workspace is the workspace as the account describes it, which is where the organisation and the kind come
-// from. Both are the server's; a device that kept its own word about either would be a second
-// opinion.
+// workspace reads the workspace from the account, which owns its organisation and kind.
 func (s *Members) workspace(
 	ctx context.Context,
 	caller domain.Caller,
@@ -216,16 +202,12 @@ func (s *Members) workspace(
 			return one, nil
 		}
 	}
-	// The account no longer has it: somebody was removed from the workspace, or it was deleted in the
-	// panel. That is not a failure of this screen, and the round that reads the account's list says
-	// so on the workspace itself.
+	// Removed or deleted in the panel; the next round marks the workspace itself.
 	return domain.RemoteWorkspace{}, domain.Refuse(domain.CodeWorkspaceMissing, domain.ErrNotFound, nil)
 }
 
-// linked is a workspace this device has an account id for, with the caller asking and the workspace as the
-// account describes it. Every change here is made in the account, and the organisation a link is
-// made in is the account's answer. A workspace never linked has no team and no way to invite anybody,
-// and the window is told rather than shown controls that cannot work.
+// linked resolves a workspace's account id and the caller. An unlinked workspace has no team, which
+// the window is told.
 func (s *Members) linked(
 	ctx context.Context,
 	workspaceID string,
@@ -253,9 +235,7 @@ func (s *Members) linked(
 // The shape that exists only for the window: the team of the workspace on screen. A member row is a
 // domain type and is not here.
 
-// Team is who is in one workspace and what is waiting to let more in. Every change returns the whole of
-// it again, so a window is always drawn from an answer the server has just given rather than a list
-// it patched itself.
+// Team is a workspace's members and invitations; every change returns it whole from the server.
 type Team struct {
 	// WorkspaceID is the workspace here, which is what the window asked with.
 	WorkspaceID string `json:"workspaceId"`
@@ -273,9 +253,8 @@ type Team struct {
 	Roles []domain.Role `json:"roles"`
 }
 
-// MemberServer is the account's side: who is in a workspace, what a person may do there, and the links that
-// let more in. Every method takes the caller, because the token is the account's own and expires
-// behind its door.
+// MemberServer is the account's member API. Every method takes the caller, since the token refreshes
+// behind the account.
 type MemberServer interface {
 	// Workspaces is the workspaces of the account. It is how the organisation a workspace stands in is read: an
 	// invitation is made in it, and the roles that may be handed out are its own.
@@ -311,11 +290,8 @@ type MemberServer interface {
 	Roles(ctx context.Context, caller domain.Caller, orgID, scope string) ([]domain.Role, error)
 }
 
-// The team of a workspace: who is in it, what a person may do there, and the links that let more in.
-//
-// Three services on the wire and one subject here: a window drawing a workspace's people asks all three
-// at once. Nothing here decides anything; whether somebody may be added, a link is good or a role
-// may be handed out is the server's to refuse, and what comes back is its answer worded.
+// The team of a workspace: members, roles and invite links. The server decides every rule; refusals
+// are returned worded.
 
 // Members is the people in a workspace.
 func (c *Client) Members(
@@ -424,10 +400,7 @@ func (c *Client) RemoveMember(
 	return err
 }
 
-// Leave takes the caller out of a workspace. It names nobody: the person leaving is the one asking,
-// which is the difference from `RemoveMember` (a right over another's place versus their own).
-// Whether they are the last one who may manage the workspace is a server rule, and its refusal travels
-// back as it is.
+// Leave takes the caller out of a workspace. Whether they are its last manager is the server's rule.
 func (c *Client) Leave(ctx context.Context, caller domain.Caller, workspaceID string) error {
 	_, err := callServer(c, ctx, caller,
 		func(ctx context.Context, conn *grpc.ClientConn) (
@@ -441,9 +414,7 @@ func (c *Client) Leave(ctx context.Context, caller domain.Caller, workspaceID st
 	return err
 }
 
-// Roles is the roles of an organisation in one scope: the ones a person may be given in a workspace, or
-// the ones they may hold in the org itself. This application asks for the first: it hands roles out
-// and does not write them.
+// Roles lists an organisation's roles in one scope; the app asks for workspace roles to hand out.
 func (c *Client) Roles(
 	ctx context.Context,
 	caller domain.Caller,
@@ -470,9 +441,7 @@ func (c *Client) Roles(
 	return out, nil
 }
 
-// Invites is the invitations an organisation has made. A workspace's own list is this one read for that
-// workspace: an invitation that names a workspace carries it, and the server answers one org at a time
-// because that is the scope a link is made in.
+// Invites lists an organisation's invitations; the server answers per organisation.
 func (c *Client) Invites(
 	ctx context.Context,
 	caller domain.Caller,
@@ -507,9 +476,7 @@ func (c *Client) Invites(
 	return out, nil
 }
 
-// Invite makes a link and returns it. The letter goes out inside this call when the invitation
-// names an address, which is why nothing here reports one: a letter that did not leave is not a
-// link that did not work.
+// Invite makes a link; the email goes out within the call, so a failed letter is not reported here.
 func (c *Client) Invite(
 	ctx context.Context,
 	caller domain.Caller,

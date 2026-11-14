@@ -5,11 +5,7 @@ import { findCollection } from './collectionTree'
 import { PASSWORD } from './layout'
 import type { Visibility } from '../stores/publications'
 
-/**
- * The sentence a problem is shown in. A problem is not a refusal — the page goes out without the
- * part — so what it says is which request it was about, and this is where the name the page could
- * not carry is put back beside the code's own wording.
- */
+/** Words a problem with the request name the page could not carry. */
 export function problemText(problem: Problem): string {
   const key = `errors.codes.${problem.code}`
   if (!te(key)) return ''

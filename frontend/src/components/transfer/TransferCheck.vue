@@ -25,6 +25,6 @@ defineProps<{ on: boolean }>()
 .box.on {
   background: var(--accent);
   box-shadow: none;
-  color: #fff;
+  color: var(--accent-text);
 }
 </style>

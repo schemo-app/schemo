@@ -84,6 +84,11 @@ export const RequestFailed = "request:failed";
 export const RequestFinished = "request:finished";
 
 /**
+ * Name of the custom event "request:stream-opened".
+ */
+export const RequestStreamOpened = "request:stream-opened";
+
+/**
  * Name of the custom event "run:finished".
  */
 export const RunFinished = "run:finished";

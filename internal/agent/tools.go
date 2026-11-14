@@ -10,12 +10,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// The tools an agent is offered. Every one answers from the Tools port, and the policy (which
-// workspaces, whether sending is allowed, whether a send is confirmed) is checked here where the
-// answers are composed, so no port implementation has to know what an agent may do.
-//
-// Names and descriptions are for the agent's model, so they are English and say what the tool
-// answers; what the person reads is the window's, worded in the catalogue.
+// The tools an agent is offered. The policy is checked here so no port needs to know what an agent
+// may do. Names and descriptions are for the model, so they stay English.
 
 const (
 	// maxHistoryLimit bounds a history answer: an agent does not need the whole workspace, and the
@@ -65,9 +61,7 @@ type sendOut struct {
 	Response Response `json:"response"`
 }
 
-// errNoWorkspace is the answer to a by-id question about a workspace the agent may not reach: the id is
-// real, and that is all it says. Whether the workspace exists for somebody else is not for an agent to
-// learn.
+// errNoWorkspace answers for a workspace the agent may not reach, without saying whether it exists.
 var errNoWorkspace = errors.New("that workspace is not one this agent may reach")
 
 // registerReadTools adds the four tools every agent is offered, whatever the policy is.

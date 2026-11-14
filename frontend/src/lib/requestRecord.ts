@@ -4,8 +4,9 @@ import type {
   HeaderPair,
   Record as RequestRecord,
 } from '../../bindings/schemo/internal/domain'
-import { formatBytes, formatDay } from '../i18n'
+import { formatBytes, formatDay, formatDuration, formatNumber, t } from '../i18n'
 import { splitAddress } from './address'
+import { protocolOf, requestLabel } from './protocol'
 
 /** How big a record's answer is, or a dash for one that carried nothing. */
 export function responseSize(record: Pick<RequestRecord, 'responseBody'>): string {
@@ -28,17 +29,35 @@ export function recordsByDay(records: RequestRecord[]): { day: number; label: st
   return groups
 }
 
+export function recordSize(record: RequestRecord): string {
+  const stream = protocolOf(record.protocol).stream
+  if (stream) return t(stream.count, record.messageCount ?? 0)
+  return record.responseBody?.size ? responseSize(record) : ''
+}
+
 export function matchesRecord(record: RequestRecord, query: string): boolean {
-  return `${record.method} ${record.url} ${record.status}`.toLowerCase().includes(query) ||
+  return `${requestLabel(record)} ${record.url} ${record.operation ?? ''} ${record.status}`.toLowerCase().includes(query) ||
     (record.agent ?? '').toLowerCase().includes(query)
 }
 
-export function isHttpError(record: RequestRecord): boolean {
+export function isRecordError(record: RequestRecord): boolean {
+  if (record.error) return true
+  if (protocolOf(record.protocol).status === 'grpc') return record.status !== 0
   return record.status >= 400 && record.status < 600
 }
 
-export function isSlow(record: RequestRecord): boolean {
-  return record.durationUs >= 1_000_000
+const MICROS_PER_SECOND = 1_000_000
+
+/** A request is slow from one second up. */
+export function isSlow(record: Pick<RequestRecord, 'durationUs'>): boolean {
+  return record.durationUs >= MICROS_PER_SECOND
+}
+
+/** A list row's duration: milliseconds, seconds once slow, or a note while still running. */
+export function durationLabel(record: Pick<RequestRecord, 'active' | 'durationUs'>): string {
+  if (record.active) return t('request.protocol.inProgress')
+  if (!isSlow(record)) return formatDuration(record.durationUs)
+  return `${formatNumber(record.durationUs / MICROS_PER_SECOND, 1)} ${t('units.s')}`
 }
 
 function recordEntry(record: RequestRecord, scope: string) {
@@ -46,7 +65,9 @@ function recordEntry(record: RequestRecord, scope: string) {
   const normalizedPath = path.split(/[?#]/, 1)[0]
     .replace(/\/(?:\d+|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?=\/|$)/gi, '/{id}') || '/'
   const origin = record.url.slice(0, record.url.length - path.length)
-  const key = JSON.stringify([scope, record.method, origin, normalizedPath, record.status, Boolean(record.error)])
+  const key = JSON.stringify([
+    scope, requestLabel(record), origin, normalizedPath, record.operation, record.status, Boolean(record.error), record.active,
+  ])
   return { record, host, path, normalizedPath, key }
 }
 
@@ -90,12 +111,14 @@ export type RecordView = Omit<
   cookieWrites: CookieWrite[]
   requestBody: string
   responseBody: string
+  /** The answer is bytes: Go keeps them, and the window offers to save them instead of reading them. */
+  responseBinary: boolean
 }
 
-/** Container for fetched request and response body contents. */
+/** A record's bodies as read: the references it came with, filled in where they had to be fetched. */
 export interface RecordBodies {
-  request?: string
-  response?: string
+  request?: BodyRef
+  response?: BodyRef
 }
 
 /** Transforms a raw record domain entity into a UI-ready RecordView representation. */
@@ -105,12 +128,13 @@ export function recordView(record: RequestRecord, bodies?: RecordBodies): Record
     requestHeaders: record.requestHeaders ?? [],
     responseHeaders: record.responseHeaders ?? [],
     cookieWrites: record.cookieWrites ?? [],
-    requestBody: bodies?.request ?? record.requestBody?.inline ?? '',
-    responseBody: bodies?.response ?? record.responseBody?.inline ?? '',
+    requestBody: (bodies?.request ?? record.requestBody)?.inline ?? '',
+    responseBody: (bodies?.response ?? record.responseBody)?.inline ?? '',
+    responseBinary: !!(bodies?.response ?? record.responseBody)?.binary,
   }
 }
 
 /** Checks if a non-empty body reference requires an asynchronous fetch to retrieve full content. */
 export function bodyMissing(ref: BodyRef | null | undefined): boolean {
-  return !!ref && ref.size > 0 && !ref.inline
+  return !!ref && ref.size > 0 && !ref.inline && !ref.binary
 }

@@ -6,9 +6,7 @@ import { hoveredVar } from '../../lib/varPeek'
 import { usePlatform } from '../../composables/usePlatform'
 import { t } from '../../i18n'
 
-// A variable as an input shows it: its own text on a tinted ground, no bigger than the text. It is
-// a picture and takes no pointer, so the field keeps every click and drag; which token the pointer
-// rests on is `v-var-peek`'s to say, and its tooltip says what stands in the variable.
+// Takes no pointer, so the field keeps every click; `v-var-peek` handles the tooltip.
 const { name, text, envId } = defineProps<{ name: string; text?: string; envId?: string }>()
 
 const environments = useEnvironmentsStore()

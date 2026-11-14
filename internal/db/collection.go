@@ -69,7 +69,7 @@ func (s *Store) Collections(ctx context.Context, workspaceID string) ([]domain.C
 			}
 			items[n.CollectionID] = append(items[n.CollectionID], domain.CollectionNode{
 				ID: n.ID, CollectionID: n.CollectionID, Name: n.Name, Position: n.Position,
-				Method: n.Method, Description: n.Description, Auth: n.Auth,
+				Method: n.Method, Protocol: n.Protocol, Description: n.Description, Auth: n.Auth,
 			})
 			continue
 		}
@@ -189,7 +189,7 @@ func (s *Store) ContentRows(ctx context.Context, collectionID string) ([]domain.
 			if err != nil {
 				return err
 			}
-			out = append(out, domain.LevelRow{ID: n.ID, Name: n.Name, Method: n.Method, URL: n.URL})
+			out = append(out, domain.LevelRow{ID: n.ID, Name: n.Name, Method: n.Method, Protocol: n.Protocol, URL: n.URL})
 		}
 		return nil
 	}

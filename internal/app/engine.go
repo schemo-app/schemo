@@ -17,24 +17,10 @@ type engineExecutor struct {
 var _ request.Executor = engineExecutor{}
 
 func (e engineExecutor) Execute(ctx context.Context, req request.Request) (*domain.Response, error) {
-	var jar request.EngineJar
 	if e.cookies.sending() {
-		jar = e.jar
+		req.Jar = e.jar
 	}
-	return e.engine.Do(ctx, request.Spec{
-		ID:        req.ID,
-		Method:    req.Method,
-		URL:       req.URL,
-		Headers:   req.Headers,
-		Body:      req.Body,
-		Digest:    req.Digest,
-		Workspace: req.Workspace,
-		Jar:       jar,
-	}), nil
-}
-
-func (e engineExecutor) Cancel(id string) bool {
-	return e.engine.Cancel(id)
+	return e.engine.Do(ctx, req), nil
 }
 
 type outbound struct {

@@ -9,13 +9,11 @@ import (
 	"schemo/internal/domain"
 )
 
-// The material behind a window and the palette it is drawn in are not reachable from the page,
-// since the platform owns the frame. The choice is therefore said twice: on the URL for the frame
-// before the first paint, and here for the frame already on screen.
+// The page cannot reach the window frame, so the look is passed twice: on the URL before the first
+// paint, and here for windows already open.
 
-// SetTheme is the one writer of the theme: the window on screen is re-tinted here and one not yet
-// created reads the choice from its URL. The tint is the platform's own (Windows repaints the frame
-// and shadow shortly after the call, macOS on its main thread), hence window first.
+// SetTheme re-tints open windows and records the theme for new ones' URLs. Windows first, since the
+// platforms repaint the frame asynchronously.
 func (h *Host) SetTheme(theme domain.Theme) {
 	h.theme.Store(string(theme))
 	h.tint(theme)
@@ -48,9 +46,8 @@ func (h *Host) tint(theme domain.Theme) {
 	}
 }
 
-// windowQuery is what goes on a window's URL: the pre-paint script reads it before the first frame,
-// which no IPC call can do. Both windows share one stylesheet, so the flag makes the same page the
-// ground of one window and the glass of another.
+// windowQuery is read by the pre-paint script before any IPC is possible; the flag tells the shared
+// stylesheet whether the window is glass.
 func (h *Host) windowQuery(translucent bool) string {
 	return encodeQuery(h.windowParams(translucent))
 }
@@ -116,9 +113,8 @@ func windowTheme(theme domain.Theme) application.Theme {
 	case domain.ThemeLight:
 		return application.Light
 	}
-	// Not SystemDefault: it leaves a window's attributes alone, and a window that never says which
-	// way it is dark gets the light ones, so the material would be tinted against the app. Set
-	// once, when the window is created.
+	// Not SystemDefault: a window that never says it is dark gets light attributes and a mis-tinted
+	// material. Set once at creation.
 	if systemIsDark() {
 		return application.Dark
 	}

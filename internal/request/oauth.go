@@ -13,9 +13,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// oauthConfig is the configuration all four grants share. Client authentication is the one thing
-// the user chooses, since no server can be guessed about; the two answers are the two styles the
-// library knows.
+// oauthConfig is shared by all four grants; the client authentication style is the user's choice.
 func oauthConfig(auth domain.Auth) oauth2.Config {
 	return oauth2.Config{
 		ClientID:     strings.TrimSpace(auth.Answer("clientId")),
@@ -106,13 +104,10 @@ func oauthToken(
 	}
 }
 
-// fetcher is the scheme's way of getting what it carries, called only by Materialize: the window
-// draws rows without asking anybody for anything. The exchange is passed in because the registry is
-// shared by every materializer, only some of which have a browser.
+// fetcher obtains a scheme's credential, called only by Materialize; the exchange is passed in because
+// not every materializer has a browser.
 type fetcher func(ctx context.Context, auth domain.Auth, exchange codeExchange) (token string,
 	expires time.Time, err error)
 
-// codeExchange is the two grants that need a browser: the user says yes at the provider and comes
-// back with a token. It is a function so the materializer can be built without one (a test, or a
-// build with no browser).
+// codeExchange runs a browser grant; a function so materializers can be built without one.
 type codeExchange func(ctx context.Context, auth domain.Auth) (string, time.Time, error)

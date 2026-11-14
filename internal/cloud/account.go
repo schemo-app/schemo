@@ -18,9 +18,8 @@ import (
 // TopicAccountChanged is published whenever the account state changes (sign-in, sign-out, etc.).
 const TopicAccountChanged = "account:changed"
 
-// Account is the account as the window sees it: who the app is signed in as, the sign-in itself,
-// and the devices it is signed in on. Every method returns the whole state, and every window is
-// told as well (see TopicChanged).
+// Account is the signed-in account, its sign-in flow and devices. Every method returns the whole
+// state, and windows are notified (see TopicChanged).
 type Account struct {
 	store       *db.Store
 	credentials Credentials
@@ -206,9 +205,7 @@ func (s *Account) saveSignedInAccount(ctx context.Context, stored domain.Account
 	return nil
 }
 
-// CheckServer asks whether the address is a server this app can sign in to, before anybody signs
-// in. Nothing is written and nobody is signed in: "look at it" and "keep it" are different clicks,
-// and the one that keeps is Begin.
+// CheckServer checks the address is a server this app can sign in to; nothing is stored (Begin keeps it).
 func (s *Account) CheckServer(ctx context.Context, address string) (AccountStatus, error) {
 	if err := s.server.Discover(ctx, serverAddressOrDefault(address)); err != nil {
 		return AccountStatus{}, err
@@ -290,9 +287,7 @@ type AccountStatus struct {
 	SignedIn    bool           `json:"signedIn"`
 	SessionOnly bool           `json:"sessionOnly"`
 	Account     domain.Account `json:"account"`
-	// Address is where the account actually talks: the stored choice, or the app's own server when
-	// nobody chose one. The stored row keeps "" for the default, while a panel link needs the
-	// address itself.
+	// Address is the server actually used: the stored choice, or the default, which the row stores as "".
 	Address string `json:"address"`
 	// Waiting indicates an active sign-in flow waiting for browser confirmation.
 	Waiting   bool             `json:"waiting"`
@@ -303,12 +298,8 @@ type AccountStatus struct {
 	Reachability Reachability `json:"reachability"`
 }
 
-// Reachability is what the last call to the server came to: whether the other side answered, and
-// when it last did. A failed attempt does not move that moment, since "last contact" is not "last
-// attempt". It is not part of the account, which is a row this app keeps: a server that is down is
-// weather, not a fact about the person.
-//
-// Checked tells "not asked yet" from "did not answer", which a window words differently.
+// Reachability is whether the server answered the last call and when it last did; a failed attempt
+// does not move LastContact. Checked tells "not asked yet" from "did not answer".
 type Reachability struct {
 	Checked   bool      `json:"checked"`
 	Reachable bool      `json:"reachable"`
@@ -322,15 +313,10 @@ type Credentials interface {
 	Delete(account domain.Account) error
 }
 
-// AccountServer is the other side: the OIDC endpoints a device signs in through and the API of the account
-// it signs in to. It is one interface for one server, because a caller can never have half of it.
-//
-// Every method takes the address it is about: the client underneath is stateless, and the same
-// process may talk to another server tomorrow.
+// AccountServer is the OIDC endpoints and the account API of one server. Every method takes the
+// address, since the client underneath is stateless.
 type AccountServer interface {
-	// Discover reads the server's discovery document and says whether the address is one this app
-	// can sign in to. A window checks an address with it before offering to sign in; it needs no
-	// account and creates nothing on the server.
+	// Discover checks the discovery document; it needs no account and creates nothing.
 	Discover(ctx context.Context, address string) error
 	// Authorize asks for a device code: what the person has to confirm, and where.
 	Authorize(ctx context.Context, address string, device domain.Device) (domain.Challenge, error)
@@ -346,9 +332,8 @@ type AccountServer interface {
 	EndSession(ctx context.Context, address, access, sessionID string) ([]domain.Session, error)
 	EndOthers(ctx context.Context, address, access string) ([]domain.Session, error)
 	SignOut(ctx context.Context, address, access string) error
-	// DeleteAccount purges the account and every session onto it. It is asked with nothing: the
-	// address the server would check the act against is one this app already holds, and making the
-	// person type it back would only add friction.
+	// DeleteAccount purges the account and its sessions; the app confirms in its own window instead of
+	// asking for the address.
 	DeleteAccount(ctx context.Context, address, access string) error
 }
 

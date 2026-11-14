@@ -132,9 +132,7 @@ func detach(ctx context.Context, tx *writeTx, key string) error {
 	return nil
 }
 
-// forgetVersions sets every row of a workspace back to a version nobody has agreed on. The versions
-// were the old account's, and a push at one of them to a server holding nothing of the row would be
-// a change of a version nobody has; at none, it is a creation.
+// forgetVersions clears row versions from the previous account, so the next push creates them.
 func forgetVersions(ctx context.Context, tx *writeTx, workspaceID string) error {
 	for _, statement := range []string{
 		`UPDATE workspaces SET version = ? WHERE id = ?`,
@@ -147,9 +145,7 @@ func forgetVersions(ctx context.Context, tx *writeTx, workspaceID string) error 
 	return nil
 }
 
-// Wipe removes every workspace of an account key with all that stands in them, and forgets the key as
-// the one this installation works as, leaving the work that never belonged to an account. A key
-// naming nothing erases nothing and is not a failure.
+// Wipe removes an account key's workspaces and forgets the key; an unknown key erases nothing.
 func (s *Store) Wipe(ctx context.Context, key string) (int, error) {
 	if key == "" {
 		return 0, nil
@@ -226,9 +222,7 @@ func (s *Store) owedNothing(ctx context.Context, key string) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// Adopt takes what the account says about a workspace this device is already paired with: what it is
-// for and what this person may do in it. Both are the server's answers and arrive together. It
-// reports whether the row moved, which is what the windows redraw on.
+// Adopt stores the account's kind and access for a paired workspace and reports whether the row changed.
 func (s *Store) Adopt(
 	ctx context.Context, workspaceID string, remote domain.RemoteWorkspace,
 ) (bool, error) {

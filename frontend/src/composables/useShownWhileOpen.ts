@@ -1,9 +1,6 @@
 import { shallowRef, toValue, watchEffect, type MaybeRefOrGetter, type Ref } from 'vue'
 
-/**
- * Preserves the last visible value while the dialog is closing.
- * Updates the value only while the dialog is open.
- */
+/** Keeps the last value while the dialog animates closed. */
 export function useShownWhileOpen<T>(
   open: MaybeRefOrGetter<boolean>,
   read: () => T

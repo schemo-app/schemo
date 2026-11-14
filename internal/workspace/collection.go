@@ -37,27 +37,21 @@ func (s *Collections) Tree(ctx context.Context) ([]domain.Collection, error) {
 	return s.store.Collections(ctx, workspace)
 }
 
-// TreeOf is the tree of one named workspace, for a reader that is not the window: the MCP server reads
-// workspaces the window is not showing, and switching the app there to read them would move the window
-// under somebody's cursor.
+// TreeOf is a named workspace's tree, for the MCP server, without switching the window.
 //
 //wails:ignore
 func (s *Collections) TreeOf(ctx context.Context, workspace string) ([]domain.Collection, error) {
 	return s.store.Collections(ctx, workspace)
 }
 
-// WorkspaceOf is which workspace a collection belongs to, asked by a reader that reached the id from
-// outside: the MCP server checks the answer against what an agent may reach before it reads or
-// sends anything of it.
+// WorkspaceOf names a collection's workspace, so the MCP server can check an agent may reach it.
 //
 //wails:ignore
 func (s *Collections) WorkspaceOf(ctx context.Context, collectionID string) (string, error) {
 	return s.store.WorkspaceOf(ctx, collectionID)
 }
 
-// PathOf is the collections from the asked one up to the root of its workspace, the asked one first and
-// each said by its name alone: a page is a whole tree, so the page a folder sits inside of is found
-// by walking up. An id the tree never meets returns nothing rather than a refusal.
+// PathOf lists the collections from id up to the root, id first; an unknown id returns nothing.
 //
 //wails:ignore
 func (s *Collections) PathOf(ctx context.Context, workspace, id string) ([]domain.Collection, error) {
@@ -88,9 +82,8 @@ func (s *Collections) Node(ctx context.Context, id string) (domain.CollectionNod
 	return s.store.Node(ctx, id)
 }
 
-// Contents reads the requests a collection holds, as its page draws them: a name, a method, an
-// address and the folder each sits in. It covers everything inside the collection, not the level
-// alone: the table is what running the collection would send, and a run reaches the whole subtree.
+// Contents lists every request under a collection (what a run would send) with name, method, address
+// and folder.
 func (s *Collections) Contents(ctx context.Context, collectionID string) ([]domain.LevelRow, error) {
 	return s.store.ContentRows(ctx, collectionID)
 }
@@ -141,12 +134,8 @@ func (s *Collections) requireCollection(ctx context.Context, workspace, id strin
 	return nil
 }
 
-// CreateCollection adds an empty collection at the end of a level. The name is given rather than
-// invented: the window asks for it in the tree. The level is the top of the tree when parentID is
-// empty, and the collection it names otherwise; a folder inside a folder is a collection inside
-// one. The created row comes back with the tree for the reason CreateNode's does: the id is Go's to
-// mint, and a lookup by name would find the older row of the same name (a folder's name is not
-// unique, even within one level).
+// CreateCollection adds an empty collection at the end of a level (the top when parentID is empty).
+// It returns the new row, since names are not unique and the id is Go's.
 func (s *Collections) CreateCollection(
 	ctx context.Context,
 	name string,
@@ -197,10 +186,7 @@ func (s *Collections) CreateCollection(
 	return created, nil
 }
 
-// CreateNode adds a request to the end of a collection's level.
-//
-// It returns the row that appeared and the tree it appeared in: the window needs the id Go minted,
-// and looking it up by name afterwards would find the older row of the same name.
+// CreateNode adds a request at the end of a level and returns the new row with the tree.
 func (s *Collections) CreateNode(
 	ctx context.Context,
 	in RequestDraft,
@@ -232,6 +218,8 @@ func (s *Collections) CreateNode(
 		Name:          name,
 		Description:   description,
 		Position:      position,
+		Protocol:      in.Protocol,
+		Options:       in.Options,
 		Method:        defaultMethod(in.Method),
 		URL:           strings.TrimSpace(in.URL),
 		Params:        domain.OrEmpty(in.Params),
@@ -242,10 +230,7 @@ func (s *Collections) CreateNode(
 		Form:          withFormIDs(s.ids, in.Form),
 		BodyFile:      in.BodyFile,
 		EnvironmentID: in.EnvironmentID,
-		// The auth is stored the way the tree keeps one: "None" with nothing behind it is a level
-		// nobody has answered at, and storing it as a value would make a request saved from the
-		// command line stop inheriting. That is not what "None" means there, where nothing is above
-		// it and the chip offers no "Inherit" to pick instead.
+		// Stored as the tree keeps it: a bare "None" would stop a command-line request inheriting.
 		Auth: storedAuth(in.Auth),
 	}
 	if err := s.store.SaveNode(ctx, node); err != nil {
@@ -254,9 +239,7 @@ func (s *Collections) CreateNode(
 	return node, nil
 }
 
-// Move puts a collection or request where it was dropped. The position counts the level the way
-// the tree draws it (requests and collections are one list); an empty parent is the top level,
-// which only a collection can take.
+// Move drops a row at a position counted over the level's mixed list; only a collection may go to the top.
 func (s *Collections) Move(ctx context.Context, id, parentID string, position int64) error {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -367,9 +350,8 @@ func (s *Collections) Update(ctx context.Context, id string, patch CollectionPat
 		})
 }
 
-// editRow changes the collection the id names or, when it names none, the request of that id: the
-// two share one id workspace, and a caller does not say which it means. Either way it returns the whole
-// tree.
+// editRow edits the collection with that id or else the request (they share an id space) and returns
+// the tree.
 func (s *Collections) editRow(
 	ctx context.Context,
 	id string,
@@ -430,9 +412,7 @@ func (s *Collections) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// SaveNode writes what the card was editing back into the tree. The node is re-read first: the
-// parts the card does not own (where it sits, when it was made) belong to the tree and stay as they
-// are.
+// SaveNode writes the card's edits back, keeping the tree-owned fields (position, creation time).
 //
 //wails:ignore
 func (s *Collections) SaveNode(
@@ -454,15 +434,14 @@ func (s *Collections) SaveNode(
 	if err != nil {
 		return err
 	}
+	stored.Protocol, stored.Options = edited.Protocol, edited.Options
 	stored.Method = defaultMethod(edited.Method)
 	stored.URL = edited.URL
 	stored.Params = domain.OrEmpty(edited.Params)
 	stored.Headers = domain.OrEmpty(edited.Headers)
 	stored.PathParams = domain.OrEmpty(edited.PathParams)
 	stored.Body = edited.Body
-	// What the body was composed as travels with the text: a form and a file are fields of their
-	// own in the model, and a save that wrote the text without them would turn a multipart request
-	// back into raw text the next time it was opened.
+	// Keep the body kind, or a multipart request would reopen as raw text.
 	stored.BodyKind = domain.KindOf(edited.BodyKind)
 	stored.Form = domain.OrEmpty(edited.Form)
 	stored.BodyFile = edited.BodyFile
@@ -527,14 +506,14 @@ type CollectionPatch struct {
 	Variables   *[]domain.Variable `json:"variables,omitempty"`
 }
 
-// RequestDraft is what the tree asks for when a row is created: where it goes and what is already
-// known about the request. A request made by hand arrives with its method only and the next card
-// fills in the rest, while one saved from the command line is a whole request; building it empty
-// first would leave a node with no address if the second step failed.
+// RequestDraft is a new row's place and what is known of it; a whole request is saved in one step so
+// a failure cannot leave a node without an address.
 type RequestDraft struct {
-	CollectionID string `json:"collectionId"`
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
+	Protocol     domain.Protocol         `json:"protocol,omitempty"`
+	Options      *domain.ProtocolOptions `json:"options,omitempty"`
+	CollectionID string                  `json:"collectionId"`
+	Name         string                  `json:"name"`
+	Description  string                  `json:"description,omitempty"`
 
 	Method     string           `json:"method,omitempty"`
 	URL        string           `json:"url,omitempty"`

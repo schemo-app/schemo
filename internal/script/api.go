@@ -10,9 +10,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// runState is one script's run: the runtime, what the script was given, and the report being
-// written as it goes. The prelude builds `pm` out of the bridge and then deletes the bridge, so
-// this is the only way in or out of the sandbox.
+// runState is one script's run. The prelude builds `pm` on the bridge and deletes it, so this is the
+// only way in or out of the sandbox.
 type runState struct {
 	vm  *goja.Runtime
 	in  domain.ScriptInput
@@ -24,9 +23,8 @@ type runState struct {
 	testsCapped bool
 }
 
-// bridge installs the way out of the sandbox and runs the prelude over it. A prelude that does not
-// compile or run is a bug in this package, not in a user's script, and comes back as a failed run:
-// a broken report beats a crash.
+// bridge installs the bridge and runs the prelude; a prelude failure is a bug here and returns as a
+// failed run, not a crash.
 func (s *runState) bridge() error {
 	program, err := preludeProgram()
 	if err != nil {
@@ -60,9 +58,7 @@ func (s *runState) bridge() error {
 	return nil
 }
 
-// get reads a variable. `variables` is the run's own scope and looks through the environment and
-// globals after it; the other two are read alone, which tells a script whether a name is set in the
-// environment or only borrowed.
+// get reads a variable: `variables` falls back to environment and globals, the others read one scope.
 func (s *runState) get(call goja.FunctionCall) goja.Value {
 	if s.in.Variables == nil {
 		return goja.Undefined()
@@ -131,9 +127,7 @@ func (s *runState) test(call goja.FunctionCall) goja.Value {
 		}
 		result.Passed, result.Error = false, messageOf(err)
 	} else if isThenable(returned) {
-		// `pm.test('...', async () => ...)` would otherwise pass without checking anything: an
-		// assertion inside an async function throws into a promise nobody waits for, and the
-		// sandbox has nothing to wait with.
+		// An async test would pass unchecked: its assertions throw into a promise nothing awaits.
 		result.Passed = false
 		result.Error = "the test waits for a promise, and there is nothing to wait for in the " +
 			"sandbox: no timers, no network"
@@ -149,9 +143,7 @@ func (s *runState) skip(goja.FunctionCall) goja.Value {
 	return goja.Undefined()
 }
 
-// readBack takes what the script left the request in. A field it never touched reads as undefined
-// and leaves the request as it was, which differs from the empty string: a script that sets a body
-// to nothing means it.
+// readBack applies the script's edits; an untouched field reads undefined and is kept, unlike "".
 func (s *runState) readBack(request *domain.ScriptRequest) {
 	if request == nil {
 		return
@@ -166,9 +158,7 @@ func (s *runState) readBack(request *domain.ScriptRequest) {
 	if value := object.Get("url"); isText(value) {
 		request.URL = value.String()
 	}
-	// The byte kinds are shown nothing, so reading the body back would overwrite the request's real
-	// encoding with that nothing: a script that never mentioned the body would silently empty an
-	// upload.
+	// Byte kinds were shown nothing; reading that back would empty an upload.
 	if !isByteKind(request.BodyKind) {
 		if value := object.Get("body"); isText(value) {
 			request.Body = value.String()
@@ -195,9 +185,7 @@ func messageOf(err error) string {
 	return value.String()
 }
 
-// failure is what a broken script says about itself: the message it threw and where, since the
-// script's own line is what has to be fixed. A script that ran out of time says that instead: it is
-// the sandbox closing, not a mistake in the script.
+// failure is the thrown message with its location, or the timeout, which is not the script's mistake.
 func (s *runState) failure(err error) string {
 	var interrupted *goja.InterruptedError
 	if errors.As(err, &interrupted) {
@@ -238,11 +226,8 @@ func (s *runState) member(names ...string) *goja.Object {
 	return nil
 }
 
-// scriptBody is the body a script is shown.
-//
-// Text kinds are their text, which a script may rewrite. Byte kinds are nothing: a multipart body
-// is a wire encoding and a file's bytes in a JavaScript string come back corrupted. The encoding
-// itself is untouched either way, so a script sees less than the request carries.
+// scriptBody is the body a script sees: text kinds as text, byte kinds as nothing, since bytes in a
+// JavaScript string come back corrupted.
 func scriptBody(request *domain.ScriptRequest) string {
 	if isByteKind(request.BodyKind) {
 		return ""

@@ -58,9 +58,8 @@ type FiltersFrame struct {
 	Filters domain.CaptureFilters `json:"filters"`
 }
 
-// SettingsFrame carries the two switches of the extension section to the extension: whether it
-// connects on its own when both sides are running, and whether it re-arms the addresses capture was
-// armed on after the browser restarts. The extension carries them out.
+// SettingsFrame carries the extension switches: whether to connect on its own, and whether to re-arm
+// capture after a browser restart.
 type SettingsFrame struct {
 	Type         string `json:"type"`
 	AutoConnect  bool   `json:"autoConnect"`

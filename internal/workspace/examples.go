@@ -9,10 +9,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// SaveExamples writes the answers kept beside a request. The whole set arrives as the pane holds
-// it, in order; only a request has them, so a collection answers not-found like any unknown id.
-// Nothing in an example is refused: a status the server never sent and a body that is not JSON are
-// both things a person may write down.
+// SaveExamples writes a request's examples in order; any status or body is accepted.
 func (s *Collections) SaveExamples(
 	ctx context.Context,
 	id string,

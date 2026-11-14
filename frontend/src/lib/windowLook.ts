@@ -14,9 +14,7 @@ export function markPlatform(): void {
   }
 }
 
-// The frame's own choices, written on a window's address by Go when it was made: the accent, the
-// scale and the code's font. A window that takes its look from here draws itself without asking the
-// settings, which is what a window showing a picture and a version wants.
+// Look settings Go writes on a window's address, for windows that draw without loading settings.
 
 /** The four choices, as the settings carry them. */
 export interface WindowLook {

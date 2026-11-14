@@ -4,9 +4,6 @@ import type { Workspace } from '../../../bindings/schemo/internal/domain'
 import { tintOf } from '../../lib/workspacePalette'
 import { workspaceInitial } from '../../stores/workspaces'
 
-// The square with a letter in it, in the two sizes the titlebar pill and a row of the switcher ask
-// for, a shade apart. The square itself (the letter, its centring, the white) is `letter-square` in
-// the stylesheet.
 const {
   workspace,
   size = 'md',

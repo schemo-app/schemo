@@ -109,11 +109,8 @@ func workspaceEntity(
 		createdAt, updatedAt, payload), true, nil
 }
 
-// recordEntity is one sent request with everything that hangs off it: the bodies, the run that
-// produced it and what the code around it reported.
-//
-// It is one payload because it is one document (a report without its record is a report of nothing)
-// and the only heavy one: two bodies at the size of a download.
+// recordEntity is one sent request with its bodies, run and script reports: one document, and the
+// only heavy one.
 func recordEntity(
 	ctx context.Context,
 	q querier,

@@ -5,12 +5,14 @@ import { History } from '../../../bindings/schemo/internal/request'
 import { callOrToast } from '../../lib/calls'
 import { useCaptureStore } from '../../stores/capture'
 import { useRecordsStore } from '../../stores/records'
-import { methodInkClass } from '../../lib/format'
+import { methodInkClass, metaLine } from '../../lib/format'
+import { protocolOf, requestLabel } from '../../lib/protocol'
 import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
-import { isHttpError, isSlow, matchesRecord, repeatedRecordsByDay, responseSize } from '../../lib/requestRecord'
-import { daysAgo, formatClock, formatDuration, formatNumber, t } from '../../i18n'
+import { durationLabel, isSlow, recordSize } from '../../lib/requestRecord'
+import { daysAgo, formatClock, t } from '../../i18n'
 import { useHarExport } from '../../composables/useHarExport'
 import { useLoadOlder } from '../../composables/useLoadOlder'
+import { useRecordFilter } from '../../composables/useRecordFilter'
 import { useToast } from '../../composables/useToast'
 import Icon from '../ui/Icon.vue'
 import Segment from '../ui/Segment.vue'
@@ -30,7 +32,6 @@ type Source = typeof records.historySource
 type ClearMessage = 'clearedShown' | 'clearedOlder'
 
 const clearOpen = ref(false)
-const expandedRepeats = ref(new Set<string>())
 
 const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
 
@@ -47,43 +48,30 @@ function sourceOf(record: RequestRecord): Exclude<Source, 'all'> {
   return record.source === RecordSource.SourceBrowser ? 'browser' : 'manual'
 }
 
-function duration(record: RequestRecord): string {
-  if (!isSlow(record)) return formatDuration(record.durationUs)
-  return `${formatNumber(record.durationUs / 1_000_000, 1)} ${t('units.s')}`
+function failedWithoutStatus(record: RequestRecord): boolean {
+  return !!record.error && !(protocolOf(record.protocol).status && record.statusText)
 }
 
-const matching = computed(() => {
-  const query = records.historyQuery.trim().toLowerCase()
-  const selectedSource = records.historySource
-  const session = records.sessionFilter
-
-  return records.records.filter(
-    record =>
-      (selectedSource === 'all' || sourceOf(record) === selectedSource) &&
-      (!session || tabKeyOf(record) === session) &&
-      (!query || matchesRecord(record, query)),
-  )
+const { errorCount, slowCount, rows, groups, toggleRepeat, collapseRepeats } = useRecordFilter({
+  records: () => records.records,
+  query: () => records.historyQuery,
+  errorsOnly: () => records.historyErrorsOnly,
+  slowOnly: () => records.historySlowOnly,
+  keep: record =>
+    (records.historySource === 'all' || sourceOf(record) === records.historySource) &&
+    (!records.sessionFilter || tabKeyOf(record) === records.sessionFilter),
 })
 
-const errorCount = computed(() => matching.value.filter(isHttpError).length)
-const slowCount = computed(() => matching.value.filter(isSlow).length)
-const filtered = computed(() => matching.value.filter(record =>
-  (!records.historyErrorsOnly || isHttpError(record)) &&
-  (!records.historySlowOnly || isSlow(record))
-))
-
-const rowsByDay = computed(() => repeatedRecordsByDay(filtered.value, expandedRepeats.value))
-
 const count = computed(() =>
-  filtered.value.length === records.records.length
-    ? t('history.requestsN', { n: filtered.value.length })
+  rows.value.length === records.records.length
+    ? t('history.requestsN', { n: rows.value.length })
     : t('history.countOf', {
-      shown: filtered.value.length,
+      shown: rows.value.length,
       total: records.records.length,
     }),
 )
 
-const hidden = computed(() => records.records.length - filtered.value.length)
+const hidden = computed(() => records.records.length - rows.value.length)
 
 const older = computed(() =>
     records.records.filter((record) => daysAgo(record.startedAt) > 0),
@@ -126,7 +114,7 @@ const liveLine = computed(() => {
     }))
   }
 
-  return parts.join(' · ')
+  return metaLine(...parts)
 })
 
 const sourceIcons = { manual: 'MousePointer2', browser: 'Globe', mcp: 'Asterisk' } as const
@@ -144,11 +132,6 @@ function select(id: string, event: MouseEvent) {
   void records.selectRecord(id, event.metaKey || event.ctrlKey)
 }
 
-function toggleRepeat(id: string) {
-  if (expandedRepeats.value.has(id)) expandedRepeats.value.delete(id)
-  else expandedRepeats.value.add(id)
-}
-
 // The store tells the person when the rows could not be deleted, so only a deletion that happened
 // is announced here.
 async function clearRecords(ids: string[], message: ClearMessage) {
@@ -161,7 +144,7 @@ async function clearRecords(ids: string[], message: ClearMessage) {
 
 function clearShown() {
   return clearRecords(
-      filtered.value.map((record) => record.id),
+      rows.value.map((record) => record.id),
       'clearedShown',
   )
 }
@@ -183,14 +166,14 @@ const onScroll = () => loadIfNearEnd(scrollEl.value)
 
 // Filters and collapsed runs can leave no scrollbar even when older records are available.
 onMounted(onScroll)
-watch(rowsByDay, onScroll, { flush: 'post' })
+watch(groups, onScroll, { flush: 'post' })
 watch(() => [
   records.historyQuery, records.historySource, records.sessionFilter,
   records.historyErrorsOnly, records.historySlowOnly,
 ], () => {
   if (scrollEl.value) scrollEl.value.scrollTop = 0
 })
-watch(() => records.workspaceId, () => expandedRepeats.value.clear())
+watch(() => records.workspaceId, collapseRepeats)
 </script>
 
 <template>
@@ -264,12 +247,12 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
             <div class="hist-menu-head">{{ t('history.clearHead') }}</div>
 
             <DropdownMenuItem
-                v-if="filtered.length && hidden"
+                v-if="rows.length && hidden"
                 class="hist-menu-item"
                 @select="clearShown"
             >
               <span>{{ t('history.clearShown') }}</span>
-              <span class="hist-menu-count">{{ filtered.length }}</span>
+              <span class="hist-menu-count">{{ rows.length }}</span>
             </DropdownMenuItem>
 
             <DropdownMenuItem
@@ -282,7 +265,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
             </DropdownMenuItem>
 
             <DropdownMenuSeparator
-                v-if="(filtered.length && hidden) || older.length"
+                v-if="(rows.length && hidden) || older.length"
                 class="hist-menu-sep"
             />
 
@@ -326,7 +309,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
     </div>
 
     <div ref="scrollEl" class="hist-scroll" @scroll.passive="onScroll">
-      <template v-for="group in rowsByDay" :key="group.day">
+      <template v-for="group in groups" :key="group.day">
         <div class="hist-group">
           <span>{{ group.label }}</span>
           <span>· {{ group.count }}</span>
@@ -341,13 +324,16 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
           :aria-expanded="row.repeatCount ? row.expanded : undefined"
           @click="row.repeatCount ? toggleRepeat(row.record.id) : select(row.record.id, $event)"
         >
-          <span class="hist-method" :class="methodInkClass(row.record.method)">
-            {{ row.record.method }}
+          <span class="hist-method" :class="methodInkClass(requestLabel(row.record))">
+            {{ requestLabel(row.record) }}
           </span>
 
           <span class="hist-addr">
             <span class="hist-url" :title="row.repeatCount ? undefined : row.record.url">
               <span class="hist-host">{{ row.host }}</span>{{ row.path === '/' ? '' : row.path }}
+            </span>
+            <span v-if="row.record.operation" class="hist-operation" :title="row.record.operation">
+              {{ row.record.operation }}
             </span>
             <span
               v-if="row.repeatCount"
@@ -360,15 +346,18 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
           </span>
 
           <span class="hist-status">
-            <StatusBadge :status="row.record.status" :failed="!!row.record.error" />
+            <StatusBadge
+              :status="row.record.status" :protocol="row.record.protocol" :failed="failedWithoutStatus(row.record)"
+              :status-text="row.record.statusText" :title="row.record.statusText"
+            />
           </span>
 
           <span class="hist-metrics">
             <span v-if="!row.expanded" :class="{ slow: !row.repeatCount && isSlow(row.record) }">
-              {{ duration(row.record) }}
+              {{ durationLabel(row.record) }}
             </span>
-            <span v-if="!row.repeatCount && row.record.responseBody?.size" class="hist-size">
-              · {{ responseSize(row.record) }}
+            <span v-if="!row.repeatCount && !row.record.active && recordSize(row.record)" class="hist-size">
+              · {{ recordSize(row.record) }}
             </span>
           </span>
           <span class="hist-source" :title="sourceText(row.record)">
@@ -379,7 +368,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
         </button>
       </template>
 
-      <div v-if="!rowsByDay.length && !records.olderLoading" class="hist-empty">
+      <div v-if="!groups.length && !records.olderLoading" class="hist-empty">
         {{ records.records.length ? t('common.nothingFound') : t('history.empty') }}
       </div>
 
@@ -664,6 +653,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 
 .hist-scroll {
   @apply flex-1 min-h-0 overflow-auto;
+  container-type: inline-size;
   padding: 0 0.5rem 1.25rem;
 }
 
@@ -708,7 +698,8 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 }
 
 .hist-addr {
-  @apply flex items-center min-w-0;
+  @apply flex items-baseline min-w-0;
+  overflow: hidden;
   gap: 0.5rem;
 }
 
@@ -720,6 +711,11 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 
 .hist-host {
   color: var(--text-tertiary);
+}
+
+.hist-operation {
+  @apply flex-none truncate text-text-secondary;
+  max-width: 55%;
 }
 
 .hist-repeat {
@@ -739,7 +735,7 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 }
 
 .hist-status {
-  @apply flex justify-end;
+  @apply flex justify-end min-w-0;
 }
 
 .hist-metrics,
@@ -763,6 +759,17 @@ watch(() => records.workspaceId, () => expandedRepeats.value.clear())
 .hist-source {
   @apply flex justify-center;
   color: var(--text-tertiary);
+}
+
+@container (max-width: 31.25rem) {
+  .hist-row {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem min(8rem, 26%) var(--clock-width);
+    column-gap: 0.375rem;
+  }
+
+  .hist-source {
+    display: none;
+  }
 }
 
 .hist-empty {

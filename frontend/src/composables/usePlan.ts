@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
 import { Plan as PlanService } from '../../bindings/schemo/internal/cloud'
-import type { Plan } from '../../bindings/schemo/internal/domain'
-import { TIER_FREE } from '../lib/onboardingFeatures'
+import type { Feature, Plan } from '../../bindings/schemo/internal/domain'
+
+/** The tier a device works on when nobody has bought anything, in the server's vocabulary. */
+export const TIER_FREE = 'free'
 
 // Cached subscription plan state shared across the UI
 const held = ref<Plan | null>(null)
@@ -11,11 +13,8 @@ export function usePlan() {
   /** True if subscription tier metadata has been loaded. */
   const known = computed(() => !!held.value?.tier)
 
-  /**
-   * Checks whether the current plan includes the specified feature flag.
-   * Returns true when plan state is unknown.
-   */
-  function includes(feature: string): boolean {
+  /** True when the plan includes the feature, or while the plan is unknown. */
+  function includes(feature: Feature): boolean {
     if (!known.value) return true
     return held.value?.features?.includes(feature) ?? false
   }

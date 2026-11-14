@@ -7,7 +7,8 @@ import { useCollectionsStore } from '../../stores/collections'
 import { useWorkspaceSnapshot } from '../../composables/useWorkspaceSnapshot'
 import { callOrToast } from '../../lib/calls'
 import { findNode } from '../../lib/collectionTree'
-import { methodInkClass } from '../../lib/format'
+import { hasResponseStatus, methodInkClass, metaLine } from '../../lib/format'
+import { protocolOf, requestLabel } from '../../lib/protocol'
 import { formatDate, formatMicros, t } from '../../i18n'
 import Icon from '../ui/Icon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
@@ -61,7 +62,9 @@ const results = computed(() => {
     return {
       result,
       name: request?.name ?? t('collections.deletedRequest'),
-      method: request?.method ?? '',
+      method: request ? requestLabel(request) : '',
+      protocol: request?.protocol,
+      statusText: result.status != null && protocolOf(request?.protocol).status === 'grpc' ? String(result.status) : undefined,
       failed: !result.skipped && (!result.ok || result.assertionsPassed < result.assertionsTotal),
     }
   })
@@ -74,7 +77,7 @@ function whenOf(item: CollectionRun): string {
 }
 
 function metaOf(item: CollectionRun): string {
-  return [item.environment || t('titlebar.noEnvironment'), item.durationUs ? formatMicros(item.durationUs) : ''].filter(Boolean).join(' · ')
+  return metaLine(item.environment || t('titlebar.noEnvironment'), item.durationUs ? formatMicros(item.durationUs) : '')
 }
 
 function summaryOf(item: CollectionRun): string {
@@ -141,7 +144,7 @@ function open(result: CollectionRunResult) {
       <span class="text-right">{{ t('history.colTime') }}</span>
     </div>
 
-    <div v-for="{ result, method, name, failed } in visible" :key="result.position" class="run-row" @click="open(result)">
+    <div v-for="{ result, method, name, failed, protocol, statusText } in visible" :key="result.position" class="run-row" @click="open(result)">
       <span class="font-mono text-12 font-bold" :class="methodInkClass(method)">{{ method }}</span>
       <button type="button" class="run-request" :title="name" @click.stop="open(result)">{{ name }}</button>
       <span class="run-tests">
@@ -172,7 +175,10 @@ function open(result: CollectionRunResult) {
         <span v-else class="run-meta">—</span>
       </span>
       <span>
-        <StatusBadge v-if="result.status" :status="result.status" />
+        <StatusBadge
+          v-if="result.status != null && hasResponseStatus(result.status, protocol, statusText)"
+          :status="result.status" :protocol :status-text="statusText"
+        />
         <span v-else class="run-meta" :class="{ 'run-test-error': failed }">
           {{ result.skipped ? t('collections.skippedShort') : failed ? t('collections.failed') : '—' }}
         </span>

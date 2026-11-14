@@ -2,26 +2,20 @@ package desktop
 
 import "github.com/wailsapp/wails/v3/pkg/application"
 
-// MenuLabels are the few words the native menu needs. They arrive from the window because the
-// system draws the menu and only the page knows the language; a second catalogue here would drift
-// from the one the rest of the app reads.
+// MenuLabels are the native menu's words, sent by the window so there is only one catalogue.
 type MenuLabels struct {
 	About       string `json:"about"`
 	File        string `json:"file"`
 	Settings    string `json:"settings"`
 	CloseWindow string `json:"closeWindow"`
-	// SettingsKey and UpdateKey are the accelerators the two commands wear, in this platform's own
-	// words ("CmdOrCtrl+,"). The window resolves what a command is bound to and the system draws
-	// the menu, so they meet here: "" is a window that has not said yet (the default stands) and
-	// "none" is an unassigned command.
+	// SettingsKey and UpdateKey are the commands' accelerators ("CmdOrCtrl+,"): "" keeps the
+	// default and "none" means unassigned.
 	SettingsKey  string `json:"settingsKey"`
 	CheckUpdates string `json:"checkUpdates"`
 	UpdateKey    string `json:"updateKey"`
 }
 
-// EnglishMenuLabels is what the bar carries before a window has said what language it is in: the
-// menu is built before any window exists, and a bar with no words is worse than one in the wrong
-// language for a second. The first window that answers replaces the whole set.
+// EnglishMenuLabels label the menu built before any window has sent its language.
 func EnglishMenuLabels() MenuLabels {
 	return MenuLabels{
 		About:        "About",
@@ -32,9 +26,8 @@ func EnglishMenuLabels() MenuLabels {
 	}
 }
 
-// MenuRow is one line of the menu the window drew for itself, sent so the system's bar can carry
-// the same lines. Go draws the line and hands its ID back when it is picked; what the row does is
-// the window's, so a row with no command of its own (a theme, a zoom) is no different here.
+// MenuRow is a row of the window's drawn menu, mirrored in the system bar; picking it hands its ID
+// back to the window.
 type MenuRow struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`
@@ -43,23 +36,16 @@ type MenuRow struct {
 	Disabled bool   `json:"disabled"`
 }
 
-// MenuGroup is one submenu of that menu. Its ID names the submenu of the bar the rows land in
-// ("file", "edit", "view", "go", "help") and its sections are the rows, cut where the window drew a
-// rule. Where the system's own menu is the working one (Edit) the rows are added to it; a group the
-// system carries whole is not sent.
+// MenuGroup is one submenu, addressed by ID ("file", "edit", "view", "go", "help"); sections are
+// split where the window drew a rule. Rows join the system's own Edit menu.
 type MenuGroup struct {
 	ID       string      `json:"id"`
 	Label    string      `json:"label"`
 	Sections [][]MenuRow `json:"sections"`
 }
 
-// BuildMenu is the native menu for the platforms that do not draw their own title bar. It is built
-// again whenever the window sends new labels or rows, which is why it takes them rather than
-// reading them.
-//
-// The application menu has about, the update check and the settings above services and hiding, with
-// quit at the foot. Below it is macOS's own order (File, Edit, View, Go, Window, Help); groups are
-// addressed by ID so the window's order is kept, and a group with no rows is not drawn.
+// BuildMenu builds the native menu where the system draws the title bar. It is rebuilt whenever the
+// window sends labels or rows; groups follow macOS order and empty ones are skipped.
 func BuildMenu(host *Host, name string, labels MenuLabels, groups []MenuGroup) *application.Menu {
 	menu := application.NewMenu()
 
@@ -180,9 +166,7 @@ func accelerate(item *application.MenuItem, key, fallback string) {
 	}
 }
 
-// ApplyMenu rebuilds the native menu in the language the window sent. Go cannot resolve "system"
-// and has nowhere to keep a second catalogue, so the menu is built twice: with the fallback at
-// startup and again here.
+// ApplyMenu rebuilds the native menu in the window's language.
 func (h *Host) ApplyMenu(labels MenuLabels) {
 	h.applyMenu(&labels, nil)
 }
@@ -193,9 +177,8 @@ func (h *Host) ApplyWindowMenu(groups []MenuGroup) {
 	h.applyMenu(nil, &groups)
 }
 
-// applyMenu rebuilds the bar from the two halves the window describes: the words, which arrive with
-// the language, and the rows, which arrive with the state. A window that has not sent one leaves
-// the half it has (the settings window changes the language without having tabs to draw rows from).
+// applyMenu rebuilds the bar from labels and rows; a nil half keeps what was there, since the settings
+// window sends labels without rows.
 func (h *Host) applyMenu(labels *MenuLabels, groups *[]MenuGroup) {
 	h.mu.Lock()
 	if labels != nil {

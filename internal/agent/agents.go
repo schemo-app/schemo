@@ -9,9 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Agent is one MCP client as the window draws it: what it calls itself, when it last asked for
-// something and how much it has asked for today. A client that never said its name is drawn by what
-// little is known of it rather than hidden.
+// Agent is one MCP client as the window lists it; a client that never named itself is still listed.
 type Agent struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -99,9 +97,8 @@ func (r *agentRegistry) list() []Agent {
 	return out
 }
 
-// forget ends an agent's sessions and drops its row. The token stays: disconnecting concerns the
-// client speaking now, and a fresh call with the same token is a fresh introduction, so the row
-// comes back when it asks again.
+// forget ends an agent's sessions and drops its row. The token stays valid, so the row returns on
+// the next call.
 func (r *agentRegistry) forget(id string) bool {
 	r.mu.Lock()
 	row, ok := r.agents[id]

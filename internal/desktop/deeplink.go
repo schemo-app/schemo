@@ -39,9 +39,8 @@ func (h *Host) OnSecondInstance(data application.SecondInstanceData) {
 	h.FocusMain()
 }
 
-// importedPage is the page an import link names (`schemo://import?url=…`), and an empty string for
-// every other link. The address is handed on as it arrived; whether this app may read it is for the
-// reading side to say.
+// importedPage is the page of a `schemo://import?url=…` link, or "" for any other; the reader decides
+// whether it may be read.
 func importedPage(parsed *url.URL) string {
 	if parsed.Host != importLink {
 		return ""

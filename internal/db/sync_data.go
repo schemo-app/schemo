@@ -10,9 +10,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// A row travels as it is stored: its data JSON, beside the paths in it that hold a secret. The
-// registry below is everything the sync engine knows about a kind kept in the entities table; the
-// queue, the push, the pull and the conflicts are written once for all of them.
+// Every entity kind the sync engine knows, stored as data JSON plus its secret paths; queue, push, pull
+// and conflicts are written once for all.
 
 // syncKind is one kind that travels.
 type syncKind struct {

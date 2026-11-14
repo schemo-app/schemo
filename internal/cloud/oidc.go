@@ -21,9 +21,8 @@ import (
 // The account API, in the app's own words. Every method here is a thin reading of one call — the
 // decisions about when to make it are the service's, and this is only the translation.
 
-// Me is who the account is, as the server describes it. The session id in the answer makes this
-// device recognisable in the list of them. What the account is entitled to is the organisation's,
-// and Client asks for it separately.
+// Me is the account as the server describes it, including this device's session id. The plan is
+// asked separately.
 func (c *OIDC) Me(ctx context.Context, address, access string) (domain.Account, error) {
 	answer, err := callAccount(c, ctx, address, access,
 		func(ctx context.Context, client accountv1.AccountServiceClient) (*accountv1.MeResponse, error) {
@@ -93,9 +92,8 @@ func (c *OIDC) SignOut(ctx context.Context, address, access string) error {
 	return err
 }
 
-// DeleteAccount purges the account and every session onto it. The confirmation is left empty: the
-// contract's field is the address a person types, which the server checks against its own row, and
-// this app makes the act deliberate in its own window instead.
+// DeleteAccount purges the account and its sessions, leaving the typed-address confirmation empty:
+// the app confirms in its own window.
 func (c *OIDC) DeleteAccount(ctx context.Context, address, access string) error {
 	_, err := callAccount(c, ctx, address, access,
 		func(ctx context.Context,
@@ -135,11 +133,8 @@ func fromTimestamp(stamp *timestamppb.Timestamp) time.Time {
 	return stamp.AsTime()
 }
 
-// refuse turns what a call failed with into the app's own refusal.
-//
-// The distinction that matters above: a server that answered has an opinion, which decides whether
-// the account is still good, while a server that did not answer is merely away and the next click
-// may work.
+// refuse turns a call failure into the app's refusal, telling a server that answered (whose answer
+// decides the account) from one that is merely away.
 func refuse(err error) error {
 	if err == nil {
 		return nil
@@ -150,14 +145,10 @@ func refuse(err error) error {
 	return domain.Refuse(domain.CodeServerUnreachable, nil, nil)
 }
 
-// scopes is what the app asks for: `openid` is the identity, `email` the address, and
-// `offline_access` asks to stay signed in. Without it the server hands over no refresh token and
-// the app would be signed out within the hour.
+// scopes asks for identity, email and `offline_access`, without which there is no refresh token.
 var scopes = []string{"openid", "email", "offline_access"}
 
-// clientID is the name this app signs in under. It is not the slug: it is half of a protocol whose
-// other half is the server's own list of clients, and a device introducing itself under any other
-// name is turned away before a code is printed.
+// clientID must match the server's registered client list.
 const clientID = "schemo-app"
 
 const maxDiscoveryBytes = 1 << 20
@@ -384,10 +375,8 @@ func (c *OIDC) endpoints(ctx context.Context, address string) (oauth2.Endpoint, 
 	return endpoints, nil
 }
 
-// namesItself says whether a discovery document claims the place it was read from (OpenID Connect
-// Discovery §4.3): its issuer is the address the app was given, or the origin the document was
-// finally fetched from when the address redirects to the identity provider. Without it a server
-// could hand out the document of another issuer. A trailing slash is not a difference.
+// namesItself checks the discovery issuer (OpenID Connect Discovery §4.3) against the given address
+// or the final redirect origin, ignoring a trailing slash.
 func namesItself(issuer, address string, readFrom *url.URL) bool {
 	issuer = strings.TrimSuffix(issuer, "/")
 	if issuer == "" {

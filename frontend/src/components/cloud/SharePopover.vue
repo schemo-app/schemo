@@ -12,10 +12,11 @@ import { useTabsStore } from '../../stores/tabs'
 import { usePlan } from '../../composables/usePlan'
 import { useToast } from '../../composables/useToast'
 import { copyToClipboard } from '../../lib/clipboard'
-import { FEATURES, featureRefusal } from '../../lib/onboardingFeatures'
 import { passwordFits, problemText } from '../../lib/publicationText'
 import { PASSWORD } from '../../lib/layout'
-import { t, te } from '../../i18n'
+import { featureRefusal, t } from '../../i18n'
+import { metaLine } from '../../lib/format'
+import { Feature } from '../../../bindings/schemo/internal/domain'
 
 const props = defineProps<{ collectionId: string }>()
 const publications = usePublicationsStore()
@@ -35,14 +36,14 @@ const label = computed(() => {
   if (!live.value) return t('publications.share')
   if (!behind.value) return t('publications.published')
   const count = mark.value?.changes?.length ?? 0
-  return t('publications.changes') + (count ? ' · ' + count : '')
+  return metaLine(t('publications.changes'), count > 0 && String(count))
 })
 const publication = computed(() => publications.publication)
 const readOnly = computed(() => !!publication.value && !publication.value.canManage)
 const disabled = computed(() => readOnly.value || publications.busy || publications.reading)
 const passwordOk = computed(() => publications.visibility !== 'password' || passwordFits(publications.password) ||
   (!publications.password && publication.value?.visibility === 'password'))
-const canPublish = computed(() => includes(FEATURES.shareLinks) && !disabled.value && passwordOk.value)
+const canPublish = computed(() => includes(Feature.FeatureShareLinks) &&!disabled.value && passwordOk.value)
 const pending = computed(() => publications.behind || publications.visibility !== publication.value?.visibility || publications.passwordChanged)
 const envLabel = computed(() => publications.environments.find(choice => choice.id === publications.environment)?.name ??
   environments.activeEnvironment?.name ?? t('publications.envNone'))
@@ -50,7 +51,7 @@ const lede = computed(() => t(publications.visibility === 'public' ? 'publicatio
   publications.visibility === 'password' ? 'publications.draftPassword' : 'publications.draftUnlisted'))
 const hidden = computed(() => publications.report?.hidden ?? [])
 const problems = computed(() => (publications.report?.problems ?? []).map(problemText).filter(Boolean))
-const refusal = computed(() => includes(FEATURES.shareLinks) ? '' : featureRefusal(t, te, FEATURES.shareLinks))
+const refusal = computed(() => includes(Feature.FeatureShareLinks) ? '' : featureRefusal(Feature.FeatureShareLinks))
 const passwordRange = { min: PASSWORD.min, max: PASSWORD.max }
 
 function pickVisibility(value: Visibility) {

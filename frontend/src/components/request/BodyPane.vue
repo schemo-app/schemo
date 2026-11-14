@@ -14,6 +14,7 @@ import { type MessageKey, t } from '../../i18n'
 import type { RequestSource } from '../../lib/requestSource'
 import { BodyKind, RowKind, type FormRow } from '../../../bindings/schemo/internal/domain'
 import { useIndent } from '../../composables/useIndent'
+import { fileName } from '../../lib/format'
 
 // The body, as the pane draws it: the one section whose subject is a format rather than a list. Five
 // branches in one file, because they share every style below and are never used apart.
@@ -45,9 +46,6 @@ const canFormat = computed(() => kind.value === BodyKind.BodyJSON || kind.value 
 // A plain textarea, not a highlighted one: `{{tokens}}` are painted over a real input. The gutter is
 // numbers only and as tall as the text, so the two scroll as one.
 const lines = computed(() => Math.max(source.body.split('\n').length, 1))
-// An empty body is still a place to write one: the editor opens a few lines tall rather than one.
-const MIN_LINES = 6
-
 const area = useTemplateRef<HTMLTextAreaElement>('area')
 const findOpen = ref(false)
 const findText = ref('')
@@ -81,9 +79,7 @@ function onInput(e: Event) {
   source.setBody((e.target as HTMLTextAreaElement).value)
 }
 
-// Reformatting replaces the text with a re-typed version of itself, so it goes through the same
-// buffer the typing does and is handed over on the same clock. Go reads the notation; an answer
-// that arrives after the person has typed on is about text that is no longer there, and is let go.
+// Goes through the typing buffer; an answer that arrives after further typing is dropped.
 async function format() {
   const text = source.body
   const next = await callOrToast(Drafts.FormatBody(kind.value, text, indent.value), 'request.editFailed')
@@ -148,12 +144,6 @@ async function pickBody() {
   if (path) void source.setBodyFile(path)
 }
 
-// The last path segment, for a chip that has room for a name and not for a path.
-function baseName(path: string): string {
-  const parts = path.split(/[\\/]/)
-  return parts[parts.length - 1] || path
-}
-
 </script>
 
 <template>
@@ -203,7 +193,7 @@ function baseName(path: string): string {
         ref="area"
         :value="source.body"
         class="editor mono"
-        :rows="Math.max(lines, MIN_LINES)"
+        :rows="Math.max(lines, 6)"
         wrap="off"
         :placeholder="kind === BodyKind.BodyRaw ? t('request.body.rawPlaceholder') : ''"
         spellcheck="false"
@@ -241,7 +231,7 @@ function baseName(path: string): string {
           @click="pickFile(row)"
         >
           <Icon name="Download" :size="12" :stroke-width="2" />
-          <span>{{ row.src ? baseName(row.src) : t('request.body.chooseFile') }}</span>
+          <span>{{ row.src ? fileName(row.src) : t('request.body.chooseFile') }}</span>
         </FileDrop>
         <TokenField
           v-else
@@ -276,7 +266,7 @@ function baseName(path: string): string {
 
     <FileDrop v-else class="drop" @files="([path]) => source.setBodyFile(path)">
       <Icon name="Download" :size="24" :stroke-width="1.5" />
-      <span class="drop-name">{{ source.bodyFile ? baseName(source.bodyFile) : t('request.body.noFileChosen') }}</span>
+      <span class="drop-name">{{ source.bodyFile ? fileName(source.bodyFile) : t('request.body.noFileChosen') }}</span>
       <button type="button" class="drop-btn" @click="pickBody">{{ t('request.body.chooseFile') }}</button>
     </FileDrop>
   </div>

@@ -36,12 +36,8 @@ export function DomainOf(rawURL: string): $CancellablePromise<string> {
 }
 
 /**
- * ForURL is the jar as one address sees it: the cookies that apply to it, whole, with the value and
- * attributes a `Cookie` header never carried. The response tab draws it under an answer, so the
- * table and the next request to that address cannot disagree: they are the same list read twice.
- * 
- * It is the active workspace's jar, not a named one; the draft, the only caller that sends for
- * another workspace, asks for the header instead.
+ * ForURL lists the active workspace's cookies that apply to an address, with full attributes, using
+ * the same matching as a send.
  */
 export function ForURL(rawURL: string): $CancellablePromise<domain$0.JarCookie[] | null> {
     return $Call.ByID(2927885743, rawURL);
@@ -55,12 +51,8 @@ export function Jar(): $CancellablePromise<domain$0.JarDomain[] | null> {
 }
 
 /**
- * Save writes one cookie of the manager's table. The domain is the row's own and the row keeps the
- * identity it was found by: what changes is the value and the attributes.
- * 
- * How far the cookie reaches is read off the domain it was written with, as a browser's cookie list
- * writes it: a leading dot means the whole domain, no dot the host alone. A cookie typed by hand is
- * therefore not a third kind, only one nobody spelt out in full.
+ * Save writes one cookie from the manager. A leading dot on the domain means the whole domain, none
+ * the host alone, as browsers write it.
  */
 export function Save(cookie: domain$0.JarCookie): $CancellablePromise<void> {
     return $Call.ByID(715286934, cookie);

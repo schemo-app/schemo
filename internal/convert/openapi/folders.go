@@ -51,9 +51,7 @@ func (f *folderNode) collection() domain.Collection {
 	return collection
 }
 
-// tagSegments is one tag as the folders it names. Whether `/` splits at all is the document's
-// answer (a marker, or the hierarchy the tags show), so a document with plain tag names keeps plain
-// folders.
+// tagSegments splits a tag on `/` only when the document's tags form a hierarchy.
 func tagSegments(tag string, shouldSplit bool) []string {
 	if !shouldSplit {
 		if tag == "" {

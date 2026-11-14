@@ -84,6 +84,7 @@ CREATE TABLE records (
     source TEXT NOT NULL CHECK (source IN ('manual', 'browser')),
     agent TEXT NOT NULL DEFAULT '',
     method TEXT NOT NULL,
+    protocol_json TEXT NOT NULL DEFAULT '{}',
     url TEXT NOT NULL,
     status INTEGER NOT NULL DEFAULT 0,
     status_text TEXT NOT NULL DEFAULT '',

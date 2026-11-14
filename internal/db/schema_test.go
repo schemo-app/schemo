@@ -46,6 +46,26 @@ func TestEmbeddedSchemaApplies(t *testing.T) {
 	}
 }
 
+func TestProtocolUpgradeKeepsExistingRecords(t *testing.T) {
+	ctx := t.Context()
+	store := newMigratedStore(t)
+	_, err := store.DB().ExecContext(ctx, `
+		ALTER TABLE records DROP COLUMN protocol_json;
+		PRAGMA user_version = 2;
+		INSERT INTO records (id, workspace_id, source, method, url, started_at)
+		VALUES ('old', 'personal', 'manual', 'GET', 'https://example.test', 1)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := store.Migrate(ctx); err != nil || moved != "" {
+		t.Fatalf("migrating version 2 moved the database to %q: %v", moved, err)
+	}
+	record, err := store.Record(ctx, "old")
+	if err != nil || record.Method != "GET" || record.Protocol != "" {
+		t.Fatalf("existing HTTP record = %+v, %v", record, err)
+	}
+}
+
 func TestADatabaseOfAnotherSchemaIsMovedAside(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)

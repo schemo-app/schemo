@@ -37,11 +37,7 @@ export function useRequestEnvironment(source: RequestSource) {
       pinned.value ? Boolean(pinnedEnv.value?.readonly) : Boolean(environments.activeEnvironment?.readonly)
   )
 
-  /**
-   * Formatted options list for the environment selector dropdown. The colour and the lock are the
-   * row's own, drawn as the window's environment popover draws them. The row that follows the window
-   * says so in its name: the word for it stands where the count stands.
-   */
+  /** The "follow the window" row shows its label where the others show a count. */
   const options = computed(() => [
     {
       value: '',

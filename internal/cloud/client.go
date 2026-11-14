@@ -26,19 +26,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// The two questions the engine asks before it exchanges anything: which workspaces this account has,
-// and what this server takes.
-//
-// Neither is the sync service, but both belong here: they are about the same server and account,
-// and another client would need a second token to answer one question.
+// Account-level questions the engine asks before exchanging anything.
 
-// Workspaces is the workspaces of the account, and the organisation the caller owns among them. An empty
-// org is the caller's own workspaces, which is what a device syncs: a workspace it has not joined is not
-// one it can sync.
-//
-// Which workspaces stand in the person's own organisation is read here, not left to the engine: the
-// server answers one id per call and every workspace of it is theirs. A workspace of anybody else's, one
-// they were invited into, is read but never filled.
+// Workspaces lists the account's workspaces and the organisation the caller owns. Only workspaces in
+// that organisation are synced; invited ones are listed but never filled.
 func (c *Client) Workspaces(ctx context.Context, caller domain.Caller) (domain.AccountWorkspaces, error) {
 	answer, err := callServer(c, ctx, caller,
 		func(ctx context.Context, conn *grpc.ClientConn) (*workspacev1.ListResponse, error) {
@@ -98,16 +89,8 @@ func accessOf(workspace *workspacev1.Workspace) domain.WorkspaceAccess {
 	}
 }
 
-// Create makes a workspace in the account for one this device holds, and returns it as the server
-// describes it.
-//
-// The organisation named is the one the person owns. Letting the server choose would put the workspace
-// wherever the person last worked, such as a team's organisation, and the panel and devices would
-// create workspaces differently.
-//
-// What the workspace is for travels with it: it is the kind the person chose, held by the server. The
-// id is this device's and makes the call safe to repeat: if an answer never arrived, asking again
-// under the same id returns that workspace instead of a second one.
+// Create makes the account's copy of a local workspace in the caller's own organisation. The local id
+// makes the call idempotent: retrying after a lost answer returns the same workspace.
 func (c *Client) Create(
 	ctx context.Context,
 	caller domain.Caller,
@@ -142,11 +125,8 @@ func (c *Client) Create(
 	}, nil
 }
 
-// DeleteWorkspace ends a workspace in the account. The server keeps it a month in the trash and lets the
-// deletion travel, so every device holding the workspace learns of it, including one that was away.
-//
-// No name travels with it: the sheet that asked is where the act was made deliberate, and the name
-// this device draws could be one a rename in flight would make the account refuse.
+// DeleteWorkspace ends a workspace in the account; the server trashes it and lets every device learn
+// of the deletion.
 func (c *Client) DeleteWorkspace(
 	ctx context.Context,
 	caller domain.Caller,
@@ -160,9 +140,7 @@ func (c *Client) DeleteWorkspace(
 	return err
 }
 
-// SetKind changes what a workspace in the account is for. The server's answer decides: whether a workspace
-// may become somebody's own depends on who is in it. A refusal such as `workspacePersonal` for a
-// workspace a second person works in travels back as it is and is the caller's to word.
+// SetKind changes a workspace's kind; the server refuses (e.g. `workspacePersonal`) when others work in it.
 func (c *Client) SetKind(
 	ctx context.Context,
 	caller domain.Caller,
@@ -201,9 +179,7 @@ func (c *Client) Limits(ctx context.Context, caller domain.Caller) (domain.Limit
 	}, nil
 }
 
-// kindOf reads what a workspace is for from the word the server sends. An unknown word is read as a
-// team's, the careful direction: a personal workspace may be paired with a device's own one and a
-// team's never, so nothing offers work to a word nobody understands.
+// kindOf reads an unknown kind as team, the safe side: only personal workspaces pair with a device's own.
 func kindOf(kind workspacev1.WorkspaceKind) domain.WorkspaceKind {
 	if kind == workspacev1.WorkspaceKind_WORKSPACE_KIND_PERSONAL {
 		return domain.WorkspacePersonal
@@ -334,9 +310,7 @@ const (
 	pingWait  = 10 * time.Second
 )
 
-// maxRecvBytes is what one answer may weigh. gRPC stops reading at 4 MiB, but the heaviest answer
-// asked for is a record with both bodies, each up to 8 MiB on the server; at the default such a
-// call fails with a refusal about the call itself.
+// maxRecvBytes fits a record with both bodies (up to 8 MiB each), above gRPC's 4 MiB default.
 const maxRecvBytes = 32 << 20
 
 // Dialer manages reusable gRPC client connections keyed by server host address.
@@ -438,24 +412,18 @@ func FromStatus(err error) error {
 		return domain.Refuse(domain.CodeServerRefused, nil,
 			domain.Args{"reason": domain.ArgTooLarge})
 	case "featureRequired":
-		// A plan is the server's to know and this is its answer, not a fault: the window draws the
-		// control as one the plan does not carry, and the feature's name travels so it can be named
-		// in a sentence.
+		// Not a fault: the window disables the control and names the feature.
 		return domain.Refuse(domain.CodeFeatureRequired, domain.ErrNotAllowed, named(held))
 	case "publishConfirmRequired", "publishVisibilityRefused", "snapshotUnreadable",
 		"snapshotVersion", "snapshotTooLarge", "snapshotChanged", "nameTaken",
 		"askedTooMany":
-		// The server refuses publishing for reasons the window has no sentence for, each about the
-		// document rather than this device: the server's reason goes along and the window shows it
-		// as the server's answer.
+		// Reasons about the document the window has no wording for; the server's reason is shown.
 		return domain.Refuse(domain.CodeServerRefused, nil, named(held))
 	}
 	return domain.Refuse(domain.CodeServerRefused, nil, nil)
 }
 
-// named is the values a refusal carries: the server's own arguments with the reason it gave kept
-// among them. A window names the reason when it has nothing better; the rest are whatever the
-// refusal was measured against.
+// named is a refusal's arguments, with the server's reason kept among them.
 func named(held *status.Status) domain.Args {
 	for _, detail := range held.Details() {
 		info, ok := detail.(*errdetails.ErrorInfo)

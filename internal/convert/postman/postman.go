@@ -1,6 +1,4 @@
-// Package postman reads and writes the Postman v2.1 collection format: bytes in, a
-// domain.Collection out, and back. It is a pure package, so both directions are tested against a
-// file.
+// Package postman reads and writes Postman v2.1 collections.
 package postman
 
 import (
@@ -101,12 +99,8 @@ func (l *lines) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*list)(l))
 }
 
-// variable is one `{{name}}` a level answers for, as a file writes it. The value is read as any
-// JSON, not a string: the format allows numbers and flags, and dropping them would silently change
-// the variable's meaning.
-//
-// The file's type is not kept: Postman collection variables are never secret and this app
-// substitutes text in every case, so the type says nothing name and value do not.
+// variable is one collection variable. The value is any JSON, since the format allows numbers and
+// flags; the type is ignored because every value is substituted as text.
 type variable struct {
 	Key      string `json:"key"`
 	Value    any    `json:"value,omitempty"`
@@ -187,9 +181,7 @@ type fileField struct {
 	Src string `json:"src,omitempty"`
 }
 
-// auth is an authorization as Postman writes it: the scheme's name and its fields under a key of
-// the same name (`{"type":"bearer","bearer":[{"key":"token","value":"…"}]}`). The fields are a map
-// because they belong to the scheme.
+// auth is Postman's scheme name with fields under a key of the same name.
 type auth struct {
 	Type  string             `json:"type"`
 	Extra map[string][]field `json:"-"`

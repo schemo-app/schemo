@@ -10,6 +10,7 @@ import StatusBadge from '../ui/StatusBadge.vue'
 import ExampleForm from './ExampleForm.vue'
 import type { RequestSource } from '../../lib/requestSource'
 import { exampleName, exampleOf, isKeepable } from '../../lib/examples'
+import { protocolOf } from '../../lib/protocol'
 import { formatBytes, t } from '../../i18n'
 import type { ResponseExample } from '../../../bindings/schemo/internal/domain'
 
@@ -18,6 +19,7 @@ const { source } = defineProps<{ source: RequestSource }>()
 const picked = ref(0)
 const fresh = ref(-1)
 const pane = ref<'body' | 'headers'>('body')
+const rpcStatus = computed(() => protocolOf(source.protocol).status === 'grpc')
 const example = computed(() => source.responses[picked.value])
 const keepable = computed(() => {
   const record = source.record
@@ -49,7 +51,7 @@ function saveResponse() {
 function blankExample() {
   addExample({
     name: '',
-    status: 200,
+    status: rpcStatus.value ? 0 : 200,
     body: '',
     headers: [{ name: 'Content-Type', value: 'application/json; charset=utf-8' }],
   })
@@ -72,6 +74,7 @@ function removeExample() {
     :key="`${picked}:${source.responses.length}`"
     v-model:pane="pane"
     :example
+    :protocol="source.protocol"
     :fresh="picked === fresh"
     @patch="patch"
     @remove="removeExample"
@@ -92,7 +95,10 @@ function removeExample() {
             :class="{ selected: index === picked }"
             @select="pick(index)"
           >
-            <StatusBadge :status="one.status ?? 0" class="example-code" />
+            <StatusBadge
+              :status="one.status ?? 0" :protocol="source.protocol"
+              :status-text="rpcStatus && one.status != null ? String(one.status) : undefined" class="example-code"
+            />
             <span class="min-w-0 flex-1 truncate" :class="{ 'text-text-tertiary': !one.name }">
               {{ one.name || t('request.examples.untitled') }}
             </span>

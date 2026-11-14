@@ -9,6 +9,23 @@ import (
 	"schemo/internal/domain"
 )
 
+// Resolver captures the variables for a request and produces its wire and masked text together.
+//
+//wails:ignore
+func (s *Environments) Resolver(
+	ctx context.Context, workspace string, above []domain.Variable, envID string,
+) (func(string) (string, string), error) {
+	state, err := s.store.EnvState(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	live, _ := variableLookup(state, true, above, envID)
+	masked, secrets := variableLookup(state, false, above, envID)
+	return func(text string) (string, string) {
+		return interpolate(text, live, false), redact(interpolate(text, masked, true), secrets)
+	}, nil
+}
+
 //wails:ignore
 func (s *Environments) SubstituteTexts(
 	ctx context.Context,
@@ -31,10 +48,8 @@ func (s *Environments) SubstituteTexts(
 	return out, nil
 }
 
-// ReferenceTexts resolves the texts of a request for an export that leaves secret values out: a
-// secret resolves to a shell variable of its own (`$SCHEMO_TOKEN`), so the file names where the
-// value comes from instead of carrying it. A value the text still spells out is masked as a log's
-// is, since a secret a person pasted rather than named must not leave in a file either.
+// ReferenceTexts resolves a request for an export without secrets: a secret becomes a shell
+// variable (`$SCHEMO_TOKEN`) and a pasted secret value is masked.
 //
 //wails:ignore
 func (s *Environments) ReferenceTexts(
@@ -119,9 +134,7 @@ func (s *Environments) MaskTexts(
 	return out, nil
 }
 
-// MaskTextsIn is MaskTexts for one named workspace: the values a mask is made of are that workspace's, and
-// a reader looking at a workspace the window is not showing must not be answered with the ones on
-// screen.
+// MaskTextsIn is MaskTexts with a named workspace's secrets.
 //
 //wails:ignore
 func (s *Environments) MaskTextsIn(
@@ -166,6 +179,11 @@ func (s *Environments) resolverIn(
 	if err != nil {
 		return nil, nil, err
 	}
+	resolve, secrets := variableLookup(state, revealSecrets, above, envID)
+	return resolve, secrets, nil
+}
+
+func variableLookup(state domain.EnvState, revealSecrets bool, above []domain.Variable, envID string) (lookup, []string) {
 	if envID == "" {
 		envID = state.ActiveID
 	}
@@ -201,9 +219,8 @@ func (s *Environments) resolverIn(
 		secrets = secretValues(collections, active, globals)
 	}
 
-	// The window's own levels stand over a collection's: what a person wrote in an environment is
-	// the answer they are looking at, and a name a collection brought along in an import must not
-	// quietly take its place. A collection still answers the names no other level holds.
+	// Environment levels beat a collection's, so an imported name cannot shadow the person's own;
+	// a collection still answers names nobody else holds.
 	return func(name string) (domain.Resolution, bool) {
 		if v, ok := active[name]; ok {
 			return resolution(v, "env", revealSecrets), true
@@ -215,7 +232,7 @@ func (s *Environments) resolverIn(
 			return resolution(v, "collection", revealSecrets), true
 		}
 		return domain.Resolution{}, false
-	}, secrets, nil
+	}, secrets
 }
 
 func secretValues(levels ...map[string]domain.Variable) []string {

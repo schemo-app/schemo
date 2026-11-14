@@ -8,9 +8,7 @@ import { useCollectionsStore } from '../../stores/collections'
 import { pageName } from '../../lib/publicationText'
 import { t } from '../../i18n'
 
-// Taking a page down: the address stops answering, so the question names what is asked about and
-// says what happens to it. The name comes from the tree, since the page itself carries only a slug
-// and a person is owed the name they gave the collection.
+// The page carries only a slug, so the name comes from the tree.
 const publications = usePublicationsStore()
 const collections = useCollectionsStore()
 

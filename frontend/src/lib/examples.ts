@@ -1,6 +1,7 @@
 import { t, te } from '../i18n'
 import type { ResponseExample } from '../../bindings/schemo/internal/domain'
 import type { RecordView } from './requestRecord'
+import { hasResponseStatus } from './format'
 
 /** What a new example of an answer is called by default: the catalogue's own name for the status,
  *  and nothing for a code it has no name for — a key shown as a name is not a name. */
@@ -9,9 +10,12 @@ export function exampleName(status: number): string {
   return te(key) ? t(key) : ''
 }
 
-/** Whether an answer is worth keeping: a refusal or a timeout has no status and nothing to save. */
-export function isKeepable(record: Pick<RecordView, 'status' | 'error'>): boolean {
-  return record.status > 0 && !record.error
+/** Whether an answer is worth keeping: a refusal or a timeout has no status and nothing to save,
+ * and a binary answer no text for an example to show. */
+export function isKeepable(
+  record: Pick<RecordView, 'status' | 'statusText' | 'protocol' | 'error' | 'responseBinary'>
+): boolean {
+  return !record.error && !record.responseBinary && hasResponseStatus(record.status, record.protocol, record.statusText)
 }
 
 /** An answer as an example kept beside its request: the status it carried, its headers and body. */

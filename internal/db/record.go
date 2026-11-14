@@ -27,6 +27,10 @@ func (s *Store) SaveRecord(ctx context.Context, workspaceID string, rec domain.R
 		return fmt.Errorf("saving record %s: %w", rec.ID, err)
 	}
 
+	protocol, err := json.Marshal(rec.ProtocolRecord)
+	if err != nil {
+		return fmt.Errorf("saving protocol metadata of %s: %w", rec.ID, err)
+	}
 	finishedAt := time.Now().UnixMilli()
 	return s.inTx(ctx, fmt.Sprintf("saving record %s", rec.ID), func(tx *writeTx) error {
 		_, err := tx.ExecContext(ctx,
@@ -35,16 +39,16 @@ func (s *Store) SaveRecord(ctx context.Context, workspaceID string, rec domain.R
                       tls_us, wait_us, download_us, request_bytes, response_bytes,
                       request_headers_json, response_headers_json, cookie_writes_json,
                       started_at, finished_at, node_id, run_id, tab_id, tab_title, tab_url,
-                      favicon_url, agent, updated_at)
+                      favicon_url, agent, updated_at, protocol_json)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			         ?, ?, ?, ?)`,
+			         ?, ?, ?, ?, ?)`,
 			rec.ID, workspaceID, string(rec.Source), rec.Method, rec.URL, rec.Status, rec.StatusText,
 			rec.ContentType,
 			rec.Error, rec.Cancelled, rec.DurationUs, rec.DNSUs, rec.ConnectUs, rec.TLSUs,
 			rec.WaitUs, rec.DownloadUs, rec.RequestBytes, rec.ResponseBytes,
 			string(requestHeaders), string(responseHeaders), string(writes), rec.StartedAt, finishedAt,
 			rec.NodeID, nullIfEmpty(rec.RunID), nullIfZero(rec.TabID), nullIfEmpty(rec.TabTitle),
-			nullIfEmpty(rec.TabURL), nullIfEmpty(rec.FavIconURL), rec.Agent, finishedAt)
+			nullIfEmpty(rec.TabURL), nullIfEmpty(rec.FavIconURL), rec.Agent, finishedAt, string(protocol))
 		if err != nil {
 			if isUniqueViolation(err) {
 				return fmt.Errorf("record %s: %w", rec.ID, domain.ErrConflict)
@@ -65,7 +69,7 @@ func (s *Store) SaveRecord(ctx context.Context, workspaceID string, rec domain.R
 			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO record_bodies (record_id, side, content, size, truncated)
 				 VALUES (?, ?, ?, ?, ?)`,
-				rec.ID, string(side.kind), []byte(side.body.Inline), side.body.Size,
+				rec.ID, string(side.kind), []byte(side.body.Content()), side.body.Size,
 				side.body.Truncated); err != nil {
 				return fmt.Errorf("saving the %s body of %s: %w", side.kind, rec.ID, err)
 			}
@@ -81,7 +85,7 @@ const recordColumns = `id, workspace_id, source, method, url, status, status_tex
 	       download_us, request_bytes, response_bytes, request_headers_json,
 	       response_headers_json, cookie_writes_json, started_at, node_id, ifnull(run_id, ''),
 	       ifnull(tab_id, 0), ifnull(tab_title, ''), ifnull(tab_url, ''),
-	       ifnull(favicon_url, ''), is_remote, ifnull(agent, '')`
+	       ifnull(favicon_url, ''), is_remote, ifnull(agent, ''), protocol_json`
 
 // rowScanner abstracts scanning methods shared between sql.Row and sql.Rows.
 type rowScanner interface {
@@ -90,15 +94,15 @@ type rowScanner interface {
 
 func scanRecord(row rowScanner) (domain.Record, error) {
 	var (
-		rec                                     domain.Record
-		requestHeaders, responseHeaders, writes string
+		rec                                               domain.Record
+		requestHeaders, responseHeaders, writes, protocol string
 	)
 	if err := row.Scan(&rec.ID, &rec.WorkspaceID, &rec.Source, &rec.Method, &rec.URL,
 		&rec.Status, &rec.StatusText, &rec.ContentType, &rec.Error, &rec.Cancelled, &rec.DurationUs,
 		&rec.DNSUs, &rec.ConnectUs, &rec.TLSUs, &rec.WaitUs, &rec.DownloadUs, &rec.RequestBytes,
 		&rec.ResponseBytes, &requestHeaders, &responseHeaders, &writes, &rec.StartedAt,
 		&rec.NodeID, &rec.RunID, &rec.TabID, &rec.TabTitle, &rec.TabURL, &rec.FavIconURL,
-		&rec.IsRemote, &rec.Agent); err != nil {
+		&rec.IsRemote, &rec.Agent, &protocol); err != nil {
 		return domain.Record{}, err
 	}
 	for _, part := range []struct {
@@ -109,6 +113,7 @@ func scanRecord(row rowScanner) (domain.Record, error) {
 		{requestHeaders, &rec.RequestHeaders, "request headers"},
 		{responseHeaders, &rec.ResponseHeaders, "response headers"},
 		{writes, &rec.CookieWrites, "cookie writes"},
+		{protocol, &rec.ProtocolRecord, "protocol metadata"},
 	} {
 		if err := json.Unmarshal([]byte(part.raw), part.into); err != nil {
 			return domain.Record{}, fmt.Errorf("reading the %s of %s: %w", part.what, rec.ID, err)
@@ -168,7 +173,7 @@ func (s *Store) Record(ctx context.Context, id string) (domain.Record, error) {
 	return records[0], nil
 }
 
-// attachBodyRefs populates body size and truncation metadata for the provided records.
+// attachBodyRefs populates body size, truncation and whether it is binary for the provided records.
 func (s *Store) attachBodyRefs(
 	ctx context.Context,
 	records []domain.Record,
@@ -180,9 +185,10 @@ func (s *Store) attachBodyRefs(
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT record_id, side, size, truncated
+		`SELECT record_id, side, size, truncated, substr(content, 1, ?)
 		   FROM record_bodies
-		  WHERE record_id IN (SELECT id FROM records`+scope+`)`, args...)
+		  WHERE record_id IN (SELECT id FROM records`+scope+`)`,
+		append([]any{domain.BodySniffBytes}, args...)...)
 	if err != nil {
 		return fmt.Errorf("listing the bodies of records: %w", err)
 	}
@@ -199,15 +205,16 @@ func (s *Store) attachBodyRefs(
 			side      domain.BodySide
 			size      int64
 			truncated int
+			sample    []byte
 		)
-		if err := rows.Scan(&id, &side, &size, &truncated); err != nil {
+		if err := rows.Scan(&id, &side, &size, &truncated, &sample); err != nil {
 			return fmt.Errorf("listing the bodies of records: %w", err)
 		}
 		rec, ok := at[id]
 		if !ok {
 			continue
 		}
-		ref := &domain.BodyRef{Size: size, Truncated: truncated != 0}
+		ref := &domain.BodyRef{Size: size, Truncated: truncated != 0, Binary: domain.BinarySample(string(sample), size)}
 		if side == domain.SideRequest {
 			rec.RequestBody = ref
 		} else {
@@ -490,7 +497,7 @@ func (s *Store) SaveFetched(
 				`INSERT INTO record_bodies (record_id, side, content, size, truncated)
 				 VALUES (?, ?, ?, ?, ?)
 				 ON CONFLICT(record_id, side) DO NOTHING`,
-				id, string(side), []byte(body.Inline), body.Size,
+				id, string(side), []byte(body.Content()), body.Size,
 				body.Truncated); err != nil {
 				return fmt.Errorf("keeping the %s body of %s: %w", side, id, err)
 			}

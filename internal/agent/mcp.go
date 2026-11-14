@@ -42,9 +42,8 @@ type MCPStatus struct {
 	Busy    bool    `json:"busy"`
 }
 
-// MCP is the MCP server of one app instance: an HTTP listener on the loopback interface, the
-// protocol behind a token, and the policy of what an agent may do. Apply is the only way its state
-// changes, so the stored settings and what is listening cannot disagree for longer than one call.
+// MCP is the app's MCP server: a loopback listener, a token guard and the agent policy. Apply is the
+// only way its state changes.
 type MCP struct {
 	tools    Tools
 	notifier domain.Notifier
@@ -99,9 +98,7 @@ func NewMCP(tools Tools, notifier domain.Notifier, build platform.BuildInfo) *MC
 	return s
 }
 
-// Apply is the whole of the server's state: the policy for the next call, and whether and where it
-// listens. It never fails on a port that is taken: the window draws that state, and a settings row
-// that refused to save because a number is in use would be the wrong half of the app failing.
+// Apply sets the policy and the listener. A taken port is state the window shows, not an error.
 //
 //wails:ignore
 func (s *MCP) Apply(settings domain.MCPSettings) error {
@@ -129,8 +126,7 @@ func (s *MCP) Apply(settings domain.MCPSettings) error {
 	return nil
 }
 
-// Rotate takes a fresh token and drops everyone: every agent holding the old one is no longer an
-// agent of this server, and a connection kept through it is kept by a stranger.
+// Rotate takes a fresh token and drops every connection made with the old one.
 //
 //wails:ignore
 func (s *MCP) Rotate(token string) {
@@ -180,7 +176,7 @@ func (s *MCP) startLocked(port int) {
 	s.listenPort = port
 	s.http = &http.Server{
 		Handler:           s.guard,
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: domain.LoopbackHeaderTimeout,
 		ErrorLog:          log.New(log.Writer(), "[mcp] ", log.LstdFlags),
 	}
 	log.Printf("[mcp] listening on 127.0.0.1:%d", port)
@@ -207,9 +203,7 @@ func (s *MCP) stopLocked() {
 	s.agents.reset()
 }
 
-// policyNow is the policy this call runs under. A call without an applied policy cannot happen,
-// since nothing listens then, and the empty answer denies everything, which is the right way for an
-// impossible call to fall.
+// policyNow is the applied policy; the zero value denies everything.
 func (s *MCP) policyNow() domain.MCPSettings {
 	if held := s.policy.Load(); held != nil {
 		return *held
@@ -232,9 +226,8 @@ func (s *MCP) publishConfirm(ask ConfirmRequest) {
 	s.notifier.Publish(TopicConfirm, ask)
 }
 
-// Tools is what the server can ask the app. It is a port of small questions rather than the use
-// cases: the answers are already shaped for an agent (masked where a value would be a secret, named
-// rather than addressed), so the policy of what an agent may see lives where the policy lives.
+// Tools is what the server may ask the app. Answers come pre-masked for an agent, so the policy stays
+// in this package.
 type Tools interface {
 	WorkspaceTools
 	Workspaces(ctx context.Context) ([]Workspace, error)
@@ -243,9 +236,7 @@ type Tools interface {
 	Request(ctx context.Context, id string) (Request, error)
 	History(ctx context.Context, workspaceID string, limit int) ([]HistoryRow, error)
 	Response(ctx context.Context, recordID string) (Response, error)
-	// Send makes a real call with the person's environment (inherited variables and authorization
-	// resolved by the app) and returns what came back. The agent's name travels with it, so the
-	// history record says whose doing the send was.
+	// Send makes a real call with the app's inheritance and auth, recording the agent's name in history.
 	Send(ctx context.Context, requestID string, agent string) (Response, error)
 }
 
@@ -311,6 +302,7 @@ type Response struct {
 	DurationMs int64    `json:"durationMs,omitempty"`
 	Headers    []Header `json:"headers,omitempty"`
 	Body       string   `json:"body,omitempty"`
+	Binary     bool     `json:"binary,omitempty"`
 	Truncated  bool     `json:"truncated,omitempty"`
 	Error      string   `json:"error,omitempty"`
 	Workspace  string   `json:"-"`

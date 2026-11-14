@@ -6,9 +6,6 @@ import { useWorkspacesStore } from '../../stores/workspaces'
 import { reachLabel } from '../../lib/responseCookies'
 import { t } from '../../i18n'
 
-// Which cookie domain the pane beside it is about, and the one way to start a cookie. The dot
-// is the accent on the domain the last response wrote to and quiet on the rest; the lock marks a
-// domain whose responses may not write.
 const emit = defineEmits<{ (e: 'select', host: string): void; (e: 'create'): void }>()
 
 const cookies = useCookiesStore()

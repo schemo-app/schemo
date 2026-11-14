@@ -1,12 +1,13 @@
 import { ref } from 'vue'
 import { createEventHook } from '@vueuse/core'
 
-// What a menu asks of the pane on screen. The sender names the act and the pane that can do it
-// answers, because what comes back belongs to the tab that is open: a request sent from behind a
-// menu would leave its answer to the wrong one.
+// A menu names the act and the open pane carries it out, so the answer lands in the right tab.
 
-/** The tree menu's "send" and the request's own Send button are one act. */
+/** Sends the request selected by the tree menu. */
 export const sendRequest = createEventHook<void>()
+
+/** A gRPC call sent without a method opens the method picker in the address bar. */
+export const pickOperation = createEventHook<void>()
 
 /** The tab menu's "save to collection…" opens the panel of the tab's own bookmark. */
 export const saveRequest = createEventHook<void>()

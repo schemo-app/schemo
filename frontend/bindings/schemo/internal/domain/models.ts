@@ -105,6 +105,7 @@ export interface BodyRef {
     "inline"?: string;
     "size": number;
     "truncated"?: boolean;
+    "binary"?: boolean;
 }
 
 /**
@@ -185,6 +186,8 @@ export enum Code {
     CodeFileUnreadable = "fileUnreadable",
     CodeFileTooLarge = "fileTooLarge",
     CodeBadCertificate = "badCertificate",
+    CodeNoReflection = "noReflection",
+    CodeNoServices = "noServices",
     CodeNotJSON = "notJson",
     CodeNotPostman = "notPostmanCollection",
     CodeNotSchemo = "notSchemoCollection",
@@ -206,7 +209,9 @@ export enum Code {
     CodeNoEnvironment = "noEnvironment",
     CodeUnknownField = "unknownField",
     CodeUnknownFormat = "unknownFormat",
+    CodeExportProtocol = "exportProtocol",
     CodeUnknownList = "unknownList",
+    CodeLiveRequest = "liveRequest",
     CodeDraftWithoutID = "draftWithoutId",
     CodeIntoItself = "intoItself",
     CodeUnknownTheme = "unknownTheme",
@@ -280,14 +285,14 @@ export interface Collection {
     "variables"?: Variable[] | null;
 
     /**
-     * A level's own code. It is written only where a whole tree is written (import, duplicate):
-     * SaveCollection works from shallow rows that carry no code, so writing it there would erase
-     * the code on every rename.
+     * Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
      */
     "scripts"?: Scripts | null;
 }
 
 export interface CollectionNode {
+    "protocol"?: Protocol;
+    "options"?: ProtocolOptions | null;
     "id": string;
     "collectionId": string;
     "name": string;
@@ -430,6 +435,8 @@ export enum DocKind {
 };
 
 export interface Draft {
+    "protocol"?: Protocol;
+    "options"?: ProtocolOptions | null;
     "id": DraftID;
     "method": string;
     "url": string;
@@ -447,6 +454,11 @@ export interface Draft {
     "form": FormRow[] | null;
     "bodyFile"?: string;
     "environmentId"?: string;
+
+    /**
+     * InactiveProtocols holds the editor's previous inputs in this draft when the protocol changes.
+     */
+    "inactiveProtocols"?: { [_ in Protocol]?: ProtocolDraft } | null;
 }
 
 /**
@@ -478,9 +490,7 @@ export enum EntityType {
     EntityRecord = "record",
 
     /**
-     * EntityRun is a collection run pushed through the same endpoint, once by id however many
-     * records name it. It is not in EntityTypes: that order is the sync endpoint's, and a run goes
-     * through history beside its records.
+     * EntityRun syncs through history beside its records, once by id, so it is not in EntityTypes.
      */
     EntityRun = "run",
 };
@@ -527,9 +537,7 @@ export interface Environment {
 }
 
 /**
- * ExtensionSettings is how the app and the browser extension behave together: whether they connect
- * on their own, and whether the addresses capture was armed on are armed again after a browser
- * restart. The extension carries both out; the app only keeps and hands them over.
+ * ExtensionSettings are applied by the extension: auto-connect, and re-arming capture after a restart.
  */
 export interface ExtensionSettings {
     "autoConnect": boolean;
@@ -540,6 +548,25 @@ export interface Failure {
     "code": Code;
     "args"?: Args;
 }
+
+/**
+ * Feature is a plan entitlement, named as the server's refusals name it.
+ */
+export enum Feature {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    FeatureSync = "sync",
+    FeatureSharedSpaces = "shared_spaces",
+    FeatureRoles = "roles",
+    FeatureHistory = "history",
+    FeatureAudit = "audit",
+    FeatureShareLinks = "share_links",
+    FeatureSecrets = "secrets",
+    FeatureBilling = "billing",
+};
 
 export interface Field {
     "key": string;
@@ -712,6 +739,7 @@ export interface JarDomain {
 export type Language = string;
 
 export interface LevelRow {
+    "protocol"?: Protocol;
     "id": string;
     "name": string;
     "method"?: string;
@@ -744,10 +772,8 @@ export enum MCPMode {
 };
 
 /**
- * MCPSettings is the server as it was left: off until turned on, with the token minted at that
- * moment. Mode, asking and workspaces are read on every call, so a change applies to the next one. The
- * token never leaves on its own: a window gets HasToken, and only an explicit reveal returns the
- * value.
+ * MCPSettings is read on every call, so changes apply to the next one. The token is revealed only on
+ * request; windows get HasToken.
  */
 export interface MCPSettings {
     "token"?: string;
@@ -794,6 +820,17 @@ export interface Member {
      */
     "gone"?: boolean;
 }
+
+export enum MessageFormat {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    MessageJSON = "json",
+    MessageText = "text",
+    MessageBinary = "binary",
+};
 
 /**
  * Meter is one resource against its cap. Kind is the app's own name for the resource; mapping the
@@ -990,7 +1027,7 @@ export interface Plan {
     "tier": string;
     "seats": number;
     "planUntil"?: number;
-    "features"?: string[] | null;
+    "features"?: Feature[] | null;
     "quotas"?: { [_ in string]?: number } | null;
 
     /**
@@ -1027,6 +1064,47 @@ export interface ProjectedRow {
     "name": string;
     "value": string;
     "from": AuthType;
+}
+
+/**
+ * Protocol selects a transport or request format. The zero value is HTTP.
+ */
+export enum Protocol {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    ProtocolGraphQL = "gql",
+    ProtocolSSE = "sse",
+    ProtocolWebSocket = "ws",
+    ProtocolGRPC = "grpc",
+};
+
+/**
+ * ProtocolDraft is the part of a draft that changes with its protocol.
+ */
+export interface ProtocolDraft {
+    "body": string;
+    "bodyKind": BodyKind;
+    "form": FormRow[] | null;
+    "bodyFile"?: string;
+    "options"?: ProtocolOptions | null;
+}
+
+export interface ProtocolOptions {
+    "variables"?: string;
+    "operationName"?: string;
+    "rpcMethod"?: string;
+
+    /**
+     * Descriptors is the schema merged from SchemaSources when they were last read: a gRPC file
+     * descriptor set, or a GraphQL schema's type definitions. The request works from it offline.
+     */
+    "descriptors"?: string;
+    "schemaSources"?: SchemaSource[] | null;
+    "messageFormat"?: MessageFormat;
+    "messages"?: SavedMessage[] | null;
 }
 
 export enum ProxyMode {
@@ -1071,9 +1149,7 @@ export interface ProxySettings {
 }
 
 /**
- * Publication is a collection published at a public address, as this device remembers it. It is a
- * copy: the server issues the address and keeps the page, and this is its last answer, so a window
- * can draw a published collection before asking anything.
+ * Publication is this device's copy of the server's last answer about a published collection.
  */
 export interface Publication {
     "options"?: PublicationOptions | null;
@@ -1119,9 +1195,7 @@ export interface Publication {
     "pendingUnpublish"?: boolean;
 
     /**
-     * Outline and Changes are this device's own state: the shape of the last publish and what has
-     * changed since. No server answer carries them, so a dedicated save writes them and every other
-     * write of the row leaves them alone.
+     * Outline and Changes are local state (last published shape, changes since) with a save of their own.
      */
     "outline"?: OutlineItem[] | null;
     "changes"?: PageRelease[] | null;
@@ -1213,6 +1287,10 @@ export interface ReadingRow {
  * Record represents full execution history, including timing phases, headers, and bodies.
  */
 export interface Record {
+    "protocol"?: Protocol;
+    "options"?: ReplayOptions | null;
+    "operation"?: string;
+    "messageCount"?: number;
     "id": string;
     "workspaceId"?: string;
     "source": RecordSource;
@@ -1256,6 +1334,7 @@ export interface Record {
     "requestBody"?: BodyRef | null;
     "responseBody"?: BodyRef | null;
     "skipped"?: boolean;
+    "active"?: boolean;
 }
 
 /**
@@ -1270,6 +1349,16 @@ export enum RecordSource {
     SourceManual = "manual",
     SourceBrowser = "browser",
 };
+
+/**
+ * ReplayOptions keeps the settings needed to repeat an exchange from history.
+ */
+export interface ReplayOptions {
+    "variables"?: string;
+    "operationName"?: string;
+    "rpcMethod"?: string;
+    "descriptors"?: string;
+}
 
 export interface Requests {
     "httpVersion": HTTPVersion;
@@ -1352,6 +1441,53 @@ export enum RowKind {
     RowPathParams = "pathParams",
 };
 
+export interface SavedMessage {
+    "data": string;
+    "format": MessageFormat;
+}
+
+export interface SchemaFile {
+    "name": string;
+    "methods"?: number;
+}
+
+/**
+ * SchemaSource is one place a gRPC or GraphQL schema is read from. A request merges all of its
+ * sources, so a module's files can describe what the server does not reflect.
+ */
+export interface SchemaSource {
+    "kind": SchemaSourceKind;
+
+    /**
+     * Path is the file or folder on disk; a server is read at the request's own address.
+     */
+    "path"?: string;
+
+    /**
+     * Skipped are the files under a folder taken out of the schema, relative to it with forward
+     * slashes. Files added to the folder later are read.
+     */
+    "skipped"?: string[] | null;
+
+    /**
+     * What the source gave when it was last read, so the list of sources shows it without reading.
+     */
+    "loadedAt"?: number;
+    "methods"?: number;
+    "files"?: SchemaFile[] | null;
+}
+
+export enum SchemaSourceKind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    SchemaSourceServer = "server",
+    SchemaSourceFile = "file",
+    SchemaSourceFolder = "folder",
+};
+
 export interface Scheme {
     "type": AuthType;
     "label": string;
@@ -1406,9 +1542,8 @@ export enum ScriptScope {
 };
 
 /**
- * Scripts is the code that runs around a request: before it goes out and after it comes back. On a
- * node it is a pointer like Auth (nil means not set here), but levels do not override each other:
- * every level with a script runs, outermost first.
+ * Scripts run around a request. Nil means not set here; levels do not override each other, every
+ * level's script runs, outermost first.
  */
 export interface Scripts {
     "pre"?: string;
@@ -1438,9 +1573,8 @@ export interface SearchGroup {
 }
 
 /**
- * SearchHit is one row of the palette. Everything but the words is decided here: title and path are
- * the user's text and the note is a shape the window words. Only where the query was found is
- * carried, not the matched text, which keeps a variable's value out of the answer.
+ * SearchHit is one palette row. Only the match tier is carried, not the matched text, so variable
+ * values stay out.
  */
 export interface SearchHit {
     "kind": SearchKind;
@@ -1482,9 +1616,7 @@ export enum SearchKind {
 };
 
 /**
- * SearchMatch is where the query was found, which orders the results: exact name, then name, then
- * address, then a variable that merely holds the word. It is a tier rather than a score;
- * SearchHit.At breaks ties within a tier.
+ * SearchMatch is a result tier: exact name, name, address, value. SearchHit.At breaks ties.
  */
 export enum SearchMatch {
     /**
@@ -1552,9 +1684,7 @@ export interface SearchResult {
 }
 
 /**
- * SearchTarget names what activating a row does. The window switches on it; a target this build
- * does not know is a row that does nothing, which is what a newer build's answer should be to an
- * older window.
+ * SearchTarget is what activating a row does; an unknown target does nothing.
  */
 export enum SearchTarget {
     /**
@@ -1594,9 +1724,7 @@ export interface Settings {
     "mcp": MCPSettings;
 
     /**
-     * Shortcuts holds only what was changed: a command not in it uses its default combination, and
-     * ShortcutNone means no combination. The command registry lives in the window, which owns the
-     * labels and the actions.
+     * Shortcuts holds overrides only; ShortcutNone unbinds. The registry lives in the window.
      */
     "shortcuts"?: { [_ in string]?: string } | null;
     "updateCheckAuto": boolean;
@@ -1642,6 +1770,17 @@ export interface Span {
     "head": number;
     "start": number;
     "end": number;
+}
+
+export interface StreamMessage {
+    "sequence": number;
+    "at": number;
+    "direction": string;
+    "name"?: string;
+    "id"?: string;
+    "data": string;
+    "binary"?: boolean;
+    "bytes": number;
 }
 
 /**
@@ -1898,9 +2037,8 @@ export interface Workspace {
 }
 
 /**
- * WorkspaceAccess is what the account says this person may do in a workspace: the role and the three
- * acts the window draws a control for. It is the account's answer, never this device's, so only the
- * round that reads the account's list writes it. The server judges every change itself.
+ * WorkspaceAccess is the account's word on what this person may do; only the account round writes it,
+ * and the server still judges every change.
  */
 export interface WorkspaceAccess {
     "roleName"?: string;

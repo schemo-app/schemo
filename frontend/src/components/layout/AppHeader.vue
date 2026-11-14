@@ -14,10 +14,7 @@ import CaptionClose from '../ui/CaptionClose.vue'
 import AppTabStrip from './AppTabStrip.vue'
 import Icon from '../ui/Icon.vue'
 
-// The window's header: the strip of tabs and the two buttons beside it, the environment and the
-// command palette. On macOS the traffic lights float over its left, and with the sidebar closed
-// over this bar instead, which the left inset makes room for. Where the app draws the chrome
-// itself, its left leads with the menu and the panel.
+// On macOS the traffic lights float over the left edge; the left inset makes room for them.
 const search = useSearchStore()
 const { isMac, customTitlebar } = usePlatform()
 const { hidden: sidebarHidden, toggle: toggleSidebar } = useSidebarToggle()

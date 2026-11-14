@@ -10,9 +10,7 @@ import (
 // Rendering a request back as a command — one tool per file beside this one. Only curl is ever read
 // back; all five are ways of carrying a request out of here for a person to paste in a terminal.
 
-// A Format is one of the five notations. FormatURL is the address alone, the one shape that is not
-// a command; FormatCurlLines is curl written for a file, one option per line, rather than for a
-// terminal.
+// Format is a notation. FormatURL is the bare address; FormatCurlLines is curl with one option per line.
 type Format string
 
 const (

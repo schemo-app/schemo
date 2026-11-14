@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // DraftID names a draft the window is editing: a tab's (see IsTabDraft) or a saved request's,
@@ -31,11 +32,13 @@ const (
 )
 
 type Draft struct {
-	ID      DraftID `json:"id"`
-	Method  string  `json:"method"`
-	URL     string  `json:"url"`
-	Params  []Row   `json:"params"`
-	Headers []Row   `json:"headers"`
+	Protocol Protocol         `json:"protocol,omitempty"`
+	Options  *ProtocolOptions `json:"options,omitempty"`
+	ID       DraftID          `json:"id"`
+	Method   string           `json:"method"`
+	URL      string           `json:"url"`
+	Params   []Row            `json:"params"`
+	Headers  []Row            `json:"headers"`
 	// PathParams holds one row for each `:name` the address carries and is derived from it: the
 	// name is the address's, and what the row keeps is the value and the description.
 	PathParams    []Row     `json:"pathParams"`
@@ -45,6 +48,17 @@ type Draft struct {
 	Form          []FormRow `json:"form"`
 	BodyFile      string    `json:"bodyFile,omitempty"`
 	EnvironmentID string    `json:"environmentId,omitempty"`
+	// InactiveProtocols holds the editor's previous inputs in this draft when the protocol changes.
+	InactiveProtocols map[Protocol]ProtocolDraft `json:"inactiveProtocols,omitempty"`
+}
+
+// ProtocolDraft is the part of a draft that changes with its protocol.
+type ProtocolDraft struct {
+	Body     string           `json:"body"`
+	BodyKind BodyKind         `json:"bodyKind"`
+	Form     []FormRow        `json:"form"`
+	BodyFile string           `json:"bodyFile,omitempty"`
+	Options  *ProtocolOptions `json:"options,omitempty"`
 }
 
 func NewDraft() Draft {
@@ -94,9 +108,7 @@ type FormRow struct {
 	Enabled bool   `json:"enabled"`
 }
 
-// MediaTypeOf is the media type of a Content-Type value: type/subtype in lower case, without its
-// parameters. A value too damaged for its parameters to be read still names a type before the first
-// semicolon.
+// MediaTypeOf is a Content-Type's lower-case type/subtype without parameters, even when they are malformed.
 func MediaTypeOf(contentType string) string {
 	media, _, err := mime.ParseMediaType(contentType)
 	if err == nil || (media != "" && errors.Is(err, mime.ErrInvalidMediaParameter)) {
@@ -151,9 +163,8 @@ type QueryPair struct {
 	Value string
 }
 
-// QueryPairs reads a query string into its pairs, in the order they were written and with the
-// repeated names kept, which url.Values cannot do. A part with no `=` is a name on its own, the way
-// a flag is written. Nothing is decoded; see Decoded.
+// QueryPairs splits a query in order with repeats kept, which url.Values cannot; a part without `=`
+// is a bare name. Nothing is decoded (see Decoded).
 func QueryPairs(query string) []QueryPair {
 	var pairs []QueryPair
 	for _, part := range strings.Split(query, "&") {
@@ -188,9 +199,8 @@ type pathToken struct {
 	name       string
 }
 
-// pathSlot is a `:name` right after a slash. A name starts with a letter or underscore, so the port
-// of `host:8080` never matches; a hyphen continues it and a dot ends it (`:id.json`). The window
-// reads the same grammar in `frontend/src/lib/vars.ts`.
+// pathSlot is a `:name` after a slash; names start with a letter or underscore, so ports never match.
+// Mirrored in frontend/src/lib/vars.ts.
 var pathSlot = regexp.MustCompile(`/(:([A-Za-z_][A-Za-z0-9_-]*))`)
 
 // pathTokens finds the `:name` segments before the query or the fragment.
@@ -298,9 +308,7 @@ func escapeSegment(value string) string {
 	return out.String()
 }
 
-// ResolvedRequest is a saved request as a copy needs it: the whole request, the authorization from
-// the nearest level above and the variables of the levels above. The tree carries neither bodies
-// nor those answers, so the walk that knows them returns this shape.
+// ResolvedRequest is a whole saved request with the nearest inherited auth and the variables above it.
 type ResolvedRequest struct {
 	Node      CollectionNode `json:"node"`
 	Auth      *Auth          `json:"auth,omitempty"`
@@ -372,7 +380,10 @@ type Capture struct {
 	Off    bool          `json:"off,omitempty"`
 }
 
-var variableName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+// VariableNamePattern is the grammar of a variable name, for a pattern that finds names in text.
+const VariableNamePattern = `[A-Za-z_][A-Za-z0-9_]*`
+
+var variableName = regexp.MustCompile(`^` + VariableNamePattern + `$`)
 
 func IsVariableName(name string) bool { return variableName.MatchString(name) }
 
@@ -394,9 +405,11 @@ func (c Capture) Valid() bool {
 	return false
 }
 
-// LoopbackHost says whether a host is this machine by its own spelling: an address in a loopback
-// range, or the name localhost. A name that merely starts like an address (127.example.com) is a
-// name like any other.
+// LoopbackHeaderTimeout bounds how long the app's loopback servers wait for request headers, so a
+// stalled local client cannot hold a connection open.
+const LoopbackHeaderTimeout = 10 * time.Second
+
+// LoopbackHost reports a loopback address or "localhost"; 127.example.com is an ordinary name.
 func LoopbackHost(host string) bool {
 	host = strings.TrimSuffix(strings.Trim(host, "[]"), ".")
 	if addr, err := netip.ParseAddr(host); err == nil {
@@ -405,9 +418,8 @@ func LoopbackHost(host string) bool {
 	return strings.EqualFold(host, "localhost")
 }
 
-// LocalName is LoopbackHost, and any name under .localhost, which RFC 6761 §6.3 reserves for this
-// machine. A resolver is only advised to honour that, so whoever trusts the name for more than a
-// default also checks the address it was dialed at.
+// LocalName is LoopbackHost plus names under .localhost (RFC 6761 §6.3). Resolvers only should honour
+// that, so trusting it further needs the dialed address checked.
 func LocalName(host string) bool {
 	if LoopbackHost(host) {
 		return true

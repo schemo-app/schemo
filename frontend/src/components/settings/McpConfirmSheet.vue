@@ -4,10 +4,7 @@ import Sheet from '../ui/Sheet.vue'
 import { useMcp } from '../../composables/useMcp'
 import { t } from '../../i18n'
 
-// The "ask before sending" question: an agent asked for a request to go out, and it goes nowhere
-// until somebody here says so. It shows only what the app knows (the agent, the method and the
-// masked address), because a confirmation with a secret in it would be one more place a secret is
-// written down.
+// Only the masked address is shown, so the prompt never carries a secret.
 
 const { question, answerSend } = useMcp()
 

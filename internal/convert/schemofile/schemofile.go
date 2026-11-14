@@ -1,6 +1,4 @@
-// Package schemofile reads and writes this app's own collection file, the one format that loses
-// nothing: folders, authorization, scripts, variables with their kinds, and environments beside the
-// collections. It is a pure package, so both directions are tested against a file.
+// Package schemofile reads and writes the app's own lossless collection file, environments included.
 package schemofile
 
 import (
@@ -34,6 +32,8 @@ type level struct {
 }
 
 type request struct {
+	Protocol    domain.Protocol          `json:"protocol,omitempty"`
+	Options     *domain.ProtocolOptions  `json:"options,omitempty"`
 	Name        string                   `json:"name"`
 	Method      string                   `json:"method,omitempty"`
 	URL         string                   `json:"url,omitempty"`
@@ -66,9 +66,7 @@ type formRow struct {
 	Enabled bool   `json:"enabled"`
 }
 
-// variable is what a level answers for `{{tokens}}`. A secret keeps its name and kind and loses its
-// value unless values were asked for: this is the one file the app writes that can carry one, and
-// only on request.
+// variable keeps a secret's name and kind, and its value only when asked for.
 type variable struct {
 	Name     string              `json:"name"`
 	Value    string              `json:"value,omitempty"`
@@ -131,6 +129,8 @@ func writtenLevel(collection domain.Collection, secrets bool) level {
 func writtenRequest(node domain.CollectionNode) request {
 	out := request{
 		Name:        node.Name,
+		Protocol:    node.Protocol,
+		Options:     node.Options,
 		Method:      node.Method,
 		URL:         node.URL,
 		Body:        node.Body,
@@ -248,6 +248,8 @@ func readLevel(from level) domain.Collection {
 		node := domain.CollectionNode{
 			Name:        one.Name,
 			Position:    one.Position,
+			Protocol:    one.Protocol,
+			Options:     one.Options,
 			Method:      one.Method,
 			URL:         one.URL,
 			Body:        one.Body,

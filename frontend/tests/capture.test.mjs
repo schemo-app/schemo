@@ -32,7 +32,11 @@ globalThis.captureBridge = { Status: async () => ({ connected: false }), Listeni
 const realComponents = ['/history/CapturePage.vue', '/history/HistoryPage.vue', '/components/ui/Button.vue']
 const load = await vite({
   '/bindings/schemo/internal/agent/index.ts': 'export const Extension = globalThis.captureBridge',
-  '/bindings/schemo/internal/domain/index.ts': 'export const RecordSource = {SourceBrowser: "browser"}',
+  '/bindings/schemo/internal/domain/index.ts': `
+    export const RecordSource = { SourceBrowser: 'browser' }
+    export const Protocol = { $zero: '', ProtocolGraphQL: 'gql', ProtocolWebSocket: 'ws', ProtocolSSE: 'sse', ProtocolGRPC: 'grpc' }
+    export const BodyKind = { BodyJSON: 'json' }
+  `,
   '/bindings/schemo/internal/convert/index.ts': 'export const Transfer = {}',
   '/src/stores/records.ts': 'export const useRecordsStore = () => globalThis.recordsStore',
   '/src/stores/capture.ts': 'export const useCaptureStore = () => globalThis.captureStore',
@@ -67,6 +71,7 @@ const load = await vite({
 })
 const { useCaptureEvents } = await load('/src/composables/useAppEvents.ts')
 const { captureSessions } = await load('/src/lib/recordTabs.ts')
+const { isRecordError } = await load('/src/lib/requestRecord.ts')
 Object.defineProperty(globalThis.recordsStore, 'browserRecords', {
   get() { return this.records.filter(record => record.source === 'browser') },
 })
@@ -75,6 +80,14 @@ Object.defineProperty(globalThis.captureStore, 'sessions', {
 })
 const { default: CapturePage } = await load('/src/components/history/CapturePage.vue')
 const { default: HistoryPage } = await load('/src/components/history/HistoryPage.vue')
+
+test('history recognizes gRPC failures and treats status zero as success', () => {
+  assert.equal(isRecordError({ protocol: 'grpc', status: 14 }), true)
+  assert.equal(isRecordError({ protocol: 'grpc', status: 0 }), false)
+  assert.equal(isRecordError({ protocol: 'grpc', status: 0, error: 'connection refused' }), true)
+  assert.equal(isRecordError({ status: 404 }), true)
+  assert.equal(isRecordError({ status: 200 }), false)
+})
 
 function mountEvents(context) {
   const renderer = createRenderer({

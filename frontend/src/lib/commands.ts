@@ -1,12 +1,7 @@
 import type { MessageKey } from '../i18n'
 
-// The commands the window knows, with the combination each comes with: the one place a shortcut is
-// written down. Every handler asks for its command rather than carrying its own key, so what the
-// settings draw is what the keyboard does.
-//
-// A combination is modifiers then a key: `mod` is the platform's own (⌘ on macOS, Ctrl elsewhere),
-// and the key is a letter, a digit, a named key such as `enter`, or an F-key. Go checks the shape
-// before it keeps one, so both sides agree on what a combination is.
+// The one place shortcuts are defined; handlers look their command up here. A combination is
+// modifiers then a key, `mod` being ⌘ on macOS and Ctrl elsewhere; Go validates the shape.
 
 /** The combination of a command somebody unassigned: it wears none, and no keyboard can match it. */
 export const COMBO_NONE = 'none'
@@ -43,10 +38,10 @@ export const COMMANDS: readonly Command[] = [
   { id: 'inspector', group: 'shortcuts.groups.response', label: 'shortcuts.cmd.inspector', combo: 'mod+alt+I' },
 ]
 
-/** The combination a keyboard event is, or nothing for one that cannot be one: modifiers alone,
- *  unmodified keys that would swallow typing, the other platform's modifier, and a character typed
- *  with AltGr. On macOS Control belongs to the text field's own caret keys (Ctrl+K, Ctrl+E), and on
- *  the other platforms the Windows key is the system's. */
+/**
+ * The combination an event makes, or '' for bare modifiers, unmodified typing keys, the other
+ * platform's modifier and AltGr characters. Control on macOS stays with the caret keys.
+ */
 export function comboOfEvent(event: KeyboardEvent, mac: boolean): string {
   if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) return ''
   if (mac ? event.ctrlKey : event.metaKey) return ''

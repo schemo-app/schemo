@@ -5,9 +5,6 @@ import { useSheetLines } from '../../composables/useSheetLines'
 import { useEnvironmentsStore } from '../../stores/environments'
 import { t } from '../../i18n'
 
-// What is about to go, before it goes. The two destructive things in this window are one shape: an
-// environment takes its variables and their secrets with it, and the globals, which cannot be
-// deleted, only emptied, take what is written in them and leave every environment alone.
 const { kind, referenced } = defineProps<{ kind: 'delete' | 'clear'; referenced: boolean }>()
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'confirm'): void }>()

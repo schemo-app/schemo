@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// The words of a tab, drawn twice: what the eye reads, and an invisible copy at the heavier weight
-// the chosen tab takes. The invisible one holds the width, so the row stands still when the choice
-// moves to another tab.
+// An invisible bold copy holds the width, so the row does not shift when the selection moves.
 </script>
 
 <template>

@@ -32,6 +32,7 @@ func init() {
 	application.RegisterEvent[domain.Record](request.TopicRecordAdded)
 	application.RegisterEvent[request.HistoryCleared](request.TopicHistoryCleared)
 	application.RegisterEvent[request.RequestFinished](request.TopicRequestFinished)
+	application.RegisterEvent[request.RequestFinished](request.TopicStreamOpened)
 	application.RegisterEvent[request.RequestFailed](request.TopicRequestFailed)
 	application.RegisterEvent[request.RunProgress](request.TopicRunProgress)
 	application.RegisterEvent[domain.CollectionRun](request.TopicRunFinished)

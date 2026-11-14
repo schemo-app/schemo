@@ -12,6 +12,7 @@ import (
 	snapshotv1 "github.com/schemo-app/proto/snapshot/v1"
 
 	"schemo/internal/cloud"
+	"schemo/internal/convert/schemofile"
 	"schemo/internal/domain"
 	"schemo/internal/platform"
 )
@@ -563,6 +564,34 @@ func TestExportAsksForSecretValuesOnlyWhenAsked(t *testing.T) {
 
 // A command is not a file: cURL is what Curl writes, so asking Export for it is the window saying
 // the wrong thing rather than a format that failed.
+func TestExportPreservesProtocolInSchemoAndRefusesLossyConverters(t *testing.T) {
+	h := newHarness()
+	h.collections.full = domain.Collection{
+		ID: "ledger", Name: "Ledger",
+		Children: []domain.Collection{{Name: "API", Items: []domain.CollectionNode{{
+			Name: "Lookup", Protocol: domain.ProtocolGraphQL, Method: "POST", URL: "https://example.test/graphql",
+			Body: "query Lookup { id }", Options: &domain.ProtocolOptions{Variables: `{"id":7}`},
+		}}}},
+	}
+	for _, format := range []Format{FormatPostman, FormatOpenAPI, FormatInsomnia} {
+		if _, err := h.transfer.export(t.Context(), "ledger", format, false); domain.CodeOf(err) != domain.CodeExportProtocol {
+			t.Fatalf("export as %s returned %v", format, err)
+		}
+	}
+	exported, err := h.transfer.export(t.Context(), "ledger", FormatSchemo, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := schemofile.Read(exported.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := document.Collections[0].Children[0].Items[0]
+	if node.Protocol != domain.ProtocolGraphQL || node.Options == nil || node.Options.Variables != `{"id":7}` {
+		t.Fatalf("export dropped protocol data: %+v", node)
+	}
+}
+
 func TestExportRefusesACommandFile(t *testing.T) {
 	h := newHarness()
 	h.collections.full = domain.Collection{ID: "ledger", Name: "Ledger"}

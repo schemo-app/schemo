@@ -15,13 +15,20 @@ export {
 };
 
 export type {
+    BinaryPreview,
     Copy,
+    GraphQLField,
+    GraphQLGroup,
+    GraphQLSchema,
     HistoryCleared,
     NodeEditor,
     Paste,
     Preview,
+    RPCMethod,
+    RPCSchema,
     RequestFailed,
     RequestFinished,
     RunProgress,
-    Seed
+    Seed,
+    StreamSnapshot
 } from "./models.js";

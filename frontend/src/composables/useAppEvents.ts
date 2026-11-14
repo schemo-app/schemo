@@ -3,7 +3,7 @@ import { useEventListener } from '@vueuse/core'
 import { Extension, type CaptureState } from '../../bindings/schemo/internal/agent'
 import { Transfer } from '../../bindings/schemo/internal/convert'
 import { useSyncStore } from '../stores/sync'
-import { ownerOf } from '../stores/content'
+import { refreshStreamPreviews, ownerOf } from '../stores/content'
 import { holdAnswer } from '../lib/earlyAnswers'
 import { useSettings } from './useSettings'
 import { useCollectionsStore } from '../stores/collections'
@@ -152,19 +152,26 @@ function useRecordEvents(
     records.prepend(event.data)
   })
 
+  useWailsEvent('request:stream-opened', (event) => {
+    const { id, record } = event.data
+    records.prepend(record)
+    const owner = ownerOf(id)
+    if (owner?.pendingSendId.value === id) void owner.showRecord(record)
+    else if (!owner) holdAnswer(id, { record })
+  })
+
   // Routes completed request execution payloads to the tab that sent it, or to the early answer buffer
   useWailsEvent('request:finished', (event) => {
     const { id, record } = event.data
+    if (!record.cancelled && !record.skipped) {
+      records.prepend(record)
+      refreshStreamPreviews(record)
+    }
     const owner = ownerOf(id)
     if (owner) {
-      void owner.finishSend(record)
-      records.prepend(record)
-    } else if (record.agent) {
-      // An agent's send belongs to nobody in this window (it asked over the MCP server), so there
-      // is no answer to hold for anybody: it goes straight into the history, where the person
-      // watches what the agent does.
-      records.prepend(record)
-    } else holdAnswer(id, { record })
+      if (record.cancelled) owner.failSend(id)
+      else void owner.finishSend(record)
+    } else if (!record.agent && !record.runId) holdAnswer(id, { record })
   })
 
   // Handles request execution failures prior to record creation
@@ -172,7 +179,8 @@ function useRecordEvents(
     const { id } = event.data
     toast.show(tr('errors.requestFailed', { error: failureText(event.data.failure) ?? event.data.error }), 'error')
     const owner = ownerOf(id)
-    if (owner) owner.failSend()
+    records.removeActive(id)
+    if (owner) owner.failSend(id)
     else holdAnswer(id, { failed: true })
   })
 
@@ -196,9 +204,8 @@ function useRecordEvents(
 }
 
 /**
- * A link to a published page asks this window for one collection, so the import dialog opens on it.
- * The page is taken from Go rather than carried by the event: a link is usually what started this
- * app, and nothing is listening while the window is still drawing.
+ * Opens the import dialog for a published-page link. The page is asked from Go because the link
+ * usually launched the app before anything listened.
  */
 function useTransferEvents(): void {
   const transfer = useTransferStore()

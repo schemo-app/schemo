@@ -3,6 +3,8 @@ package db
 import (
 	commonv1 "github.com/schemo-app/proto/go/common/v1"
 	historyv1 "github.com/schemo-app/proto/go/history/v1"
+
+	"schemo/internal/domain"
 )
 
 // RecordSource converts an application value to the wire enum.
@@ -53,27 +55,23 @@ func BodySideIn(value historyv1.BodySide) string {
 	}
 }
 
+var features = map[commonv1.Feature]domain.Feature{
+	commonv1.Feature_FEATURE_SYNC:              domain.FeatureSync,
+	commonv1.Feature_FEATURE_SHARED_WORKSPACES: domain.FeatureSharedSpaces,
+	commonv1.Feature_FEATURE_ROLES:             domain.FeatureRoles,
+	commonv1.Feature_FEATURE_HISTORY:           domain.FeatureHistory,
+	commonv1.Feature_FEATURE_AUDIT:             domain.FeatureAudit,
+	commonv1.Feature_FEATURE_SHARE_LINKS:       domain.FeatureShareLinks,
+	commonv1.Feature_FEATURE_SECRETS:           domain.FeatureSecrets,
+	commonv1.Feature_FEATURE_BILLING:           domain.FeatureBilling,
+}
+
 // Features reads the features this client recognizes.
-func Features(values []commonv1.Feature) []string {
-	out := make([]string, 0, len(values))
+func Features(values []commonv1.Feature) []domain.Feature {
+	out := make([]domain.Feature, 0, len(values))
 	for _, value := range values {
-		switch value {
-		case commonv1.Feature_FEATURE_SYNC:
-			out = append(out, "sync")
-		case commonv1.Feature_FEATURE_SHARED_WORKSPACES:
-			out = append(out, "shared_spaces")
-		case commonv1.Feature_FEATURE_ROLES:
-			out = append(out, "roles")
-		case commonv1.Feature_FEATURE_HISTORY:
-			out = append(out, "history")
-		case commonv1.Feature_FEATURE_AUDIT:
-			out = append(out, "audit")
-		case commonv1.Feature_FEATURE_SHARE_LINKS:
-			out = append(out, "share_links")
-		case commonv1.Feature_FEATURE_SECRETS:
-			out = append(out, "secrets")
-		case commonv1.Feature_FEATURE_BILLING:
-			out = append(out, "billing")
+		if feature, ok := features[value]; ok {
+			out = append(out, feature)
 		}
 	}
 	return out

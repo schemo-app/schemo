@@ -6,9 +6,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// Chain is what runs around a request, outermost first: the collection's scripts, then each
-// collection inside it on the way down, then the request's own. A level with nothing to run is not
-// in it; this is what runs, not the places it could have run from.
+// Chain is what runs around a request, outermost first; levels with nothing to run are left out.
 func (s *Scripts) Chain(ctx context.Context, nodeID string) ([]Level, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -38,12 +36,7 @@ func (s *Scripts) chain(ctx context.Context, workspace, nodeID string) ([]Level,
 		}
 	}
 
-	// Not in any tree: the command line's request, whose code lives with the draft it is. It is a
-	// chain of one, with no name to be drawn with.
-	//
-	// An id nothing knows is the same answer: a request whose level is gone (a card open on a node
-	// deleted beside it) has nothing around it, and saying so is better than failing a send over
-	// code that no longer exists.
+	// A request in no tree, or under a level since deleted, runs only its own code.
 	scripts, err := s.store.Scripts(ctx, workspace, nodeID)
 	if errors.Is(err, domain.ErrNotFound) {
 		return []Level{}, nil
@@ -57,9 +50,8 @@ func (s *Scripts) chain(ctx context.Context, workspace, nodeID string) ([]Level,
 	return []Level{{NodeID: nodeID, Kind: KindDraft, Scripts: *scripts}}, nil
 }
 
-// pathTo is the way down from a collection to one id, collections inside it included. What is above
-// a request runs before it does, so this walk's order is the chain's order. A collection that is
-// the id itself is a chain of one, with nothing above it.
+// pathTo walks down from a collection to id, giving the chain's order; id being the collection is a
+// chain of one.
 func (s *Scripts) pathTo(
 	ctx context.Context,
 	workspace string,

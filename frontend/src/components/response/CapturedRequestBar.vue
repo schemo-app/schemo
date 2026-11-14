@@ -10,13 +10,7 @@ import { isNumberText, methodInkClass } from '../../lib/format'
 import type { RecordView } from '../../lib/requestRecord'
 import { t } from '../../i18n'
 
-// The line a captured request gets, and the only one it can: it has no command line to be read in,
-// so where it went and what it carried are said here. What came back is the strip below; a method
-// and a status in this line would be the response said twice.
-//
-// The field is the editor's own object, drawn read-only: the verb as its own plate, the address
-// after it. The one way on from here is into the request line: the captured request becomes the one
-// being composed, which the button at the end of the line does.
+// A captured request has no command line, so its method and address are shown read-only here.
 const { record, canOpen = false } = defineProps<{ record: RecordView; canOpen?: boolean }>()
 
 const emit = defineEmits<{ openInRequest: [] }>()

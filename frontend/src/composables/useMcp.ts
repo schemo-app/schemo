@@ -3,10 +3,6 @@ import { Settings } from '../../bindings/schemo/internal/workspace'
 import { MCP as MCPService, type ConfirmRequest, type MCPStatus } from '../../bindings/schemo/internal/agent'
 import { useWailsEvent } from './useWailsEvent'
 
-// The MCP server as the window draws it: whether it listens and who has called, followed by the
-// event the server publishes whenever either moves, and the question it asks before a send, which
-// is answered here and nowhere else.
-
 const status = ref<MCPStatus | null>(null)
 const question = ref<ConfirmRequest | null>(null)
 

@@ -37,9 +37,7 @@ const source = ref<Source | null>(null)
 const via = ref<Via>('file')
 // What Go last read: the token is good once, and the card and the button count what it names.
 const preview = ref<Preview | null>(null)
-// Which read may still land: an answer that comes back after the dialog moved on (another source,
-// another way in) is not the preview of the screen it would arrive at, and its token would import
-// the wrong thing.
+// A read answered after the dialog moved on would import the wrong thing.
 let latestRead = 0
 const url = ref('')
 const curl = ref('')
@@ -121,9 +119,6 @@ const places = computed(() => {
   return out
 })
 
-// What the new collection would be called before anything is read: a document names itself, a paste
-// of commands has no name of its own (the window says where it came from), and nothing read yet
-// names nothing.
 const newName = computed(() => {
   if (preview.value?.name) return t('transfer.newCollection', { name: preview.value.name })
   if (source.value === 'curl') {
@@ -167,9 +162,7 @@ watch(
     via.value = 'file'
     url.value = ''
     curl.value = ''
-    // The id the dialog was opened for may name a collection that is not in the tree any more (a
-    // tab left open over a deleted row). The select offers what exists, so it starts on the new
-    // collection unless the target is one of them.
+    // The target may be a collection deleted since the tab opened.
     target.value = places.value.some((place) => place.id === transfer.importParent)
       ? transfer.importParent
       : ''

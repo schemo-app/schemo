@@ -20,36 +20,23 @@ import * as domain$0 from "../domain/models.js";
 import * as $models from "./models.js";
 
 /**
- * Create makes a workspace and leaves the app where it was: a new workspace is empty, and moving the
- * window into it without being asked would look like the app had lost its data. The switcher's
- * caller switches explicitly.
+ * Create makes a workspace without switching to it; the caller switches explicitly.
  */
 export function Create($in: $models.WorkspaceInput): $CancellablePromise<$models.Created> {
     return $Call.ByID(441341708, $in);
 }
 
 /**
- * Delete removes a workspace and everything in it. The last one is refused: every other answer the
- * app gives leans on there being a workspace to keep things in, and which one it is does not matter, so
- * the row the app is born with goes like any other. Deleting the one on screen moves the pointer to
- * the oldest that is left, so the window never points at a row that is gone.
- * 
- * A workspace that is also in the account goes from there first. The other order would leave a device
- * with no row and an account with a workspace: the next round would find nothing paired with it and
- * make it again, a deleted workspace coming back empty.
+ * Delete removes a workspace; the last one is refused, and deleting the active one moves the pointer
+ * to the oldest. A linked workspace is ended in the account first, or the next round would recreate it.
  */
 export function Delete(id: string): $CancellablePromise<domain$0.WorkspaceState> {
     return $Call.ByID(1778974835, id);
 }
 
 /**
- * Leave takes this person out of a workspace somebody else's. The account is told first and the row
- * goes after it: a device that dropped the workspace and then failed to leave would find the workspace
- * still there on its next round, the person still in it, and make it again.
- * 
- * It is separate from ending one because they are different acts with different rights: whoever
- * created a workspace may end it for everybody, and anybody in it may step out, a member who may not
- * end the workspace having no other way to leave one.
+ * Leave takes this person out of someone else's workspace. The account is told first, or the next
+ * round would bring the workspace back.
  */
 export function Leave(id: string): $CancellablePromise<domain$0.WorkspaceState> {
     return $Call.ByID(2620995047, id);
@@ -64,9 +51,7 @@ export function SaveTabs(strip: domain$0.Strip): $CancellablePromise<void> {
 }
 
 /**
- * Snapshot is every workspace and the pointer to the one on screen, the whole of what the switcher
- * draws in one answer, with what each of them holds, because the window draws the counts in the
- * same rows as the names.
+ * Snapshot is every workspace with its counts and the active pointer: everything the switcher draws.
  */
 export function Snapshot(): $CancellablePromise<domain$0.WorkspaceState> {
     return $Call.ByID(4237334732);

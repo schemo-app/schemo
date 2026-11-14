@@ -1,16 +1,9 @@
 import { ref, type Ref } from 'vue'
 import { tryOnScopeDispose, useEventListener } from '@vueuse/core'
+import type { TreeRow } from '../lib/treeRows'
 
-/** Represents a single draggable tree node (collection or request) metadata. */
-export interface DraggableRow {
-  id: string
-  kind: 'collection' | 'request'
-  name: string
-  method: string
-  depth: number
-  collectionId: string
-  position: number
-}
+/** What a drag needs to know of a tree row. */
+export type DraggableRow = Pick<TreeRow, 'id' | 'kind' | 'name' | 'method' | 'depth' | 'collectionId' | 'position'>
 
 export type DropZone = 'before' | 'after' | 'inside'
 
@@ -18,9 +11,6 @@ export interface DropTarget {
   id: string
   zone: DropZone
 }
-
-const THRESHOLD = 4
-const OPEN_AFTER = 500
 
 interface TreeDragOptions<R extends DraggableRow> {
   rows: () => R[]
@@ -77,7 +67,7 @@ export function useTreeDrag<R extends DraggableRow = DraggableRow>(options: Tree
   function onMove(e: PointerEvent): void {
     if (pending && !drag.value) {
       const travelled = Math.abs(e.clientX - pending.x) + Math.abs(e.clientY - pending.y)
-      if (travelled < THRESHOLD) return
+      if (travelled < 4) return
       drag.value = { row: pending.row, target: null, x: e.clientX, y: e.clientY }
       pending = null
       document.body.style.userSelect = 'none'
@@ -93,7 +83,7 @@ export function useTreeDrag<R extends DraggableRow = DraggableRow>(options: Tree
     if (target && target.zone !== 'inside') clearOpening()
     if (target && target.zone === 'inside' && !opening) {
       const id = target.id
-      opening = { id, timer: window.setTimeout(() => options.open(id), OPEN_AFTER) }
+      opening = { id, timer: window.setTimeout(() => options.open(id), 500) }
     }
   }
 

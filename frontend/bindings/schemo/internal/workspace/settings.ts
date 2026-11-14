@@ -64,9 +64,8 @@ export function RotateMCPToken(): $CancellablePromise<domain$0.Settings> {
 }
 
 /**
- * Save applies a JSON merge patch (RFC 7386) to the stored document: objects merge, other values
- * replace, null removes. Sending only what changed keeps two windows from undoing each other.
- * The MCP token and the has* /tail fields are Go's and are ignored in the patch.
+ * Save applies a JSON merge patch (RFC 7386), so two windows sending changes do not undo each other.
+ * The MCP token and has* /tail fields are ignored.
  */
 export function Save(patch: { [_ in string]?: any } | null): $CancellablePromise<domain$0.Settings> {
     return $Call.ByID(2391951896, patch);

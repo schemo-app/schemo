@@ -72,9 +72,6 @@ const INDEX: readonly Entry[] = [
   ['extension', 'extension.filters', 'extension.skipAnalytics', 'settings.find.skipAnalytics'],
   ['extension', 'extension.filters', 'extension.onlyJson', 'settings.find.onlyJson'],
 
-  // The MCP server. Its groups are the pane's sections, the switch at the top stands for the server
-  // itself, and the two rows that are only about it as a thing (the address and the token) are the
-  // ones an agent's setup sends somebody looking for.
   ['mcp', 'settings.cat.mcp', 'mcp.toggleTitle', 'settings.find.mcp'],
   ['mcp', 'mcp.connection', 'mcp.port', 'settings.find.mcpPort'],
   ['mcp', 'mcp.connection', 'mcp.token', 'settings.find.mcpToken'],

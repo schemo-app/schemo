@@ -1,63 +1,74 @@
-# Schemo
 
-A fast, native API client for building, testing and sharing HTTP requests.
+<div align="center">
+  <a href="https://schemo.app">
+    <img src="logo.svg" alt="Schemo" width="88" height="88">
+  </a>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/schemo-dark.png">
-  <img src="docs/media/schemo-light.png" alt="Schemo request and JSON:API response" width="880">
-</picture>
+  <h1>Schemo</h1>
+
+  <p>
+    Open-source desktop API client for building, testing, and sharing requests.
+  </p>
+
+  <p>
+    <strong>HTTP · GraphQL · gRPC · WebSocket · SSE</strong>
+  </p>
+
+  <p>
+    <a href="https://schemo.app">Website</a> ·
+    <a href="https://github.com/schemo-app/schemo/releases">Download</a> ·
+    <a href="#features">Features</a> ·
+    <a href="#development">Development</a>
+  </p>
+
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/schemo-dark.jpg">
+    <img src="docs/media/schemo-light.jpg" alt="Schemo API client" width="1200">
+  </picture>
+</div>
 
 ## Features
 
-- **Collections** with folders, inherited authorization and variables, and collection runs
-- **Environments** with secret variables that never leave the device in exports
-- **Authorization**: Bearer, Basic, API key, JWT, AWS SigV4, Digest, OAuth 2.0
-- **Scripts** before and after a request, in a sandbox, with assertions
-- **History** that is searchable and keeps every response
-- **JSON:API** navigation, JSON tree, map and type views; array tables with filtering, sorting and CSV export
-- **Bulk editing** of query parameters and headers as text
-- **Import** Postman, Insomnia, OpenAPI, HAR and cURL; **copy** as cURL, fetch, wget, HTTPie or PowerShell
-- **Team workspaces** with sync, roles and published documentation
-- **Browser capture** through the [extension](https://github.com/schemo-app/extension)
-- **MCP server** so agents can read and send your saved requests ([docs](docs/MCP.md))
+- **API protocols** — HTTP, GraphQL, gRPC (unary and server streaming), WebSocket, and SSE. Explore GraphQL schemas and load gRPC definitions via reflection or `.proto` files.
+- **Response inspector** — View JSON as a tree, map, or table. Navigate JSON:API relationships, export CSV, preview media, inspect Hex, and save response files.
+- **Collections** — Organize requests into folders, manage environments, inherit variables and authorization, and save response examples.
+- **Testing** — Run collections with pre-request scripts and response assertions.
+- **Authentication** — Bearer, Basic, API Key, JWT, AWS SigV4, Digest, and OAuth 2.0.
+- **History** — Search and replay requests, inspect headers, cookies, and timings. Capture browser traffic with [Schemo Bridge](https://github.com/schemo-app/extension).
+- **Import & export** — Import from Postman, Insomnia, OpenAPI, HAR, or cURL. Export collections or copy requests as cURL, Fetch, wget, HTTPie, or PowerShell.
+- **Collaboration** — Sync team workspaces, manage roles, and publish collection documentation with Schemo Cloud.
+- **MCP** — Let AI agents discover, execute, and inspect saved requests through the built-in MCP server. [Learn more](docs/MCP.md).
 
-## Install
+## Installation
 
-Download the latest build from [Releases](https://github.com/schemo-app/schemo/releases).
+Download the latest release from [GitHub Releases](https://github.com/schemo-app/schemo/releases).
 
-| Platform | Package | Requires |
-|---|---|---|
-| macOS | `.dmg` | macOS 12+ |
-| Windows | installer | Windows 10+ |
-| Linux | `.deb` | GTK3, WebKit2GTK 4.1 |
+| Platform | Package          | Requirements          |
+|----------|------------------|-----------------------|
+| macOS    | Universal `.dmg` | macOS 12+             |
+| Windows  | x64 installer    | Windows 10+, WebView2 |
+| Linux    | amd64 `.deb`     | GTK 3, WebKitGTK 4.1  |
 
-Updates are signed and verified before they install.
+Schemo works locally without an account. Workspace data is stored in SQLite under `~/.schemo`, and refresh tokens are kept in the OS credential store. Updates are verified before installation.
 
-## Data
-
-Everything is stored locally in `~/.schemo`. The SQLite database is not encrypted; refresh tokens
-live in the OS credential store. Cloud content is encrypted at rest, not end to end.
-See [Data, sync and protection](docs/DATA.md).
+See [Data & Security](docs/DATA.md) for details.
 
 ## Development
 
-Requires Go ([go.mod](go.mod)), Node.js ([.node-version](.node-version)), [Task](https://taskfile.dev/)
-and the Wails platform dependencies.
+Schemo is built with Go, Wails, and Vue.
+
+Install Go and Node.js versions specified in [go.mod](go.mod) and [.node-version](.node-version), plus [Task](https://taskfile.dev/) and the required Wails platform dependencies.
 
 ```sh
-task dev                 # run with hot reload
-task test                # checks and tests
-task build               # build the app
-task package             # native package
-task generate:bindings   # after changing a bound Go method
+task dev      # Start development
+task test     # Run tests
+task build    # Build application
 ```
-
-Start with [Architecture](docs/ARCHITECTURE.md).
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Data, sync and protection](docs/DATA.md)
+- [Data & Security](docs/DATA.md)
 - [MCP](docs/MCP.md)
 - [Translations](docs/TRANSLATIONS.md)
 - [Releases](docs/RELEASE.md)

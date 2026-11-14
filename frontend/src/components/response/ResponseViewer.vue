@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
+import { History } from '../../../bindings/schemo/internal/request'
+import BinaryBody from './BinaryBody.vue'
 import HeaderTable from './HeaderTable.vue'
 import JsonApiSteps from './JsonApiSteps.vue'
 import ResponseBar from './ResponseBar.vue'
+import ResponseBodyBar from './ResponseBodyBar.vue'
 import SentRequest from './SentRequest.vue'
 import Icon from '../ui/Icon.vue'
 import TabText from '../ui/TabText.vue'
 import IconButton from '../ui/IconButton.vue'
-import Input from '../ui/Input.vue'
-import PopoverContent from '../ui/PopoverContent.vue'
-import { PopoverRoot as Popover, PopoverTrigger, TabsRoot as Tabs, TabsContent, DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger } from 'reka-ui'
+import { TabsRoot as Tabs, TabsContent, DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger } from 'reka-ui'
 import TabsList from '../ui/TabsList.vue'
 import TabsTrigger from '../ui/TabsTrigger.vue'
 import Segment from '../ui/Segment.vue'
@@ -24,17 +25,16 @@ import JsonTable from '../json/JsonTable.vue'
 import SchemaMap from '../json/SchemaMap.vue'
 import ResponseNodeBar from '../inspector/ResponseNodeBar.vue'
 import CookiesTab from './CookiesTab.vue'
+import KeepExamplePopover from './KeepExamplePopover.vue'
 import TimingsTab from './TimingsTab.vue'
 import ScriptsTab from './ScriptsTab.vue'
 import type { PaneSource } from '../../stores/content'
-import { formatBytes, t } from '../../i18n'
+import { t } from '../../i18n'
 import { useCommands } from '../../composables/useCommands'
 import { useIndent } from '../../composables/useIndent'
-import { statusBadgeClass } from '../../lib/format'
 import { useInspection } from '../../composables/useInspection'
 import {
   useCookieUndo,
-  useKeepExample,
   useResponseCopy,
   useResponseSearch,
   useResponseView,
@@ -42,6 +42,7 @@ import {
   type TextViewer,
 } from '../../composables/useResponseView'
 import { useScriptRuns } from '../../composables/useScriptRuns'
+import { useToast } from '../../composables/useToast'
 import { responseNodeActions, responseNodeSelected, responseSearchable, searchResponse } from '../../lib/intents'
 import { allResources, resourceMatchesQuery } from '../../lib/jsonapi'
 import { prettyJson } from '../../lib/json'
@@ -71,11 +72,15 @@ const captureHost = computed(() => (source === 'browser' ? null : pane))
 // to.
 const hasHistory = computed(() => source !== 'collection')
 const { matches, hint } = useCommands()
+const toast = useToast()
 
-const { canKeep, isKeeping, draftName, exampleNameField, focusName, keepAsExample } = useKeepExample(
-  () => record,
-  () => pane
-)
+async function saveResponseBody() {
+  const written = await callOrToast(
+    History.SaveResponseBody(t('response.binary.saveTitle'), record.id),
+    'response.binary.saveFailed'
+  )
+  if (written) toast.show(t('browser.saved'))
+}
 
 // The record, read: which readings it leaves and where a person can go from it.
 const {
@@ -253,7 +258,7 @@ function bodyMatches(query: string): number {
 // numbers and a report, and the sent request is a snapshot of what went out.
 const searchKind = computed<SearchKind | null>(() => {
   if (activeTab.value === 'headers' || activeTab.value === 'cookies') return 'list'
-  if (activeTab.value !== 'body') return null
+  if (activeTab.value !== 'body' || record.responseBinary) return null
   if (reader.value === 'table') return 'list'
   if (reader.value === 'raw') return 'text'
   return reader.value
@@ -330,7 +335,7 @@ async function copySelectedValue() {
 
 // An answer that came back empty says so; a cancelled or failed one already has its own banner.
 const hintText = computed(() => {
-  if (record.cancelled || record.error || record.responseBody) return ''
+  if (record.cancelled || record.error || record.responseBody || record.responseBinary) return ''
   return t('response.hintEmptyBody', { status: record.status })
 })
 
@@ -375,46 +380,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
           @toggle-search="searching ? closeSearch() : openSearch()"
         >
           <template #leading>
-            <Popover v-if="activeTab === 'body' && canKeep" v-model:open="isKeeping">
-              <PopoverTrigger as-child>
-                <IconButton
-                  variant="bare"
-                  size="bar"
-                  class="row-mark"
-                  :hint="t('request.examples.toExamples')"
-                >
-                  <Icon name="BookmarkPlus" :size="16" :stroke-width="1.8" />
-                </IconButton>
-              </PopoverTrigger>
-              <PopoverContent class="ex-pop" align="end" @open-auto-focus.prevent="focusName">
-                <div class="ex-pop-head">
-                  <span class="ex-pop-title">{{ t('request.examples.savePopTitle') }}</span>
-                  <span class="ex-badge" :class="statusBadgeClass(record.status)">
-                    {{ record.status }}
-                  </span>
-                  <span class="ex-pop-meta">{{ formatBytes(record.responseBytes ?? 0) }}</span>
-                </div>
-                <label class="ex-pop-field">
-                  <span>{{ t('request.examples.saveName') }}</span>
-                  <Input
-                    ref="exampleNameField"
-                    v-model="draftName"
-                    :placeholder="t('request.examples.saveNamePlaceholder')"
-                    spellcheck="false"
-                    @keydown.enter.prevent="keepAsExample"
-                  />
-                </label>
-                <span class="ex-pop-hint">{{ t('request.examples.savePopHint') }}</span>
-                <div class="ex-pop-actions">
-                  <button type="button" class="ex-pop-cancel" @click="isKeeping = false">
-                    {{ t('common.cancel') }}
-                  </button>
-                  <button type="button" class="ex-pop-save" @click="keepAsExample">
-                    {{ t('common.save') }}
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <KeepExamplePopover v-if="activeTab === 'body'" :record :pane />
           </template>
           <template v-if="activeTab === 'cookies'">
             <IconButton
@@ -474,6 +440,17 @@ useEventListener(window, 'keydown', onWindowKeydown)
             <Icon :name="copied ? 'Check' : 'Copy'" :size="16" :stroke-width="1.8" />
           </IconButton>
           <IconButton
+            v-else-if="activeTab === 'body' && record.responseBinary"
+            variant="bare"
+            size="bar"
+            class="row-mark"
+            :hint="t('response.binary.saveTitle')"
+            :aria-label="t('response.binary.saveTitle')"
+            @click="saveResponseBody"
+          >
+            <Icon name="Download" :size="16" :stroke-width="1.8" />
+          </IconButton>
+          <IconButton
             v-if="canFormat"
             variant="bare"
             size="bar"
@@ -508,8 +485,9 @@ useEventListener(window, 'keydown', onWindowKeydown)
 
       <div class="resp-main">
         <TabsContent class="resp-tab" value="body">
+          <BinaryBody v-if="record.responseBinary" :key="record.id" :record />
           <!-- JSON arrays also have a table; other formats are read as text. -->
-          <div v-if="viewOptions.length > 1" class="body-bar">
+          <ResponseBodyBar v-else-if="viewOptions.length > 1" :info="!node && reader !== 'raw' ? bodyInfo : ''">
             <Segment
               class="flex-none"
               size="xs"
@@ -530,8 +508,7 @@ useEventListener(window, 'keydown', onWindowKeydown)
               @pick="pickNode"
               @follow="follow"
             />
-            <span v-else-if="reader !== 'raw'" class="body-info">{{ bodyInfo }}</span>
-            <template v-if="!doc && reader === 'tree'">
+            <template v-if="!doc && reader === 'tree'" #actions>
               <IconButton
                 variant="bare"
                 size="xl"
@@ -549,9 +526,13 @@ useEventListener(window, 'keydown', onWindowKeydown)
                 <Icon name="ChevronsDownUp" :size="14" :stroke-width="1.9" />
               </IconButton>
             </template>
-          </div>
+          </ResponseBodyBar>
 
-          <div class="resp-content" :class="{ 'resp-viewport': reader === 'table' || (!doc && reader !== 'raw') }">
+          <div
+            v-if="!record.responseBinary"
+            class="resp-content"
+            :class="{ 'resp-viewport': reader === 'table' || (!doc && reader !== 'raw') }"
+          >
             <JsonTable
               v-if="reader === 'table'"
               ref="jsonTable"
@@ -670,75 +651,6 @@ useEventListener(window, 'keydown', onWindowKeydown)
   @apply flex flex-col h-full min-h-0 bg-bg;
 }
 
-.ex-pop-head {
-  @apply flex items-center;
-  gap: 0.5rem;
-}
-
-.ex-pop-title {
-  @apply flex-1 font-semibold;
-  font-size: var(--text-13);
-}
-
-.ex-badge {
-  @apply font-semibold;
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  padding: 2px 6px;
-  border-radius: 0.3125rem;
-  white-space: nowrap;
-}
-
-.ex-pop-meta {
-  @apply text-text-tertiary;
-  font-size: var(--text-12);
-}
-
-.ex-pop-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3125rem;
-}
-
-.ex-pop-field span {
-  @apply text-text-secondary;
-  font-size: var(--text-12);
-}
-
-.ex-pop-hint {
-  @apply text-text-tertiary;
-  font-size: var(--text-12);
-  line-height: 1.45;
-  text-wrap: pretty;
-}
-
-.ex-pop-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.ex-pop-cancel {
-  @apply cursor-pointer border-0 text-text;
-  height: 1.875rem;
-  padding: 0 0.75rem;
-  border-radius: 0.4375rem;
-  background: var(--chip);
-  font-family: inherit;
-  font-size: var(--text-13);
-}
-
-.ex-pop-save {
-  @apply cursor-pointer border-0 font-semibold;
-  height: 1.875rem;
-  padding: 0 0.875rem;
-  border-radius: 0.4375rem;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-family: inherit;
-  font-size: var(--text-13);
-}
-
 .tabs-row {
   @apply flex items-stretch flex-none gap-0.5;
   box-sizing: content-box;
@@ -800,19 +712,6 @@ useEventListener(window, 'keydown', onWindowKeydown)
 
 .resp-search-close:hover {
   @apply bg-bg-hover text-text;
-}
-
-.body-bar {
-  @apply flex items-center flex-none gap-2.5;
-  height: 2.5rem;
-  padding: 0.625rem 0.8125rem 0.625rem 0.8125rem;
-  overflow: hidden;
-}
-
-.body-info {
-  @apply flex-1 min-w-0 truncate;
-  font-size: var(--text-12);
-  color: var(--text-tertiary);
 }
 
 /* The one control of the row that is a menu, and the one that keeps a second mark. A plain button

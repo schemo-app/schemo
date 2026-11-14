@@ -1,9 +1,7 @@
 import { ref } from 'vue'
 import { refAutoReset } from '@vueuse/core'
 
-const VISIBLE_MS = 5000
-
-const message = refAutoReset('', VISIBLE_MS)
+const message = refAutoReset('', 5000)
 const kind = ref<'info' | 'error'>('info')
 
 /** The one toast the window shows: a new one replaces the last and starts its own countdown. */

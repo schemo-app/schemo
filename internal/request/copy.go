@@ -12,9 +12,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// CopySaved writes a saved request as a command, for an export of a whole collection. Secrets are
-// as the caller asks: a command meant to be run carries their values, and one meant to be passed
-// on names them.
+// CopySaved writes a saved request as a command, with secret values or references as asked.
 //
 //wails:ignore
 func (s *Drafts) CopySaved(
@@ -61,8 +59,19 @@ func (s *Drafts) renderCommand(
 		return Copy{}, err
 	}
 
-	kind := domain.KindOf(current.BodyKind)
-	body, boundary, err := s.renderCopyBody(kind, resolved.body, current.BodyFile, resolved.form)
+	rules := protocols[current.Protocol]
+	if format != command.FormatURL && rules.commandError != nil {
+		return Copy{}, rules.commandError
+	}
+	kind := requestBodyKind(current)
+	var body, boundary string
+	if format != command.FormatURL {
+		if current.Protocol == "" {
+			body, boundary, err = s.renderCopyBody(kind, resolved.body, current.BodyFile, resolved.form)
+		} else {
+			body, boundary, err = s.renderRequestBody(current, resolved, kind, "", !secrets)
+		}
+	}
 	if err != nil {
 		return Copy{}, err
 	}
@@ -70,7 +79,7 @@ func (s *Drafts) renderCommand(
 	// Project, never Materialize: a copy answers with what a scheme already holds and goes for no
 	// token. A link carries no credential at all, so nothing is reported about one.
 	projected, err := s.auth.Project(resolved.auth,
-		authRequest(current.Method, resolved.url, resolved.headers, body))
+		authRequest(current.Protocol.HTTPMethod(current.Method), rules.httpURL(resolved.url), resolved.headers, body))
 	if err != nil {
 		return Copy{}, err
 	}
@@ -85,11 +94,12 @@ func (s *Drafts) renderCommand(
 	}
 
 	url, headers := withAuth(resolved.url, resolved.headers, projected)
+	headers = copyHeaders(current, kind, boundary, withCookie(headers, resolved.cookie))
 
 	out := command.Request{
-		Method:   current.Method,
+		Method:   current.Protocol.HTTPMethod(current.Method),
 		URL:      url,
-		Headers:  copyHeaders(headers, kind, current.BodyFile, boundary, resolved.cookie),
+		Headers:  headers,
 		Body:     body,
 		BodyKind: kind,
 		BodyFile: current.BodyFile,
@@ -171,15 +181,13 @@ func formCarriesFile(rows []domain.FormRow) bool {
 // copyHeaders is the header list a command is written with, in the send's own order. A form a
 // notation builds itself declares no type: an empty boundary names nothing, and is not dropped.
 func copyHeaders(
-	headers []domain.HeaderPair,
+	draft domain.Draft,
 	kind domain.BodyKind,
-	file string,
 	boundary string,
-	cookie string,
+	headers []domain.HeaderPair,
 ) []domain.HeaderPair {
-	headers = withCookie(headers, cookie)
 	if kind == domain.BodyForm && boundary == "" {
 		return headers
 	}
-	return withContentType(headers, kind, file, boundary)
+	return requestHeaders(draft, kind, boundary, headers)
 }

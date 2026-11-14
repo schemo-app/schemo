@@ -7,10 +7,7 @@ import { useEnvironmentsStore } from '../../stores/environments'
 import { dotOf } from '../../lib/environmentPalette'
 import { t } from '../../i18n'
 
-// Which environment the window sends with, and the way to another one. It is a component of its own
-// because the titlebar draws it in two places: in the middle of the bar where the bar is ours, and
-// among the controls on the right where the system draws the chrome. Both arrangements are one
-// button and one menu.
+// A component of its own because the titlebar draws it in two places.
 const environments = useEnvironmentsStore()
 
 

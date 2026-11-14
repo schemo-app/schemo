@@ -42,6 +42,7 @@ declare module "@wailsio/runtime" {
             "record:added": domain$0.Record;
             "request:failed": request$0.RequestFailed;
             "request:finished": request$0.RequestFinished;
+            "request:stream-opened": request$0.RequestFinished;
             "run:finished": domain$0.CollectionRun;
             "run:progress": request$0.RunProgress;
             "settings-tab": string;

@@ -16,9 +16,8 @@ const emit = defineEmits<{ saved: [scripts: Scripts | null] }>()
 
 const { pre, post, off, hold } = useScriptHalves()
 
-// Longer than the request's own boxes wait (FLUSH_MS) before they write.
-const PAUSE_MS = 600
-const { dirty, touch, flush: commit } = useDeferredWrite(save, PAUSE_MS)
+// Longer than the request's own boxes wait before they write.
+const { dirty, touch, flush: commit } = useDeferredWrite(save, 600)
 
 // The boxes show what the level holds: a level the page has just moved to starts empty, and nothing
 // that is being typed is overwritten by an answer about the level it was written for.

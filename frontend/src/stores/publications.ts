@@ -29,9 +29,7 @@ export function hostOf(url: string): string {
   }
 }
 
-/** The pages of a workspace, and the popover one collection is published from. Go answers both: this
- *  holds what it said, so a window draws a published collection as published before anybody is
- *  asked anything — and it asks nothing of the network to do it. */
+/** Workspace pages and the publish popover, as Go last answered, without touching the network. */
 export const usePublicationsStore = defineStore('publications', () => {
   const workspaces = useWorkspacesStore()
   const collections = useCollectionsStore()
@@ -73,12 +71,8 @@ export const usePublicationsStore = defineStore('publications', () => {
 
   const workspace = () => workspaces.activeId
 
-  // A page that answers at its address. A takedown this device is still holding is not one: the row
-  // stays beside the address, and what a window draws is a collection nobody can read yet.
-  //
-  // The mark stands in until the preview answers, and the preview once it has: a published
-  // collection's popover opens as the page it is, and a collection inside a published folder opens
-  // as what holds it. Otherwise the frame under the button would be one nobody has published.
+  // A pending takedown counts as unpublished. The mark stands in until the preview answers; a
+  // collection inside a published folder shows that folder's page.
   const publication = computed(() => {
     const held = preview.value?.publication ?? markOf(collection.value)?.page ?? null
     if (!held || held.status !== 'active' || held.pendingUnpublish) return null
@@ -92,9 +86,7 @@ export const usePublicationsStore = defineStore('publications', () => {
   })
   const environments = computed(() => preview.value?.environments ?? [])
   const report = computed(() => preview.value?.report ?? null)
-  // What the page is missing, request by request: Go reads the document built now against the
-  // outline the last publish put up, so this list and the page's own changelog say the same thing.
-  // A folder's list is its own requests and not the page's, which Go decides.
+  // Go compares the current document with the last published outline, matching the page's changelog.
   const changes = computed(
     () => preview.value?.changes ?? markOf(collection.value)?.changes ?? []
   )
@@ -183,9 +175,7 @@ export const usePublicationsStore = defineStore('publications', () => {
       }
     }
     if (signal.aborted || preview.value !== answer) return
-    // An environment this device no longer holds cannot be named, and a field with nothing in it
-    // would say the addresses are read against nothing while the page was built against the first.
-    // The page's own environment is named first: it is the one the field is being asked about.
+    // The page's own environment comes first; one this device no longer has cannot be named.
     const known = answer.environments ?? []
     if (known.length > 0 && !known.some((choice) => choice.id === environment.value)) {
       const carried = known.find((choice) => choice.name === answer.publication?.environmentName)
@@ -281,10 +271,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     }
   }
 
-  // Updating a page from the list of pages rather than from a collection's head keeps the access
-  // and the environment it went out with, so an update carries the requests and nothing else. A row
-  // names its environment rather than numbering it, and a name this device no longer holds falls
-  // back to the one the app is working in, as every address in the window does.
+  // Keeps the page's access and environment; an environment this device no longer has falls back to the active one.
   async function updatePage(collectionID: string): Promise<boolean> {
     if (busy.value) return false
     const held = pages.value.find((page) => page.collectionId === collectionID)

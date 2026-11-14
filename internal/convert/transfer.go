@@ -1,6 +1,5 @@
-// Package convert imports and exports collections and environments. The Transfer service reads
-// and writes files, text and URLs; each format lives in its own subpackage (har, insomnia,
-// openapi, postman, schemofile), shell commands in command, .env files in dotenv.
+// Package convert imports and exports collections and environments; each format lives in its own
+// subpackage (har, insomnia, openapi, postman, schemofile, command, dotenv).
 package convert
 
 import (
@@ -79,9 +78,7 @@ func (s *Transfer) previewText(ctx context.Context, format Format, text string) 
 	return s.stagePreview(format, []byte(text))
 }
 
-// previewUrl reads a document from a URL, such as a specification or a published collection. A
-// published page is asked for its document rather than the address it was given: what a person has
-// is where the page is read, and the bytes behind it are one path further in.
+// previewUrl reads a document from a URL; a published page is read at its document path.
 func (s *Transfer) previewUrl(ctx context.Context, format Format, url string) (Preview, error) {
 	address := url
 	if format == FormatPage {
@@ -125,10 +122,8 @@ func (s *Transfer) stagePreview(format Format, data []byte) (Preview, error) {
 	return out, nil
 }
 
-// Apply writes what a preview read, at the end of a level or of the top level, and returns the tree
-// and the environment list as they are now. The name fills in where the document gave none (a paste
-// of commands has no name of its own), and the token is good once: what was read is written and
-// forgotten.
+// Apply writes what a preview read under a level and returns the updated tree and environments. The
+// name fills in when the document has none; the token is single-use.
 func (s *Transfer) Apply(
 	ctx context.Context,
 	token string,
@@ -203,9 +198,8 @@ func nameOfFirst(document domain.Document) string {
 	return ""
 }
 
-// Workspaces lists every workspace with the collections a copy could take from its top level. The source
-// that copies from another workspace draws this, and the open workspace is marked rather than left out,
-// since the window is the one that knows not to offer it.
+// Workspaces lists every workspace with its top-level collections, the open one marked for the window
+// to skip.
 func (s *Transfer) Workspaces(ctx context.Context) ([]Workspace, error) {
 	state, err := s.workspaces.Snapshot(ctx)
 	if err != nil {
@@ -265,9 +259,8 @@ func (s *Transfer) ImportFromWorkspace(
 	}, nil
 }
 
-// Curl writes every request of a level out as a curl command, one per command, each under a `#`
-// line naming it, which is what the same paste reads back in. Secrets are as the caller asks: a
-// copy meant to be handed on names them instead of carrying them.
+// Curl writes a level's requests as curl commands, each under a `#` name line that the paste reads
+// back. Secrets are values or references as asked.
 func (s *Transfer) Curl(ctx context.Context, id string, secrets bool) (string, error) {
 	requests, err := s.collections.Requests(ctx, id, "")
 	if err != nil {
@@ -318,9 +311,7 @@ func FormatOf(name string) (Format, error) {
 		domain.Args{"format": name})
 }
 
-// Preview is what a source turned out to hold, before anything is written. The counters are what
-// the dialog says before the person commits: a file card reads "48 KB · 9 requests in 3 folders",
-// and the button says how many it will write.
+// Preview is what a source holds before anything is written, with the counts the dialog shows.
 type Preview struct {
 	// Token names what was read, for the Apply that writes it. It is good once.
 	Token string `json:"token"`

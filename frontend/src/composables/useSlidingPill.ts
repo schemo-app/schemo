@@ -1,10 +1,7 @@
 import { onMounted, ref, watch, type Ref } from 'vue'
 import { unrefElement, useMutationObserver, useResizeObserver } from '@vueuse/core'
 
-/**
- * Composable for positioning a sliding selector indicator ("pill") behind the active option in a segmented control.
- * Measures DOM offsets to dynamically adjust transform coordinates and element dimensions.
- */
+/** Positions the sliding pill behind the active option of a segmented control. */
 export function useSlidingPill(root: Readonly<Ref<HTMLElement | null>>, chosen: string, follow: () => unknown) {
   const style = ref<Record<string, string>>({})
   const ready = ref(false)

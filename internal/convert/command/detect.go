@@ -70,9 +70,8 @@ func looksLikeURL(s string) bool {
 	return hostRe.MatchString(s)
 }
 
-// A leading command word is required, so a paste that is not a command comes back as one and the
-// window leaves the field alone. Only `curl` is read: the other notations carry a request away,
-// nobody pastes them back.
+// detect requires a leading `curl`, so a non-command paste leaves the field alone. Other notations are
+// write-only.
 func detect(text string) (string, bool) {
 	head := headRe.FindStringSubmatch(trimSpace(text))
 	if head == nil {

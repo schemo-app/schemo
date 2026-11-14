@@ -8,9 +8,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// Matching belongs to the Search service, not this layer: SQLite folds case for ASCII alone, so a
-// LIKE would miss a Cyrillic title typed in lower case. Each method hands over its whole area,
-// which the schema keeps small on purpose.
+// Matching is the Search service's, since SQLite folds ASCII only; each method returns its whole area.
 
 func (s *Store) FindRequests(ctx context.Context, workspaceID string) ([]domain.SearchHit, error) {
 	byID, err := s.treeRows(ctx, workspaceID)
@@ -122,11 +120,7 @@ func (s *Store) FindEnvironments(ctx context.Context, workspaceID string) ([]dom
 	return out, nil
 }
 
-// FindHistory reads the calls that were made, newest first. It is the one area that answers an
-// empty field ("what was I just doing"), so its order matters.
-//
-// Bodies are not read: a history row is drawn from its address alone, and a body is not worth
-// pulling across for a keystroke.
+// FindHistory reads calls newest first, without bodies: a row is drawn from its address alone.
 func (s *Store) FindHistory(ctx context.Context, workspaceID string) ([]domain.SearchHit, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, method, url, started_at, ifnull(tab_title, '')
@@ -191,9 +185,7 @@ func indexOf(rows []treeRow) treeIndex {
 	return index
 }
 
-// trailOf names the way down to a collection, outermost first. The walk is bounded by the number of
-// collections: moving a collection into itself is refused, but a loop here would hang the window
-// rather than fail it.
+// trailOf names the collections down to id, outermost first; the walk is bounded so a loop cannot hang.
 func (t treeIndex) trailOf(id string) []string {
 	trail := []string{}
 	for id != "" && len(trail) <= len(t) {

@@ -3,11 +3,7 @@ import type { MessageKey } from '../i18n'
 /** What a card of the overview is about: the picture the window hands `FeatureMock`. */
 export type WelcomeKind = 'req' | 'tabs' | 'col' | 'env' | 'hist' | 'docs' | 'import' | 'ws'
 
-/**
- * One card of the overview: the picture it draws, and the two catalogued words it carries. The order
- * is the layout's: the first is the leading card, the next the narrower one beside it, the rest the
- * grid.
- */
+/** An overview card; the first leads, the second sits beside it, the rest form the grid. */
 export interface WelcomeCard {
   kind: WelcomeKind
   title: MessageKey

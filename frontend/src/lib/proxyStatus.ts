@@ -15,10 +15,7 @@ export function proxyActive(proxy: ProxySettings | null | undefined): boolean {
   return true
 }
 
-/**
- * Nothing at all while there is no setting to read: a description in the pill is not a
- * state, and naming a mode before the settings arrive would be a guess.
- */
+/** Empty until the settings load, rather than guessing a mode. */
 export function proxyLine(
   t: (key: MessageKey, said?: Said) => string,
   proxy: ProxySettings | null | undefined

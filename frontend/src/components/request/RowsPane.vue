@@ -12,6 +12,7 @@ import { useRowOrder } from '../../composables/useRowOrder'
 import { t } from '../../i18n'
 import { parsePastedRows, insertRows } from '../../lib/bulkRows'
 import { paramsFromUrl } from '../../lib/draftRows'
+import { protocolOf } from '../../lib/protocol'
 import { Drafts } from '../../../bindings/schemo/internal/request'
 import { Kind } from '../../../bindings/schemo/internal/convert/command'
 import { useToast } from '../../composables/useToast'
@@ -172,7 +173,7 @@ function patchValue(id: string, value: string) {
         :class="[states[index].class, { pasted: pastedIds.includes(row.id) }]"
         :style="states[index].style"
         grabbable
-        :name-placeholder="kind === 'headers' ? t('request.pane.headerName') : t('request.placeholderKey')"
+        :name-placeholder="kind === 'headers' ? t(protocolOf(source.protocol).headerName ?? 'request.pane.headerName') : t('request.placeholderKey')"
         @toggle="source.toggleRow(rowKind, row.id, !row.enabled)"
         @rename="patchName(row.id, $event)"
         @remove="source.removeRow(rowKind, row.id)"

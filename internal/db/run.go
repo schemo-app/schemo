@@ -13,11 +13,8 @@ import (
 // A run and the rows it produced are read and written in one piece: once when it starts and again
 // every time a request comes back.
 
-// SaveRun writes twice: when the run starts, so its results have a parent, and when it ends, with
-// the counters and the total time.
-//
-// Every write offers the run to the server again. A run is a document of its own there, kept once
-// by its id.
+// SaveRun writes at the start, so results have a parent, and at the end with the totals. Every write
+// requeues the run for sync.
 func (s *Store) SaveRun(ctx context.Context, run domain.CollectionRun) error {
 	return s.inTx(ctx, fmt.Sprintf("saving run %s", run.ID), func(tx *writeTx) error {
 		if err := writeRun(ctx, tx, run); err != nil {
@@ -114,9 +111,7 @@ func (s *Store) offerRun(ctx context.Context, tx *writeTx, runID string) error {
 	return enqueue(ctx, tx, workspace, entityRun, runID, actionUpdate)
 }
 
-// failureColumn is a row's refusal as the column holds it, or an empty string for a row the app did
-// not refuse. A failure with no sentence of ours is the machine's, which the error column already
-// holds.
+// failureColumn is a row's refusal as JSON, or "" when the app did not refuse it.
 func failureColumn(failure *domain.Failure) (string, error) {
 	if failure == nil {
 		return "", nil

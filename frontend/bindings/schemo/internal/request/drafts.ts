@@ -30,6 +30,21 @@ export function AuthSchemes(): $CancellablePromise<domain$0.Scheme[] | null> {
 }
 
 /**
+ * ChooseSchemaFile selects a schema file for the request's protocol.
+ */
+export function ChooseSchemaFile(title: string, protocol: domain$0.Protocol): $CancellablePromise<string> {
+    return $Call.ByID(152870658, title, protocol);
+}
+
+/**
+ * ChooseSchemaFolder asks for a folder whose schema files are added to a request's sources, for a
+ * module that spreads its definitions over many files.
+ */
+export function ChooseSchemaFolder(title: string): $CancellablePromise<string> {
+    return $Call.ByID(3518664544, title);
+}
+
+/**
  * Copy writes a new tab's draft from another tab's or from a saved request, for a duplicated tab.
  */
 export function Copy($from: domain$0.DraftID, to: domain$0.DraftID): $CancellablePromise<void> {
@@ -42,6 +57,21 @@ export function Copy($from: domain$0.DraftID, to: domain$0.DraftID): $Cancellabl
  */
 export function CopyAs(d: domain$0.Draft, format: command$0.Format): $CancellablePromise<$models.Copy> {
     return $Call.ByID(3592480587, d, format);
+}
+
+/**
+ * DescribeGraphQLSchema lists the operations of definitions a request keeps, without reading its
+ * sources.
+ */
+export function DescribeGraphQLSchema(descriptors: string): $CancellablePromise<$models.GraphQLSchema> {
+    return $Call.ByID(1008610639, descriptors);
+}
+
+/**
+ * DescribeRPCSchema lists the methods of descriptors a request keeps, without reading its sources.
+ */
+export function DescribeRPCSchema(descriptors: string): $CancellablePromise<$models.RPCSchema> {
+    return $Call.ByID(3302581129, descriptors);
 }
 
 /**
@@ -72,6 +102,22 @@ export function FormatBody(kind: domain$0.BodyKind, text: string, indent: domain
  */
 export function FromRecord(id: domain$0.DraftID, recordID: string): $CancellablePromise<void> {
     return $Call.ByID(3679503475, id, recordID);
+}
+
+/**
+ * LoadGraphQLSchema reads every source again and merges their types; SDL files are parsed together so
+ * one may extend another's type.
+ */
+export function LoadGraphQLSchema(draft: domain$0.Draft, sources: domain$0.SchemaSource[] | null): $CancellablePromise<$models.GraphQLSchema> {
+    return $Call.ByID(3681593344, draft, sources);
+}
+
+/**
+ * LoadRPCSchema reads every source again, the server by reflection and files from disk, and merges
+ * what they describe into one schema.
+ */
+export function LoadRPCSchema(draft: domain$0.Draft, sources: domain$0.SchemaSource[] | null): $CancellablePromise<$models.RPCSchema> {
+    return $Call.ByID(2654447186, draft, sources);
 }
 
 /**
@@ -128,9 +174,8 @@ export function Save(d: domain$0.Draft): $CancellablePromise<void> {
 }
 
 /**
- * SaveAsNewCollection saves a draft as the first request of a collection made for it. It is one
- * call because it is one intention: two would leave an empty collection behind when the second
- * failed.
+ * SaveAsNewCollection creates a collection with the draft as its first request, in one call so no
+ * empty collection is left on failure.
  */
 export function SaveAsNewCollection(collectionName: string, name: string, d: domain$0.Draft): $CancellablePromise<domain$0.CollectionNode> {
     return $Call.ByID(659544467, collectionName, name, d);
@@ -157,6 +202,13 @@ export function SaveNode(d: domain$0.Draft): $CancellablePromise<$models.NodeEdi
  */
 export function Send(d: domain$0.Draft): $CancellablePromise<string> {
     return $Call.ByID(340549408, d);
+}
+
+/**
+ * SendMessage writes a message using the environment captured when the WebSocket was opened.
+ */
+export function SendMessage(id: string, message: domain$0.SavedMessage): $CancellablePromise<void> {
+    return $Call.ByID(865370391, id, message);
 }
 
 /**

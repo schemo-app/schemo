@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// The one spinner of the window: the ring a request shows on its button while it is under way. It
-// is drawn in the colour of the text it stands beside, so a place that wants the accent says so
-// with a text colour of its own.
+// Drawn in the current text colour.
 </script>
 
 <template>

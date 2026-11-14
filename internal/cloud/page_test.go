@@ -89,6 +89,71 @@ func TestAPageNamesItsNodesWithoutTheirIds(t *testing.T) {
 	}
 }
 
+func TestNewProtocolsSurvivePublicationAndImport(t *testing.T) {
+	tree := published()
+	tree.Items = []domain.CollectionNode{
+		{ID: "gql", Name: "GraphQL", Protocol: domain.ProtocolGraphQL, URL: "https://api.example.test/graphql",
+			Body: "query Lookup { id }", Options: &domain.ProtocolOptions{
+				OperationName: "Lookup", Variables: `{"id":18014398509481985,"apiKey":"private"}`,
+				Descriptors: "private-descriptors", SchemaSources: []domain.SchemaSource{{Path: "private.graphql"}},
+			}},
+		{ID: "grpc", Name: "gRPC", Protocol: domain.ProtocolGRPC, URL: "grpc.example.test:8080",
+			Body: `{"id":7}`, Options: &domain.ProtocolOptions{RPCMethod: "catalog.Service/Lookup"},
+			Responses: []domain.ResponseExample{{Status: 0, Name: "OK", Body: "{}"}}},
+		{ID: "ws", Name: "WS", Protocol: domain.ProtocolWebSocket, URL: "{{baseUrl}}/socket",
+			Body: "private-message"},
+		{ID: "sse", Name: "SSE", Protocol: domain.ProtocolSSE, URL: "https://api.example.test/events"},
+	}
+	snapshot, _ := treeWith(t, tree)
+	packed, _, err := Encode(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document := expanded(t, packed); strings.Contains(document, "private") {
+		t.Fatalf("public document contains private request data: %s", document)
+	}
+	document, err := AsDocument(packed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := document.Collections[0].Items
+	if len(requests) != len(tree.Items) {
+		t.Fatalf("imported %d requests", len(requests))
+	}
+	for index, node := range requests {
+		want := tree.Items[index]
+		if node.Protocol != want.Protocol || node.Method != want.Protocol.HTTPMethod(want.Method) {
+			t.Fatalf("imported %s as %+v", want.Protocol, node)
+		}
+	}
+	if options := requests[0].Options; options == nil || options.OperationName != "Lookup" ||
+		options.Variables != `{"id":18014398509481985}` {
+		t.Fatalf("GraphQL options = %+v", options)
+	}
+	rpc := requests[1]
+	if rpc.Options == nil || rpc.Options.RPCMethod != "catalog.Service/Lookup" ||
+		rpc.URL != "grpc://grpc.example.test:8080" || len(rpc.Responses) != 1 || rpc.Responses[0].Status != 0 {
+		t.Fatalf("gRPC request = %+v", rpc)
+	}
+	if ws := requests[2]; ws.URL != "wss://api.example.com/socket" || ws.Body != "" {
+		t.Fatalf("WebSocket request = %+v", ws)
+	}
+}
+
+func TestPublicationImportRefusesAnInvalidProtocol(t *testing.T) {
+	snapshot, _ := treeWith(t, published())
+	endpoint := &snapshot.Collection.Groups[0].Endpoints[0]
+	endpoint.Protocol = new(snapshotv1.Gql)
+	endpoint.Method = "GET"
+	packed, _, err := Encode(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AsDocument(packed); domain.CodeOf(err) != domain.CodeNotSchemo {
+		t.Fatalf("AsDocument returned %v for a GraphQL endpoint with an invalid method", err)
+	}
+}
+
 // The one thing a page may not do is carry a value the app already hides, and hiding it is not a
 // setting: a scope read together means a variable written in terms of a hidden one is hidden too.
 func TestAVariableWrittenInTermsOfAHiddenOneIsHidden(t *testing.T) {

@@ -26,9 +26,7 @@ func DefaultCaptureFilters() CaptureFilters {
 	return CaptureFilters{Hosts: []string{}, Static: true, Analytics: false, JSON: false}
 }
 
-// ExtensionSettings is how the app and the browser extension behave together: whether they connect
-// on their own, and whether the addresses capture was armed on are armed again after a browser
-// restart. The extension carries both out; the app only keeps and hands them over.
+// ExtensionSettings are applied by the extension: auto-connect, and re-arming capture after a restart.
 type ExtensionSettings struct {
 	AutoConnect  bool `json:"autoConnect"`
 	RememberTabs bool `json:"rememberTabs"`
@@ -182,9 +180,7 @@ type Settings struct {
 	Extension        ExtensionSettings `json:"extension"`
 	SyncScopes       SyncScopes        `json:"syncScopes"`
 	MCP              MCPSettings       `json:"mcp"`
-	// Shortcuts holds only what was changed: a command not in it uses its default combination, and
-	// ShortcutNone means no combination. The command registry lives in the window, which owns the
-	// labels and the actions.
+	// Shortcuts holds overrides only; ShortcutNone unbinds. The registry lives in the window.
 	Shortcuts          map[string]string `json:"shortcuts,omitempty"`
 	UpdateCheckAuto    bool              `json:"updateCheckAuto"`
 	UpdateDownloadAuto bool              `json:"updateDownloadAuto"`
@@ -713,10 +709,8 @@ const (
 
 func (m MCPMode) Valid() bool { return m == MCPRead || m == MCPSend }
 
-// MCPSettings is the server as it was left: off until turned on, with the token minted at that
-// moment. Mode, asking and workspaces are read on every call, so a change applies to the next one. The
-// token never leaves on its own: a window gets HasToken, and only an explicit reveal returns the
-// value.
+// MCPSettings is read on every call, so changes apply to the next one. The token is revealed only on
+// request; windows get HasToken.
 type MCPSettings struct {
 	Token         string   `json:"token,omitempty"`
 	TokenTail     string   `json:"tokenTail,omitempty"`
@@ -770,9 +764,7 @@ type Release struct {
 	Notes   []string `json:"notes,omitempty"`
 }
 
-// UpdateState is what the last check saw and what the user has since said about it. It is written
-// and read whole so the version, its notes and the check time never get out of step. Preferences
-// are separate (Settings), though both share a table.
+// UpdateState is the last check and the user's answer to it, stored whole so it never gets out of step.
 type UpdateState struct {
 	// LastCheckAt is when a check last succeeded, in ms since the epoch; zero if none ever has.
 	LastCheckAt int64         `json:"lastCheckAt,omitempty"`
@@ -785,7 +777,5 @@ type UpdateState struct {
 	Skipped string `json:"skipped,omitempty"`
 }
 
-// SettingUpdateState is the key holding UpdateState as JSON, in the same table as the preferences.
-// It is a single key so the store hands the value back unchanged and a half-written state cannot be
-// expressed.
+// SettingUpdateState is the single key holding UpdateState as JSON.
 const SettingUpdateState = "update.state"

@@ -8,9 +8,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// The pages the app opens as windows of their own. Each is also a Vite entry (see
-// `frontend/vite.config.ts`) and a test holds the two lists together: a page in one and not the
-// other is a window that opens blank.
+// Window pages. Each is also a Vite entry (frontend/vite.config.ts); a test keeps the lists in sync.
 const (
 	pageAbout    = "/about.html"
 	pageUpdate   = "/update.html"
@@ -145,9 +143,8 @@ func (h *Host) heldTheme() domain.Theme {
 	return domain.Theme(theme)
 }
 
-// groundColour is what a window shows before its page has painted: the theme's ground for the dark
-// case it is given and the light one otherwise. The palette's value is spelled here because the
-// frame is the platform's, drawn before any page and out of reach of every stylesheet.
+// groundColour is the window background before the page paints, spelled here because the frame is
+// out of the stylesheet's reach.
 func (h *Host) groundColour(darkR, darkG, darkB uint8) application.RGBA {
 	if windowTheme(h.heldTheme()) == application.Dark {
 		return application.NewRGB(darkR, darkG, darkB)

@@ -9,9 +9,6 @@ import { useEnvironmentsStore } from '../../stores/environments'
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { t } from '../../i18n'
 
-// The create form: a name, a colour, and what to fill the new environment from. The three are one
-// action because an environment usually starts as a copy of another, and asking for the name first
-// would mean asking for the rest under a heading that already exists.
 const { pendingCount } = defineProps<{ pendingCount: number }>()
 
 const emit = defineEmits<{
@@ -23,10 +20,6 @@ const emit = defineEmits<{
 const environments = useEnvironmentsStore()
 const { notice, clearNotice, withNotice } = useSheetNotice()
 
-// One name per swatch, so a colour is readable without a legend. A computed and not a plain object:
-// a map made once would keep the words of the language it was made in. It is checked against the
-// palette, since a colour with no word and a word left behind by a removed colour are both
-// failures.
 const colorLabels = useColorLabels('environments', ENVIRONMENT_COLORS)
 
 const name = ref('')

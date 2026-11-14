@@ -63,13 +63,8 @@ func readCollection(data []byte, doc *domain.Document) (domain.Collection, error
 	return imported, nil
 }
 
-// importedVariables reads what a level answers for `{{tokens}}` in the order the file wrote them:
-// the editor draws that order and the nearest answer is the last, so it is not sorted. A row with
-// no name is an empty row, not a variable.
-//
-// A value the file marks secret arrives as its name with nothing in it: a collection variable
-// cannot be secret here (it leaves the app when exported), and dropping the name would lose one the
-// requests still ask for. The count of those left behind goes into the summary.
+// importedVariables keeps the file's order (the last answer wins) and skips nameless rows. A secret
+// arrives as its name without a value, since collection variables cannot be secret here.
 func importedVariables(from []variable, doc *domain.Document) []domain.Variable {
 	out := []domain.Variable{}
 	for _, v := range from {
@@ -157,9 +152,7 @@ func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
 	}
 }
 
-// pathRows are the rows that fill the `:name` segments of an address: one per name it holds, with
-// the value and description Postman kept. A name Postman declares but the address does not hold is
-// not a segment.
+// pathRows fills the address's `:name` segments; declared names missing from the address are skipped.
 func pathRows(from url) []domain.Row {
 	kept := map[string]field{}
 	for _, one := range from.Variable {
@@ -218,9 +211,7 @@ func requestNode(entry item, position int64, from request) domain.CollectionNode
 		}
 	}
 
-	// The saved answers travel as read-only examples beside the request the file put them with.
-	// Postman pads a body with NUL bytes where the response had them, and a NUL is not text this
-	// app can carry.
+	// Saved answers become examples; Postman's NUL padding is stripped.
 	for _, saved := range entry.Response {
 		one := domain.ResponseExample{
 			Name:   strings.TrimSpace(saved.Name),
@@ -278,9 +269,8 @@ func applyBody(node *domain.CollectionNode, from *body) {
 	}
 }
 
-// A scheme this app does not have is left out, so a level with no auth of its own inherits.
-// `noauth` is not unknown: it says this request sends nothing, and left as nil it would inherit and
-// send the collection's credentials.
+// authOf leaves unknown schemes nil so the request inherits; `noauth` is `none`, or it would inherit
+// the collection's credentials.
 func authOf(from auth) *domain.Auth {
 	if from.Type == "noauth" {
 		return &domain.Auth{Type: domain.AuthNone}

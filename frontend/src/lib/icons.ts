@@ -3,6 +3,7 @@
 export {
   AlignLeft,
   AppWindow,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
@@ -36,6 +37,7 @@ export {
   Eye,
   EyeOff,
   FileCode,
+  FileDown,
   FileText,
   Folder,
   FolderInput,

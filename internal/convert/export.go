@@ -1,11 +1,11 @@
 package convert
 
-// Writing a collection out in one of the formats the export dialog offers. The writers are pure
-// packages beside the readers of the same formats; what is here is the choice of environments and
-// the one place a secret's value may travel.
+// Exporting collections. The writers are pure format packages; this file picks the environments and
+// is the one place a secret value may leave.
 
 import (
 	"context"
+	"strings"
 
 	"schemo/internal/convert/insomnia"
 	"schemo/internal/convert/openapi"
@@ -25,6 +25,12 @@ func (s *Transfer) export(
 	collection, err := s.collections.Full(ctx, id)
 	if err != nil {
 		return Export{}, err
+	}
+	switch format {
+	case FormatPostman, FormatOpenAPI, FormatInsomnia:
+		if err := checkExportProtocol(collection, format); err != nil {
+			return Export{}, err
+		}
 	}
 
 	var data []byte
@@ -70,9 +76,25 @@ func (s *Transfer) export(
 	return Export{Data: data, Name: collection.Name}, nil
 }
 
-// environmentsOf is the environment list as a file would carry it: secret values are read one by
-// one (Reveal is the only way one leaves the database) and only when the person asked for them. A
-// name nothing answers is left as it is, and the file says a value was there without carrying it.
+func checkExportProtocol(collection domain.Collection, format Format) error {
+	for _, entry := range collection.Level() {
+		if entry.Collection != nil {
+			if err := checkExportProtocol(*entry.Collection, format); err != nil {
+				return err
+			}
+			continue
+		}
+		if entry.Node != nil && entry.Node.Protocol != "" {
+			return domain.Refuse(domain.CodeExportProtocol, domain.ErrNotAllowed, domain.Args{
+				"format": strings.ToUpper(string(format)), "name": entry.Node.Name,
+			})
+		}
+	}
+	return nil
+}
+
+// environmentsOf is the environments a file carries. Secret values are revealed only when asked for;
+// otherwise the file notes a value without carrying it.
 func (s *Transfer) environmentsOf(
 	ctx context.Context,
 	secrets bool,

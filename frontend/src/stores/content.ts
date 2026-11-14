@@ -38,7 +38,7 @@ export interface RequestInstance extends TabInstance {
   sendSpec(seed: Seed): Promise<void>
   claim(id: string): void
   finishSend(record: RequestRecord): Promise<void>
-  failSend(): void
+  failSend(id?: string): void
   sentIds: Ref<string[]>
   pendingSendId: Ref<string | null>
   loading: Ref<boolean>
@@ -90,6 +90,14 @@ export function ownerOf(sendId: string): RequestInstance | null {
     if (instance.sentIds.value.includes(sendId)) return instance
   }
   return null
+}
+
+export function refreshStreamPreviews(record: RequestRecord) {
+  for (const instance of instances.values()) {
+    if (instance.kind === TabKind.TabKindRequest && instance.record.value?.id === record.id && instance.record.value.active) {
+      if (instance.pendingSendId.value !== record.id) void instance.showRecord(record)
+    }
+  }
 }
 
 /** Forgets a tab's content: its buffers stop, its record and its node go. */
@@ -236,14 +244,16 @@ export async function answerUnsaved(action: 'save' | 'discard' | 'cancel') {
  *  answers that are the tab's rather than the draft's. */
 export function paneSource(instance: RequestInstance) {
   // What the pane has no business with: the buffer's own plumbing and the send's bookkeeping.
-  const { load, abandon, sentIds, pendingSendId, claim, finishSend, chain, current, ...draft } =
+  const { load, abandon, sentIds, pendingSendId, claim, finishSend, startSeed, chain, current, ...draft } =
     instance.draft
   const draftId = computed(() => current.value?.id ?? null)
 
   return reactive({
     ...draft,
+    draftSnapshot: () => current.value,
     scriptsLevel: draftId,
     draftId,
+    attemptId: pendingSendId,
     nodeId: computed(() => instance.node.value?.node.id ?? null),
     responses: instance.responses,
     saveExamples: instance.saveExamples,
@@ -268,9 +278,7 @@ function requestInstance(tab: Tab): RequestInstance {
   const node = ref<NodeEditor | null>(null)
 
   const shown = useShownRecord(() => closed)
-  // A request tab is opened for something (a node, a draft, a record) and every one of them is a
-  // read: until it lands the pane has nothing of its own to draw. One Go has just made blank is the
-  // exception: its draft is empty, so there is nothing to wait for.
+  // Every request tab starts with a read, except a blank one Go has just made.
   const reading = ref(!bornEmpty.delete(tab.id))
   const responseView = ref<ResponseViewState>(freshResponseView())
   const bound = () => Boolean(tab.ref)
@@ -329,7 +337,7 @@ function requestInstance(tab: Tab): RequestInstance {
     if (!node.value || !edited || closed) return false
     const saved = await callOrToast(Drafts.SaveNode(edited), 'collections.saveFailed')
     if (!saved || closed) return false
-    adopt(saved)
+    adopt({ ...saved, draft: { ...saved.draft, inactiveProtocols: edited.inactiveProtocols } })
     return true
   }
 
@@ -373,16 +381,7 @@ function requestInstance(tab: Tab): RequestInstance {
     sentIds: draft.sentIds,
     pendingSendId: draft.pendingSendId,
     loading: draft.loading,
-    async sendSpec(seed: Seed) {
-      draft.loading.value = true
-      const id = await callOrToast(Drafts.SendSeed(seed), 'request.sendFailed')
-      if (!id) {
-        draft.failSend()
-        return
-      }
-      draft.claim(id)
-      if (draft.loading.value) draft.pendingSendId.value = id
-    },
+    sendSpec: draft.startSeed,
     claim: draft.claim,
     finishSend: draft.finishSend,
     failSend: draft.failSend,
@@ -411,10 +410,8 @@ function pageInstance(tab: Tab): PageInstance {
   }
 }
 
-// The examples the pane edits. They are the node's own and saved on their own, a pause after the
-// typing stops, the way a description is, so the list is held here rather than in the pane: the
-// response's "to examples" writes into the same list. The composable the descriptions use is not
-// it, since that one flushes on a component's unmount and a tab is not a component.
+// Kept in the store: the response's "to examples" writes the same list, and a tab is not a component
+// whose unmount would flush a deferred write.
 function useNodeExamples(node: Ref<NodeEditor | null>) {
   const responses = ref<ResponseExample[]>([])
   let pending = false
@@ -453,14 +450,12 @@ function useNodeExamples(node: Ref<NodeEditor | null>) {
   return { responses, saveExamples, flushExamples }
 }
 
-// The record and its bodies, read by name from Go. Every instance keeps its own reading; the
-// panel's own list is a different question with a different answer. The record failing is the
-// caller's to answer; a body failing is only a body.
+// A failed record is the caller's to handle; a failed body only leaves that body empty.
 async function readRecord(id: string): Promise<{ record: RequestRecord; bodies: RecordBodies }> {
   const record = await History.Record(id)
   const bodies: RecordBodies = {
-    request: record.requestBody?.inline,
-    response: record.responseBody?.inline,
+    request: record.requestBody ?? undefined,
+    response: record.responseBody ?? undefined,
   }
   for (const [side, key] of [
     [BodySide.SideRequest, 'request'],
@@ -504,6 +499,7 @@ function useShownRecord(isClosed: () => boolean) {
     if (typeof shown !== 'string') {
       bodies.value = {}
       record.value = shown
+      if (shown.active || shown.skipped) return
     }
     await load(typeof shown === 'string' ? shown : shown.id, turn)
   }

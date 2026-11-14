@@ -15,9 +15,8 @@ import (
 // of a line, with whatever a terminal puts in front of it.
 var commandStart = regexp.MustCompile(`(?m)^[ \t]*(?:\$|>|sudo[ \t]+)?curl(?:\.exe)?\b`)
 
-// ReadCommands reads pasted text as the requests it holds, one per curl command, for the import's
-// cURL source. A `# name` line directly above a command names the request it precedes, which is how
-// this app's own copy writes commands. Text with no command in it is refused.
+// ReadCommands reads pasted curl commands as requests; a `# name` line above one names it. Text with
+// no command is refused.
 func ReadCommands(text string) ([]domain.CollectionNode, error) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	starts := commandStart.FindAllStringIndex(text, -1)
@@ -71,9 +70,7 @@ func commentAbove(text string, at int) string {
 	return strings.TrimSpace(name)
 }
 
-// nodeOfCommand is one parsed command as a request. The address keeps its query (the one place a
-// query lives) and the rows beside it are what that query reads as, all enabled: what a command
-// carries was sent.
+// nodeOfCommand keeps the query in the address, with matching enabled rows.
 func nodeOfCommand(from command.Request, name string, position int) domain.CollectionNode {
 	node := domain.CollectionNode{
 		Name:     name,
@@ -126,9 +123,7 @@ func kindOfBody(from command.Request) domain.BodyKind {
 	return ""
 }
 
-// paramsFromURL reads the query string into rows. A query string is the one place a value is
-// percent-encoded, so this is where the decoding happens — the rows hold what the user typed. The
-// fragment is not a parameter, and a URL that has one survives a round trip through the rows.
+// paramsFromURL decodes the query into rows; the fragment is not a parameter.
 func paramsFromURL(raw string) []domain.Row {
 	_, query := domain.SplitQuery(raw)
 	if query == "" {
@@ -143,9 +138,8 @@ func paramsFromURL(raw string) []domain.Row {
 	return out
 }
 
-// Written by hand rather than with url.QueryEscape: both it and the browser escape `,` and
-// brackets, while this app's URLs are `include=author,comments` and `filter[id][in]=1,2`. All three
-// are legal in a query and stay as typed; the rest follows the standard rule, workspace as `+`.
+// encodeQuery leaves `,` and brackets as typed (`include=a,b`, `filter[id][in]=1,2`), which
+// url.QueryEscape would escape; space is `+`.
 func encodeQuery(text string) string {
 	var out strings.Builder
 	out.Grow(len(text))

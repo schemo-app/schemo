@@ -15,11 +15,7 @@ import { useCopyFeedback } from '../../composables/useCopyFeedback'
 import { prettyJson } from '../../lib/json'
 import { MCP } from '../../lib/layout'
 import { formatAgo, t } from '../../i18n'
-
-// The MCP server: what it is and where it listens, the token and the configuration an agent is
-// given, what that agent may do, and who has called. The server obeys the settings the moment they
-// are saved, so the status card at the top is a reading of the same answer the rows below write,
-// never a second thing to keep in step.
+import { metaLine } from '../../lib/format'
 
 const settingsApi = useSettings()
 const { settings, rotateMCPToken } = settingsApi
@@ -94,7 +90,7 @@ const workspacesNote = computed(() => {
 })
 
 function agentNote(lastAt: number, today: number): string {
-  return [t('mcp.lastCall', { ago: formatAgo(lastAt) }), t('mcp.callsToday', { n: today })].join(' · ')
+  return metaLine(t('mcp.lastCall', { ago: formatAgo(lastAt) }), t('mcp.callsToday', { n: today }))
 }
 
 // One edit, one save and one apply: a refusal lands under the rows it was about, worded by the
@@ -438,16 +434,12 @@ async function copyConfig(): Promise<void> {
   box-sizing: border-box;
   border-radius: 0.25rem;
   border: 1px solid var(--border-strong);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 .chip.picked .tick {
   background: var(--accent);
   border-color: var(--accent);
-}
-
-:root.dark .chip.picked .tick {
-  color: var(--bg-panel);
 }
 
 .swatch {

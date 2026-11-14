@@ -1,16 +1,6 @@
-// Command layout writes what the window draws with — the range a panel is dragged between, the two
-// strings that hide a value, the settings an installation starts from and the phrase of every HTTP
-// status — into the frontend, from the one place they are declared: `domain` and the standard
-// library.
-//
-// It is the same trade as `internal/tools/manifest`: a fact this side owns is written into a file
-// on the other side, and a test fails when that file is not what this side would write. Without it
-// the window keeps a second copy of every one of them, and the copies drift — the inspector was
-// clamped at 260 and 560 in the window while Go clamped the same setting at 220 and 720, so a width
-// Go accepts could not be dragged to and a width the window wrote was under Go's own limit.
-//
-// The generated file is TypeScript rather than JSON because it has to say it is generated, and JSON
-// has nowhere to say it.
+// Command layout writes Go-owned constants (panel bounds, mask strings, default settings, HTTP status
+// phrases) into the frontend, and a test fails when the file is stale, so the two sides cannot drift.
+// TypeScript rather than JSON, so the file can say it is generated.
 package main
 
 import (
@@ -63,10 +53,8 @@ func rendered() []byte {
 		domain.IndentTwo, domain.IndentTwo.Unit(), domain.IndentFour, domain.IndentFour.Unit(),
 		domain.IndentTab, domain.IndentTab.Unit())
 
-	// What the window shows until it has read the settings: the ones Go starts a fresh installation
-	// with, so a switch drawn before the answer arrives is drawn the way it will be.
-	// An enum is the string Go writes it as, which the binding's enum type does not take as a
-	// literal: hence the cast.
+	// Defaults let the window draw before settings load. Enums are cast, since the binding's enum
+	// type does not take a string literal.
 	defaults, err := json.MarshalIndent(domain.DefaultSettings(), "", "  ")
 	if err != nil {
 		// A settings value that cannot be written as JSON is a program that cannot answer the window.

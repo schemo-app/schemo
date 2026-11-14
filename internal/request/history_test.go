@@ -116,7 +116,6 @@ func (f *fixture) broken() { _ = f.store.Close() }
 type fakeExecutor struct {
 	got       []Request
 	response  domain.Response
-	cancelled []string
 	stopEarly bool
 }
 
@@ -127,11 +126,6 @@ func (f *fakeExecutor) Execute(_ context.Context, req Request) (*domain.Response
 		resp = domain.Response{Cancelled: true}
 	}
 	return &resp, nil
-}
-
-func (f *fakeExecutor) Cancel(id string) bool {
-	f.cancelled = append(f.cancelled, id)
-	return true
 }
 
 type fakeNotifier struct {
@@ -222,7 +216,7 @@ type historyMask struct {
 	texts   []string
 }
 
-func (f *historyMask) Mask(_ context.Context, in SendInput, _ domain.ScriptRequest) (Masked, error) {
+func (f *historyMask) Mask(_ context.Context, _ string, in SendInput, _ domain.ScriptRequest) (Masked, error) {
 	f.asked++
 	f.seen = in
 	if f.fail != nil {
@@ -735,19 +729,36 @@ func TestSendReportsAStoreFailure(t *testing.T) {
 	}
 }
 
-func TestCancelReachesTheEngine(t *testing.T) {
-	history, _, executor, _ := newHistory(t)
-
-	if !history.Cancel("some-id") {
-		t.Error("Cancel reported nothing to stop")
+func TestCancelStopsAnAttemptBeforeItReachesTheEngine(t *testing.T) {
+	started := make(chan struct{})
+	resume := make(chan struct{})
+	screen := &fakeScreen{change: func(*domain.ScriptPass) {
+		close(started)
+		<-resume
+	}}
+	history, store, executor, notifier, _ := newScriptedHistory(t, screen, nil)
+	id, err := history.Send(t.Context(), input())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(executor.cancelled) != 1 || executor.cancelled[0] != "some-id" {
-		t.Errorf("cancelled = %v, want the id it was given", executor.cancelled)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		close(resume)
+		t.Fatal("the script did not start")
+	}
+	cancelled := history.Cancel(id)
+	close(resume)
+	if !cancelled {
+		t.Fatal("Cancel did not find the attempt while its script ran")
+	}
+	event := notifier.waitFor(t, TopicRequestFinished).(RequestFinished)
+	if event.ID != id || !event.Record.Cancelled || len(executor.got) != 0 || len(store.saved()) != 0 {
+		t.Fatalf("cancelled attempt produced %+v, executed %d requests and saved %d records", event, len(executor.got), len(store.saved()))
 	}
 }
 
-// An attempt the user stopped is not history: nothing came back, and the window that stopped it
-// already knows it did.
+// A stopped attempt tells its caller it ended without creating a history record.
 func TestStoppedAttemptIsNotRecorded(t *testing.T) {
 	history, store, executor, notifier := newHistory(t)
 	executor.stopEarly = true
@@ -757,11 +768,9 @@ func TestStoppedAttemptIsNotRecorded(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 
-	// Nothing is published, so the check is that nothing arrived at all.
-	select {
-	case event := <-notifier.events:
-		t.Fatalf("%s arrived for a stopped attempt (%s)", event.topic, id)
-	case <-time.After(50 * time.Millisecond):
+	event := notifier.waitFor(t, TopicRequestFinished).(RequestFinished)
+	if event.ID != id || !event.Record.Cancelled {
+		t.Fatalf("stopped attempt produced %+v", event)
 	}
 	if len(store.saved()) != 0 {
 		t.Errorf("saved %d records for an attempt that was stopped", len(store.saved()))
@@ -903,8 +912,8 @@ func TestListGetAndBody(t *testing.T) {
 	}
 
 	body, err := history.Body(ctx, rows[0].ID, domain.SideResponse)
-	if err != nil || body != `{"data":[]}` {
-		t.Errorf("Body = %q, %v; want the response text", body, err)
+	if err != nil || body.Inline != `{"data":[]}` || body.Binary {
+		t.Errorf("Body = %+v, %v; want the response text", body, err)
 	}
 
 	if err := history.Clear(ctx, []string{rows[0].ID}); err != nil {
@@ -1182,8 +1191,8 @@ func TestABodyOfSomebodyElsesRecordIsFetchedOnceAndKept(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Body: %v", err)
 	}
-	if body != `{"data":[]}` {
-		t.Errorf("body = %q, want what the fetch answered", body)
+	if body.Inline != `{"data":[]}` {
+		t.Errorf("body = %q, want what the fetch answered", body.Inline)
 	}
 	if len(source.asked) != 1 || source.asked[0] != "rec-1" {
 		t.Fatalf("asked %v, want the one record", source.asked)
@@ -1257,8 +1266,8 @@ func TestABodyOfThisDevicesOwnRecordIsNotFetched(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Body: %v", err)
 	}
-	if body != "" {
-		t.Errorf("body = %q, want nothing: the record never carried one", body)
+	if body.Inline != "" || body.Size != 0 {
+		t.Errorf("body = %+v, want nothing: the record never carried one", body)
 	}
 	if len(source.asked) != 0 {
 		t.Errorf("asked %v, want a record of this device's own left alone", source.asked)

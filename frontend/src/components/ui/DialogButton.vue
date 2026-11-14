@@ -37,16 +37,17 @@ defineExpose({ focus: () => el.value?.focus() })
 .primary,
 .danger {
   padding: 0 1rem;
-  color: #fff;
   font-weight: 600;
 }
 
 .primary {
   background: var(--accent);
+  color: var(--accent-text);
 }
 
 .danger {
   background: var(--red);
+  color: #fff;
 }
 
 .primary:disabled,

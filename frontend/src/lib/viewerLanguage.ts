@@ -1,10 +1,8 @@
-// Which grammar the text viewer paints a body with. It is a question of drawing, not of reading:
-// the body is shown whatever the answer, and a wrong answer only colours it wrongly. So it is
-// decided from what is on hand: whether Go read the body as JSON, the media type the server named
-// and, when the server named none, how the text begins.
+// Picks the viewer grammar from Go's JSON verdict, the media type or how the text begins. Only the
+// colouring depends on it.
 
 /** The grammars the viewer knows; `null` is plain text. Markdown is only ever asked for, never guessed. */
-export type ViewerLanguage = 'json' | 'html' | 'xml' | 'markdown' | null
+export type ViewerLanguage = 'json' | 'html' | 'xml' | 'markdown' | 'graphql' | null
 
 /** Picks the grammar for a response body. */
 export function viewerLanguage(contentType: string | undefined, text: string, isJson: boolean): ViewerLanguage {

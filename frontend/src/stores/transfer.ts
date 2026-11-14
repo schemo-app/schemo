@@ -14,9 +14,7 @@ import { useCollectionsStore } from './collections'
 import { useEnvironmentsStore } from './environments'
 import { useWorkspacesStore } from './workspaces'
 
-/** What a source is read as, and what an export is written as: the words Go knows the formats by.
- *  A published page is read only: a page is a place a collection stands at, and publishing it is
- *  what puts it there. */
+/** Format names as Go knows them; `page` is import-only, since publishing is how a page is made. */
 export type TransferFormat = 'schemo' | 'postman' | 'openapi' | 'insomnia' | 'har' | 'curl' | 'page'
 
 /** The two dialogs one modal at a time: what is open, what it is about, and what it wrote. */
@@ -62,9 +60,7 @@ export const useTransferStore = defineStore('transfer', () => {
     importOpen.value = true
   }
 
-  // A link from outside is a person asking for one collection in particular, and it is the dialog
-  // that reads it: the address is prefilled and read on the spot, so following the link and
-  // importing is one move rather than two.
+  // The dialog reads the link at once, so following it and importing is one step.
   function askImportPage(page: string) {
     if (!workspaces.canWrite) {
       toast.show(t('errors.codes.workspaceReadOnly'))
@@ -88,9 +84,7 @@ export const useTransferStore = defineStore('transfer', () => {
     linkedPage.value = ''
   }
 
-  // A failed read is a toast, except while somebody is still typing: a paste that does not read as
-  // a command yet is not news, and a toast per keystroke would be. A nil preview is a cancelled
-  // dialog, not a failure.
+  // No toast while typing (a half-pasted command is not news); a nil preview means cancelled.
   async function readPreview(
     read: Promise<Preview | null>,
     quietly = false

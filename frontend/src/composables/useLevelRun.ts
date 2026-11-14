@@ -1,7 +1,8 @@
 import { computed, type Ref } from 'vue'
-import type { CollectionRun, CollectionRunResult, LevelRow } from '../../bindings/schemo/internal/domain'
+import type { Protocol, CollectionRun, CollectionRunResult, LevelRow } from '../../bindings/schemo/internal/domain'
 import { useCollectionsStore } from '../stores/collections'
 import { t } from '../i18n'
+import { protocolOf } from '../lib/protocol'
 
 // The page's reading of the last run of a level: how each request of it ended, and what a row of the
 // table says about the answer. A row is broken when the request failed or asserted false.
@@ -23,8 +24,11 @@ export function useLevelRun(levelId: Ref<string>, requests: Ref<LevelRow[]>) {
     return !result.ok || result.assertionsPassed < result.assertionsTotal
   }
 
-  function statusOf(result: CollectionRunResult | undefined): { code: number; text: string } {
+  function statusOf(result: CollectionRunResult | undefined, protocol?: Protocol): { code: number; text: string } {
     if (result?.skipped) return { code: 0, text: t('collections.skippedShort') }
+    if (protocolOf(protocol).status === 'grpc' && result?.status != null) {
+      return { code: result.status, text: result.status === 0 ? 'OK' : String(result.status) }
+    }
     if (result?.error) return { code: 0, text: t('collections.failed') }
     const code = result?.status ?? 0
     return { code, text: code ? String(code) : '—' }
@@ -33,7 +37,7 @@ export function useLevelRun(levelId: Ref<string>, requests: Ref<LevelRow[]>) {
   const tableRows = computed(() =>
     requests.value.map((row) => {
       const result = resultsByNode.value.get(row.id)
-      return { row, bad: failed(result), status: statusOf(result) }
+      return { row, bad: failed(result), status: statusOf(result, row.protocol) }
     })
   )
 

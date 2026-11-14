@@ -35,9 +35,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   })
   const counts = computed<Record<string, WorkspaceCounts | undefined>>(() => state.value?.counts ?? {})
 
-  // Whether this person may change what the active workspace holds. Go refuses every write there, so this
-  // is only what the window already knows: a control that would be answered with a refusal is drawn
-  // off instead.
+  // Go refuses writes anyway; this only disables controls up front.
   const canWrite = computed(() => active.value?.access.write ?? true)
 
   async function load() {

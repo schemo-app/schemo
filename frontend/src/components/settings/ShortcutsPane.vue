@@ -11,11 +11,6 @@ import { useSettings } from '../../composables/useSettings'
 import { t } from '../../i18n'
 import { capsOf, COMBO_NONE, comboOfEvent } from '../../lib/commands'
 
-// The keyboard as it is written down: every command the window carries out, what it wears now, and
-// the one place a combination is changed. What is changed is kept in the settings and read back by
-// the same registry every handler asks, so this page is what the keyboard does rather than a
-// drawing of it.
-
 const { isMac } = usePlatform()
 const { settings, save } = useSettings()
 const { commands, combo } = useCommands()

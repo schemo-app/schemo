@@ -8,12 +8,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Export writes a collection as a file: the whole collection, or the one request the context menu
-// exports. A `{{name}}` stays text and the values a level answers for travel beside it, so the
-// collection means the same on the other side.
-//
-// Nothing needs to be held back as secret: a collection cannot hold one (SaveVariables refuses it),
-// so every value written is one the user meant to hand over.
+// Export writes a collection, or one request, as a Postman file. Collections cannot hold secrets
+// (SaveVariables refuses them), so nothing needs withholding.
 func Export(collection domain.Collection) ([]byte, error) {
 	doc := collectionFile{
 		Info: info{
@@ -173,9 +169,8 @@ func exportedRequest(node domain.CollectionNode) *request {
 	return out
 }
 
-// json, xml and raw all leave as `raw`: Postman cannot record which of the three a body was, and an
-// `options.raw.language` this reader ignores would be a promise the next import breaks. Forms and
-// files survive the trip.
+// exportedBody writes json, xml and raw all as `raw`, since Postman cannot record which; forms and
+// files survive.
 func exportedBody(node domain.CollectionNode) *body {
 	switch domain.KindOf(node.BodyKind) {
 	case domain.BodyForm:

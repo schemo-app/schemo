@@ -11,10 +11,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Import writes the collections a file held into the tree, at the end of the level named by
-// parentID, or of the top level when it is empty. The whole slice arrives in one call because it
-// came from one file: ids are minted here because a file has none, and every collection keeps its
-// name, order and everything it came with, nested collections included.
+// Import writes a file's collections at the end of a level, minting ids and keeping names, order and
+// nesting.
 //
 //wails:ignore
 func (s *Collections) Import(
@@ -66,9 +64,7 @@ func (s *Collections) Import(
 	return s.store.Collections(ctx, workspace)
 }
 
-// importName keeps a file's name inside the ceiling rather than refusing it: a name longer than a
-// person would type is the file's doing, and refusing the whole document over one line is not what
-// the person asked for.
+// importName clips an overlong name rather than refusing the whole file.
 func importName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -77,9 +73,7 @@ func importName(name string) (string, error) {
 	return clip(name), nil
 }
 
-// adopt gives an imported subtree what a file does not write: ids, and where it lives. Everything
-// else (names, addresses, rows) is the file's, and the level's own code travels beside it because
-// SaveScripts can only write to a row that exists.
+// adopt gives an imported subtree ids and a place; scripts travel beside it until the rows exist.
 func (s *Collections) adopt(
 	collection domain.Collection,
 	items []domain.CollectionNode,
@@ -117,9 +111,7 @@ func (s *Collections) adopt(
 	return out
 }
 
-// Full is a collection with every request read whole, or a single request when the id names one:
-// what an export writes down. The tree the window draws carries the method and nothing else, since
-// two hundred rows have no business carrying two hundred bodies, so an export reads them again.
+// Full reads a collection, or one request, with every body, for an export.
 //
 //wails:ignore
 func (s *Collections) Full(ctx context.Context, id string) (domain.Collection, error) {
@@ -130,8 +122,7 @@ func (s *Collections) Full(ctx context.Context, id string) (domain.Collection, e
 	return s.fullOf(ctx, workspace, id)
 }
 
-// FullOf is Full for a level of a named workspace, which the window may not be looking at: a copy of a
-// collection out of another workspace reads it there and writes it here.
+// FullOf is Full in a named workspace, for copying between workspaces.
 //
 //wails:ignore
 func (s *Collections) FullOf(ctx context.Context, workspace, id string) (domain.Collection, error) {
@@ -171,9 +162,7 @@ func (s *Collections) fullCollection(
 		children = append(children, full)
 	}
 
-	// The code of a level hangs off the row rather than off this read of it: the tree carries names
-	// and methods, and an export that dropped the code would drop what the level does around its
-	// requests.
+	// Scripts hang off the row, not the tree read, so they are read separately for the export.
 	scripts, err := s.store.Scripts(ctx, workspace, collection.ID)
 	if err != nil {
 		return domain.Collection{}, err
@@ -209,8 +198,8 @@ func (s *Collections) fullNodes(
 	return out, nil
 }
 
-// Requests is every request under a node, read whole, with the authorization and variables its
-// levels answer, in the order the tree draws them. An empty nodeID means the whole collection.
+// Requests reads every request under a node in tree order, with inherited auth and variables; an
+// empty nodeID means the whole collection.
 //
 //wails:ignore
 func (s *Collections) Requests(

@@ -161,21 +161,13 @@ async function setServer(server: string): Promise<boolean> {
   return true
 }
 
-/**
- * Asks whether an address is a server this app can sign in to, before anybody signs in there. The
- * answer that is not "yes" is a refusal in `failure`, worded by the catalogue; nothing is stored —
- * keeping an address is the sign-in's own step.
- */
+/** Checks that the address is a server this app can sign in to; nothing is stored. */
 async function checkAddress(server: string): Promise<void> {
   failure.value = ''
   await attempt(Account.CheckServer(server))
 }
 
-/**
- * Opens the account's panel in the browser. Billing, seats and sessions are the panel's, and the app
- * opens it rather than redrawing it; Go answers with the address the sign-in itself uses, because
- * the stored row keeps "" for the app's own server.
- */
+/** Opens the account panel in the browser. Go resolves the address: the stored row keeps "" for the default server. */
 function openPanel(): void {
   const address = state.value?.address
   if (address) void Browser.OpenURL(address)
@@ -187,11 +179,7 @@ async function signOut(wipe = false): Promise<void> {
   if (await take(Account.SignOut(wipe))) sessions.value = []
 }
 
-/**
- * Deletes the account in the cloud, and this device's copy of it with it. Go asks the server first —
- * the account is the server's — and the answer that is not "gone" is a refusal in `failure`, with
- * everything on this machine left where it was.
- */
+/** Deletes the cloud account, then the local copy; a refusal leaves this device untouched. */
 async function deleteAccount(): Promise<void> {
   deleteOpen.value = false
   if (await take(Account.Delete())) sessions.value = []

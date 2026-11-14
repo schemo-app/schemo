@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, useId, type Ref } from 'vue'
 import { useIndent } from '../../composables/useIndent'
-import { t } from '../../i18n'
+import { t, type MessageKey } from '../../i18n'
 
 const { prePlaceholder, postPlaceholder, disabled = false } = defineProps<{
   prePlaceholder?: string
@@ -19,52 +19,33 @@ function lines(text: string): number[] {
   return Array.from({ length: Math.max(1, text.split('\n').length) }, (_, index) => index + 1)
 }
 
-const preLines = computed(() => lines(pre.value))
-const postLines = computed(() => lines(post.value))
+const halves = computed(() => [
+  half('pre', pre, 'collections.beforeRequest', 'collections.preNote', prePlaceholder ?? t('request.body.prePlaceholder')),
+  half('post', post, 'collections.afterResponse', 'collections.postNote', postPlaceholder ?? t('request.body.postPlaceholder')),
+])
+
+function half(key: string, model: Ref<string>, title: MessageKey, hint: MessageKey, placeholder: string) {
+  return { key, model, title, hint, placeholder, lines: lines(model.value) }
+}
 </script>
 
 <template>
   <div class="scripts-editor">
-    <section class="half">
+    <section v-for="item in halves" :key="item.key" class="half">
       <div class="half-head">
-        <label :for="`${id}-pre`" class="half-title">{{ t('collections.beforeRequest') }}</label>
-        <span class="half-hint">{{ t('collections.preNote') }}</span>
+        <label :for="`${id}-${item.key}`" class="half-title">{{ t(item.title) }}</label>
+        <span class="half-hint">{{ t(item.hint) }}</span>
       </div>
-      <div class="box">
+      <div class="box" :style="{ '--lines': item.lines.length }">
         <div class="gutter" aria-hidden="true">
-          <div v-for="line in preLines" :key="line">{{ line }}</div>
+          <div v-for="line in item.lines" :key="line">{{ line }}</div>
         </div>
         <textarea
-          :id="`${id}-pre`"
-          v-model="pre"
+          :id="`${id}-${item.key}`"
+          v-model="item.model.value"
           class="code"
-          :style="{ height: `${preLines.length * 22}px` }"
           spellcheck="false"
-          :placeholder="prePlaceholder ?? t('request.body.prePlaceholder')"
-          :disabled
-          @keydown.tab.prevent="insert"
-          @input="emit('input')"
-          @blur="emit('blur')"
-        ></textarea>
-      </div>
-    </section>
-
-    <section class="half">
-      <div class="half-head">
-        <label :for="`${id}-post`" class="half-title">{{ t('collections.afterResponse') }}</label>
-        <span class="half-hint">{{ t('collections.postNote') }}</span>
-      </div>
-      <div class="box">
-        <div class="gutter" aria-hidden="true">
-          <div v-for="line in postLines" :key="line">{{ line }}</div>
-        </div>
-        <textarea
-          :id="`${id}-post`"
-          v-model="post"
-          class="code"
-          :style="{ height: `${postLines.length * 22}px` }"
-          spellcheck="false"
-          :placeholder="postPlaceholder ?? t('request.body.postPlaceholder')"
+          :placeholder="item.placeholder"
           :disabled
           @keydown.tab.prevent="insert"
           @input="emit('input')"
@@ -110,7 +91,8 @@ const postLines = computed(() => lines(post.value))
   background: var(--raise);
   font-family: var(--mono);
   font-size: var(--text-13);
-  line-height: 22px;
+  --code-line: 22px;
+  line-height: var(--code-line);
 }
 
 .gutter {
@@ -127,6 +109,7 @@ const postLines = computed(() => lines(post.value))
   font: inherit;
   white-space: pre;
   overflow: hidden;
+  height: calc(var(--lines) * var(--code-line));
 }
 
 .code::placeholder {

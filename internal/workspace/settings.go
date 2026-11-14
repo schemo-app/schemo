@@ -23,9 +23,8 @@ import (
 // SettingsKind is what the changed event names after a save.
 const SettingsKind = "settings"
 
-// SettingsWatcher reacts to a saved change. It gets both documents with secrets and decides itself what
-// differs. An error undoes the save: the document goes back, and watchers that already ran are
-// called again with the documents swapped.
+// SettingsWatcher reacts to a save with both documents, secrets included. An error rolls back: watchers
+// already run are called again, swapped.
 type SettingsWatcher func(ctx context.Context, before, after domain.Settings) error
 
 type Settings struct {
@@ -68,9 +67,8 @@ func (s *Settings) Get(ctx context.Context) (domain.Settings, error) {
 	return visible(settings), nil
 }
 
-// Save applies a JSON merge patch (RFC 7386) to the stored document: objects merge, other values
-// replace, null removes. Sending only what changed keeps two windows from undoing each other.
-// The MCP token and the has*/tail fields are Go's and are ignored in the patch.
+// Save applies a JSON merge patch (RFC 7386), so two windows sending changes do not undo each other.
+// The MCP token and has*/tail fields are ignored.
 func (s *Settings) Save(ctx context.Context, patch map[string]any) (domain.Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

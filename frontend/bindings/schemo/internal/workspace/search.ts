@@ -14,11 +14,8 @@ import * as domain$0 from "../domain/models.js";
 import * as $models from "./models.js";
 
 /**
- * Find searches every area at once or the one that was asked for. It is not called Query because
- * the name would repeat the argument's own type.
- * 
- * The workspace is resolved once, here, and travels into every area as a parameter: an area that
- * resolved it again could answer about a workspace the window has already left.
+ * Find searches every area or the one asked for. The workspace is resolved once so every area
+ * answers about the same one.
  */
 export function Find($in: $models.Query): $CancellablePromise<domain$0.SearchResult> {
     return $Call.ByID(232312693, $in);

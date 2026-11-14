@@ -11,9 +11,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// The local record of what this device has published. It is this device's own note, not a copy of
-// the server's, and is not synchronized: a second device publishes for itself. It lets a window
-// show the published state and pending changes before reaching the server.
+// This device's own record of what it published, not synced, so a window shows the state offline.
 
 // publicationColumns is the shape every read here answers in, in one place so that a column added
 // in one query is not forgotten in another.
@@ -68,9 +66,7 @@ func (s *Store) AwaitingUnpublish(ctx context.Context) ([]domain.Publication, er
 	return readPublications(rows)
 }
 
-// SavePublication writes what the server answered over whatever was known. The row is the
-// collection's, not the publication's: a collection republished at a new address replaces the old
-// one.
+// SavePublication stores the server's answer, keyed by collection, so republishing replaces the old row.
 func (s *Store) SavePublication(ctx context.Context, held domain.Publication) error {
 	const query = `
 		INSERT INTO publications (collection_id, workspace_id, publication_id, slug, public_url,
@@ -98,9 +94,7 @@ func (s *Store) SavePublication(ctx context.Context, held domain.Publication) er
 	return nil
 }
 
-// SavePublished keeps what this device alone knows about a page: the shape of the last publish and
-// what has changed since. It is a write of its own because every other write of the row is the
-// server's answer, which says nothing about either.
+// SavePublished stores what only this device knows: the last publish's outline and changes since.
 func (s *Store) SavePublished(
 	ctx context.Context,
 	collectionID string,
@@ -129,9 +123,8 @@ func (s *Store) SavePublished(
 	return nil
 }
 
-// ForgetPublication drops what is known about a collection's page. It does not take the page down
-// (the server does) and is not offered to a person: a device that forgot a published page would
-// offer to publish it again at a second address.
+// ForgetPublication drops the local record without taking the page down; not offered to users, as a
+// forgotten page would be republished at a new address.
 func (s *Store) ForgetPublication(ctx context.Context, collectionID string) error {
 	const query = `DELETE FROM publications WHERE collection_id = ?`
 

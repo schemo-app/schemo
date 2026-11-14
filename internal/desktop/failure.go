@@ -14,9 +14,8 @@ const (
 	FailureMigration = "migration"
 )
 
-// StartupFailure is a startup problem (a data directory, a database, a migration) and the reason
-// there is no window. It is not the domain's Failure, which is a refused call with a sentence
-// waiting. It cannot be a dialog: a dialog needs a running app, and these happen before one exists.
+// StartupFailure is why there is no window (data folder, database, migration). It happens before
+// the app runs, so it cannot be a dialog.
 type StartupFailure struct {
 	Kind   string `json:"kind"`
 	Detail string `json:"detail,omitempty"`

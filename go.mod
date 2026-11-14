@@ -4,12 +4,15 @@ go 1.26.7
 
 require (
 	github.com/aws/smithy-go/aws-http-auth v1.2.1
+	github.com/bufbuild/protocompile v0.14.2-0.20260910151042-7436f7c76201
 	github.com/dop251/goja v0.0.0-20260915173639-b3fa02110dbd
 	github.com/ettle/strcase v0.2.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/icholy/digest v1.2.0
+	github.com/jhump/protoreflect/v2 v2.0.0-beta.2
 	github.com/jinzhu/inflection v1.0.0
+	github.com/vektah/gqlparser/v2 v2.5.30
 	github.com/wailsapp/wails/v3 v3.0.0
 	github.com/yuin/goldmark v1.7.17
 	github.com/zalando/go-keyring v0.2.8
@@ -18,6 +21,12 @@ require (
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.59.0
+)
+
+require (
+	github.com/agnivade/levenshtein v1.2.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/petermattis/goid v0.0.0-20260716134002-a9b348f0a2b9 // indirect
 )
 
 require (
@@ -31,7 +40,7 @@ require (
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
-	github.com/coder/websocket v1.8.15 // indirect
+	github.com/coder/websocket v1.8.15
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -43,7 +52,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/schemo-app/proto v0.5.0
+	github.com/schemo-app/proto v0.6.0
 	golang.org/x/net v0.60.0
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0

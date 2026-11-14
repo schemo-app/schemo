@@ -13,9 +13,7 @@ import (
 	"time"
 )
 
-// KindCollection is what a level calls a collection: the one being run, or one inside it, which is
-// a level of the chain like any other. KindRequest is the request itself, the last level of a
-// chain. KindDraft is a request that is not in a tree at all, the command line's.
+// Level kinds: a collection in the chain, the request itself (last), and a draft in no tree.
 const (
 	KindCollection = "collection"
 	KindRequest    = "request"
@@ -29,9 +27,8 @@ type Scripts struct {
 	scope  domain.Scope
 	ids    platform.IDGen
 
-	// The run's own scope, which `pm.variables` reads and writes. It lives here because it belongs
-	// to no feature that outlives the run: a few strings per run. Only a run whose scripts actually
-	// wrote something has an entry.
+	// Run scopes (`pm.variables`), kept in memory: they live only as long as the run, and only runs
+	// that wrote something have one.
 	mu   sync.Mutex
 	runs map[string]map[string]string
 }
@@ -49,9 +46,7 @@ func NewScripts(
 	}
 }
 
-// Scripts is what a level runs of its own: a collection's, a collection's inside it, a request's or
-// a tab's draft. Nil is "not set here", a different answer from a script that is simply empty; a
-// level no row has yet (a tab whose draft was never written) reads the same way.
+// Scripts reads a level's own code; nil means not set, distinct from empty code.
 func (s *Scripts) Scripts(ctx context.Context, id string) (*domain.Scripts, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -64,9 +59,7 @@ func (s *Scripts) Scripts(ctx context.Context, id string) (*domain.Scripts, erro
 	return scripts, err
 }
 
-// SaveScripts writes what a level has to say about the requests it runs around, and nil puts it
-// back to "not set here" — the state a level returns to when its code is taken off it. The answer
-// is what was written, so the editor draws the state the database is in.
+// SaveScripts writes a level's code (nil clears it) and returns what was stored.
 func (s *Scripts) SaveScripts(
 	ctx context.Context,
 	id string,
@@ -92,14 +85,8 @@ func (s *Scripts) SaveScripts(
 	return s.store.Scripts(ctx, workspace, id)
 }
 
-// Before runs the pre-request scripts of everything above a request and reports whether the request
-// should be sent at all.
-//
-// What the scripts do to the request is on the pass, and they all see the same one: a collection's
-// script changes what a folder's is handed, and the folder's changes what the request's own sees.
-//
-// What they did goes back in the pass rather than into the store: a report hangs off the record it
-// ran around, and that record is written only after the request has been answered.
+// Before runs the pre-request scripts outermost first, each seeing the previous one's changes, and
+// reports whether to send. Reports go back in the pass, since the record is written after the answer.
 //
 //wails:ignore
 func (s *Scripts) Before(
@@ -127,13 +114,8 @@ func (s *Scripts) Before(
 	return skip, nil
 }
 
-// After writes down what the first half did (the record it belongs to exists by now) and runs the
-// second half, in the same order.
-//
-// It returns nothing because there is nothing left to say: the answer came back and the request is
-// a record already. A report that cannot be written is lost, rather than failing a request that had
-// worked, and the ones behind it are lost with it, because a store that refuses one will refuse the
-// next.
+// After stores the first half's reports and runs the post-request scripts. A report that cannot be
+// stored is dropped rather than failing a request that worked.
 //
 //wails:ignore
 func (s *Scripts) After(ctx context.Context, workspace string, pass domain.ScriptPass) {
@@ -171,10 +153,8 @@ func (s *Scripts) Runs(ctx context.Context, recordID string) ([]domain.ScriptRun
 	return s.store.ScriptRuns(ctx, recordID)
 }
 
-// scriptSource is what a level has to run for one scope. A script of nothing but whitespace is a
-// level with nothing to say, and such a level does not throw away the ones above it: it simply is
-// not in the pass. A half that is switched off reads the same way, here and only here: the level
-// keeps its code, and this is the one place that decides what runs.
+// scriptSource is a level's code for one scope; blank or switched-off code is skipped without
+// affecting the other levels.
 func scriptSource(level Level, scope domain.ScriptScope) string {
 	if level.Scripts.Off(scope) {
 		return ""
@@ -217,9 +197,7 @@ type Runner interface {
 	Run(in domain.ScriptInput) domain.ScriptRun
 }
 
-// Variables is what a script writes and reads outside its own run: the environment this app is
-// working in and the globals under it. The run's own scope is kept by this feature, since it is
-// nothing but this run's memory.
+// Variables is the stored scopes a script reads and writes: the active environment and the globals.
 type Variables interface {
 	Variable(ctx context.Context, scope domain.VarScope, name string) (string, bool, error)
 	SetVariable(ctx context.Context, scope domain.VarScope, name string, value string) error

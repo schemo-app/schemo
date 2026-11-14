@@ -5,13 +5,11 @@ import { json } from '@codemirror/lang-json'
 import { html } from '@codemirror/lang-html'
 import { xml } from '@codemirror/lang-xml'
 import { markdown } from '@codemirror/lang-markdown'
+import { graphqlLanguageSupport } from 'cm6-graphql'
 import { tags } from '@lezer/highlight'
 import type { ViewerLanguage } from './viewerLanguage'
 import { rem, supportsLengthRounding } from './units'
 
-// How every editor of ours looks, said once: the answer is read and the example is written in the
-// same palette and mono face, so the two are recognisably the same text. The colours are the app's
-// own tokens; a grammar is a reading of the text, not a second theme.
 const editorHighlight = HighlightStyle.define([
   { tag: [tags.propertyName, tags.tagName], color: 'var(--accent)' },
   { tag: [tags.attributeName, tags.keyword, tags.className], color: 'var(--purple)' },
@@ -33,7 +31,9 @@ const editorTheme = EditorView.theme({
   },
   // The app turns selection off globally and that inherits in here — a body is text and has to stay
   // selectable and copyable.
-  '.cm-content': { userSelect: 'text', WebkitUserSelect: 'text' },
+  '.cm-content': { userSelect: 'text', WebkitUserSelect: 'text', caretColor: 'var(--accent)' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)' },
+  '.cm-placeholder': { color: 'var(--text-tertiary)' },
   '.cm-gutters': {
     backgroundColor: 'transparent',
     border: 'none',
@@ -63,12 +63,9 @@ const editorTheme = EditorView.theme({
   '.cm-selectionBackground, ::selection': { backgroundColor: 'var(--accent-soft)' },
 })
 
-const GRAMMARS = { json, html, xml, markdown } as const
+const GRAMMARS = { json, html, xml, markdown, graphql: graphqlLanguageSupport } as const
 
-/**
- * What an editor wears: the reader's line numbers and wrapping, the grammar of the text it holds and
- * the palette. The caller lays its own marks and padding after it.
- */
+/** Base editor extensions: line numbers, wrapping, grammar and palette. */
 export function editorLook(
   language: ViewerLanguage | undefined,
   { numbers, wrap }: { numbers: boolean; wrap: boolean }

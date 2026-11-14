@@ -51,10 +51,8 @@ func (s *Store) Reset(ctx context.Context, workspaceID string) error {
 	})
 }
 
-// offerAnew resets queue state and enqueues all local workspace entities. A workspace this person may
-// not write in is started over and offered nothing, since the round does not push there and the
-// queue would wait for ever. A role given write access later is read as an access change, which the
-// server answers with a resync that comes here again.
+// offerAnew resets the queue and enqueues every local entity, except for read-only workspaces, whose
+// queue would never drain.
 func offerAnew(ctx context.Context, tx *writeTx, workspaceID string) error {
 	if err := startOver(ctx, tx, workspaceID); err != nil {
 		return err
@@ -119,10 +117,8 @@ func (s *Store) forget(ctx context.Context, q execer, queueID string) error {
 	return nil
 }
 
-// startOver clears sync_queue entries and resets the workspace sync sequence.
-//
-// Records and runs are not the queue of a workspace's contents: they are this device's own history,
-// were not made again by starting over, and the server will not offer them back. They stay.
+// startOver clears the workspace's queue and sequence. Records and runs stay: the server will not
+// offer them back.
 func startOver(ctx context.Context, tx *writeTx, workspaceID string) error {
 	if _, err := tx.ExecContext(ctx,
 		`DELETE FROM sync_queue WHERE workspace_id = ? AND entity_type NOT IN (?, ?)`,

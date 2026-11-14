@@ -4,11 +4,7 @@ import { useTimeoutFn } from '@vueuse/core'
 /** How long typing pauses before what was typed is written. */
 export const FLUSH_MS = 400
 
-/**
- * An edit that is written after a pause, and at once when the box is left or goes away. `touch` says
- * something was typed, `flush` writes it now if anything is waiting, and `cancel` drops it — the
- * Escape of a box that keeps its own text.
- */
+/** Writes after a pause, or at once on `flush` and unmount; `cancel` drops a pending write. */
 export function useDeferredWrite(write: () => Promise<unknown>, delay = FLUSH_MS) {
   const dirty = ref(false)
   const timer = useTimeoutFn(() => void flush(), delay, { immediate: false })

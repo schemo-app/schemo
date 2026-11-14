@@ -32,9 +32,7 @@ export function Capture(scope: domain$0.VarScope, name: string, value: string, s
 }
 
 /**
- * Create adds an environment at the end of the list and makes it the active one: a new environment
- * is being set up, and editing one you are not in is how mistakes happen. A base fills it with the
- * same keys, kinds and order; a secret is copied without its value.
+ * Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
  */
 export function Create(draft: $models.EnvironmentInput): $CancellablePromise<string> {
     return $Call.ByID(3007895376, draft);
@@ -49,9 +47,7 @@ export function Delete(id: string): $CancellablePromise<void> {
 }
 
 /**
- * EnsureDefaults gives an empty workspace the environment the app starts with, so there is
- * somewhere to type a base URL. A workspace of the account not pulled yet, or one this person may only
- * read, is left as it is: what it holds is the server's.
+ * EnsureDefaults gives an empty workspace its starting environment, except unpulled or read-only ones.
  */
 export function EnsureDefaults(): $CancellablePromise<void> {
     return $Call.ByID(4071119516);
@@ -81,10 +77,8 @@ export function Reveal(id: string): $CancellablePromise<string> {
 }
 
 /**
- * Save writes an environment as the window edited it: its name, colour, access and the whole list
- * of its variables in order. A secret sent without a value but with hasValue keeps the stored one,
- * since the window never holds it. A closed environment takes no variable changes; opening it is
- * part of the same save.
+ * Save writes an environment as edited. A secret with hasValue but no value keeps the stored one; a
+ * closed environment takes variable changes only when the same save opens it.
  */
 export function Save(env: domain$0.Environment): $CancellablePromise<void> {
     return $Call.ByID(179801057, env);

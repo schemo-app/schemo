@@ -12,10 +12,9 @@ import { t } from '../i18n'
 import { runOrToast } from '../lib/calls'
 import { touchedJar } from '../lib/responseCookies'
 import { History } from '../../bindings/schemo/internal/request'
-import { exampleName, exampleOf, isKeepable } from '../lib/examples'
-import { useToast } from './useToast'
 import { useCopyFeedback } from './useCopyFeedback'
 import type { BodyView, ResponseTab } from '../lib/responseView'
+import { protocolOf } from '../lib/protocol'
 
 
 // The record, read: how its body is understood, which readings that leaves, where a person can go
@@ -60,7 +59,7 @@ export function useResponseView(
 
   const tabLabels = computed<Record<ResponseTab, string>>(() => ({
     body: t('response.tabs.body'),
-    headers: t('response.tabs.headers'),
+    headers: t(protocolOf(record().protocol).responseHeaders ?? 'response.tabs.headers'),
     cookies: t('response.tabs.cookies'),
     timings: t('response.tabs.timings'),
     scripts: t('response.tabs.scripts'),
@@ -71,7 +70,8 @@ export function useResponseView(
   const tabs = computed<ResponseTab[]>(() => {
     const list: ResponseTab[] = ['body', 'headers']
     // A request this app sent always has an answer; a captured one usually has none.
-    if (record().source === RecordSource.SourceManual || record().cookieWrites.length > 0) {
+    if (!protocolOf(record().protocol).responseHeaders &&
+      (record().source === RecordSource.SourceManual || record().cookieWrites.length > 0)) {
       list.push('cookies')
     }
     list.push('timings')
@@ -172,9 +172,7 @@ export function useResponseView(
   }
 }
 
-// Taking an answer's cookie writes back reverts the jar and takes the claim off the record, so the
-// tab draws the answer the record now describes. There is nothing to take back for an answer that
-// left the jar as it was.
+// Reverts the jar and clears the record's claim, so the tab redraws what the record now says.
 export function useCookieUndo(record: () => RecordView) {
   const records = useRecordsStore()
   const undoing = ref(false)
@@ -188,43 +186,6 @@ export function useCookieUndo(record: () => RecordView) {
   }
 
   return { touched, undoing, undo }
-}
-
-// "To examples": the answer on screen kept beside the request it belongs to, under a name asked for
-// first, since an example is found by its name more often than by its code. Only a saved request
-// has somewhere to keep it (a draft's list lives in its tab and has no row to land on), and only an
-// answer that answered: a refusal has no status and nothing worth keeping.
-export function useKeepExample(record: () => RecordView, pane: () => PaneSource | null) {
-  const toast = useToast()
-
-  const canKeep = computed(() => Boolean(pane()?.nodeId) && isKeepable(record()))
-  const isKeeping = ref(false)
-  const draftName = ref('')
-  const nameField = useTemplateRef<{ focus(): void; select(): void }>('exampleNameField')
-
-  // The popover opens on the name the catalogue gives the status, ready to be overwritten.
-  watch(isKeeping, (open) => {
-    if (open) draftName.value = exampleName(record().status)
-  })
-
-  function focusName() {
-    void nextTick(() => {
-      nameField.value?.focus()
-      nameField.value?.select()
-    })
-  }
-
-  function keepAsExample() {
-    const answer = record()
-    const name =
-      draftName.value.trim() || exampleName(answer.status) || t('request.examples.untitled')
-    const current = pane()
-    current?.saveExamples([...(current.responses ?? []), exampleOf(answer, name)])
-    isKeeping.value = false
-    toast.show(t('request.examples.saved', { name }))
-  }
-
-  return { canKeep, isKeeping, draftName, exampleNameField: nameField, focusName, keepAsExample }
 }
 
 // What the row's copy button copies, reading by reading. Cookies, Timings and Scripts have no
@@ -249,7 +210,7 @@ export function useResponseCopy(opts: {
   const copyText = computed<string | null>(() => {
     switch (opts.tab()) {
       case 'body':
-        return opts.bodyText()
+        return opts.record().responseBinary ? null : opts.bodyText()
       case 'headers':
         return opts
           .record()

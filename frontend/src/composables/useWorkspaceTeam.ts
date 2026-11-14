@@ -6,11 +6,7 @@ import { useAccount } from './useAccount'
 import { useInviteDrafts, type InviteDraft } from './useInviteDrafts'
 import { describeFailure, t, te } from '../i18n'
 
-/**
- * The team of the workspace on screen: who is in it, what is waiting to let more in, and the roles that may
- * be handed out. It is the cloud's answer, not this device's — no membership is kept beside the
- * collections — so it is read when a workspace is shown and read again after every change.
- */
+/** The shown workspace's team, read from the cloud (nothing is kept locally) and again after every change. */
 export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<string>) {
 
   const team = ref<Team | null>(null)
@@ -18,9 +14,7 @@ export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<str
   const failure = ref('')
   const { drafts, addDraft, dropDraft, clearDrafts } = useInviteDrafts()
 
-  // A workspace not in the account has no team and nothing to make a link in; a workspace of somebody's own
-  // holds one person, and the server refuses every change to it. Without a sign-in the cloud is not
-  // asked at all: its answer would be a refusal, and the block says why instead.
+  // Signed out, the cloud is not asked: it would only refuse.
   const { state } = useAccount()
   const signedOut = computed(() => state.value !== null && state.value.signedIn !== true)
   const linked = computed(
@@ -60,10 +54,7 @@ export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<str
     }
   }
 
-  // Which workspace, whether the account has it yet, and whether there is a sign-in to ask with — the
-  // second moves on its own when the engine links a workspace made here, the third when somebody signs
-  // in or out. A string rather than an array: a getter building a new array on every run would fire
-  // on every reload of the list and wipe rows somebody is writing.
+  // A string key, not an array: a new array per run would fire on every reload and wipe typed rows.
   watch(
     () => [workspace.value?.id, workspace.value?.remoteId, kind.value, linked.value].join('|'),
     () => {

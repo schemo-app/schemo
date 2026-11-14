@@ -10,10 +10,8 @@ export interface FileDrop {
 }
 
 /**
- * MenuGroup is one submenu of that menu. Its ID names the submenu of the bar the rows land in
- * ("file", "edit", "view", "go", "help") and its sections are the rows, cut where the window drew a
- * rule. Where the system's own menu is the working one (Edit) the rows are added to it; a group the
- * system carries whole is not sent.
+ * MenuGroup is one submenu, addressed by ID ("file", "edit", "view", "go", "help"); sections are
+ * split where the window drew a rule. Rows join the system's own Edit menu.
  */
 export interface MenuGroup {
     "id": string;
@@ -22,9 +20,7 @@ export interface MenuGroup {
 }
 
 /**
- * MenuLabels are the few words the native menu needs. They arrive from the window because the
- * system draws the menu and only the page knows the language; a second catalogue here would drift
- * from the one the rest of the app reads.
+ * MenuLabels are the native menu's words, sent by the window so there is only one catalogue.
  */
 export interface MenuLabels {
     "about": string;
@@ -33,10 +29,8 @@ export interface MenuLabels {
     "closeWindow": string;
 
     /**
-     * SettingsKey and UpdateKey are the accelerators the two commands wear, in this platform's own
-     * words ("CmdOrCtrl+,"). The window resolves what a command is bound to and the system draws
-     * the menu, so they meet here: "" is a window that has not said yet (the default stands) and
-     * "none" is an unassigned command.
+     * SettingsKey and UpdateKey are the commands' accelerators ("CmdOrCtrl+,"): "" keeps the
+     * default and "none" means unassigned.
      */
     "settingsKey": string;
     "checkUpdates": string;
@@ -44,9 +38,8 @@ export interface MenuLabels {
 }
 
 /**
- * MenuRow is one line of the menu the window drew for itself, sent so the system's bar can carry
- * the same lines. Go draws the line and hands its ID back when it is picked; what the row does is
- * the window's, so a row with no command of its own (a theme, a zoom) is no different here.
+ * MenuRow is a row of the window's drawn menu, mirrored in the system bar; picking it hands its ID
+ * back to the window.
  */
 export interface MenuRow {
     "id": string;
@@ -57,9 +50,8 @@ export interface MenuRow {
 }
 
 /**
- * StartupFailure is a startup problem (a data directory, a database, a migration) and the reason
- * there is no window. It is not the domain's Failure, which is a refused call with a sentence
- * waiting. It cannot be a dialog: a dialog needs a running app, and these happen before one exists.
+ * StartupFailure is why there is no window (data folder, database, migration). It happens before
+ * the app runs, so it cannot be a dialog.
  */
 export interface StartupFailure {
     "kind": string;

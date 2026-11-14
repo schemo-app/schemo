@@ -4,10 +4,7 @@ import { CancelError } from '@wailsio/runtime/cancellable'
 
 const toast = useToast()
 
-/**
- * Wraps an async call expecting a result.
- * Displays an error toast on rejection and returns `undefined`.
- */
+/** Awaits a call and toasts a rejection; resolves to `undefined` on failure. */
 export async function callOrToast<T>(call: Promise<T>, key: MessageKey): Promise<T | undefined> {
   try {
     return await call
@@ -18,10 +15,7 @@ export async function callOrToast<T>(call: Promise<T>, key: MessageKey): Promise
   }
 }
 
-/**
- * Wraps an async action expecting no return value.
- * Displays an error toast on rejection and returns `true` on success or `false` on failure.
- */
+/** Awaits an action and toasts a rejection; resolves to whether it succeeded. */
 export async function runOrToast(call: Promise<unknown>, key: MessageKey): Promise<boolean> {
   return await callOrToast(call.then(() => true), key) === true
 }

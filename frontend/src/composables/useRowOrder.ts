@@ -17,11 +17,7 @@ interface RowOrderOptions {
   move: (id: string, position: number) => Promise<unknown>
 }
 
-/**
- * The order of a kv table, dragged: the gesture comes from the handle a row shows on hover, and the
- * table draws which row the handle belongs to and what each row wears on the way. The parameters,
- * the headers and the fields of a form body all stand on this.
- */
+/** Drag-reordering of kv table rows by the handle each row shows on hover. */
 export function useRowOrder({ rows, table, move }: RowOrderOptions) {
   const { drag, settle, noAnim, press, offsetOf } = useSlotDrag({
     axis: 'y',

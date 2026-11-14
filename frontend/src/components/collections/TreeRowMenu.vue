@@ -45,9 +45,7 @@ const { hint, offered } = useCommands()
 // change what it holds.
 const writable = computed(() => useWorkspacesStore().canWrite)
 
-// The row that has a page says so rather than asking: the same answer the head's button is drawn
-// from, and a collection nobody has published reads as one still to be shared. A folder inside a
-// published one has a page too, the one that holds it.
+// A folder inside a published one has a page too: the one that holds it.
 const publications = usePublicationsStore()
 const shared = computed(() => publications.markOf(row.id)?.page != null)
 

@@ -21,11 +21,14 @@ defineEmits<{ toggleSearch: [] }>()
 const bodySize = () => record.responseBytes ?? new Blob([record.responseBody]).size
 
 const statusLine = computed(() => formatStatus(record.status, record.statusText))
+const statusClass = computed(() => statusBadgeClass(record.status, {
+  protocol: record.protocol, failed: !!record.error, answered: !!record.statusText,
+}))
 </script>
 
 <template>
   <div class="resp-meta">
-    <span class="resp-status" :class="statusBadgeClass(record.status)">{{ statusLine }}</span>
+    <span class="resp-status" :class="statusClass">{{ statusLine }}</span>
     <span class="resp-num">{{ formatMicros(record.durationUs) }}</span>
     <span class="resp-num" :title="record.contentType || undefined">{{ formatBytes(bodySize()) }}</span>
   </div>

@@ -1,11 +1,7 @@
 <script setup lang="ts">
+import type { SheetLine } from '../../composables/useSheetLines'
 
-const { label, note = '', tag = '', tone = 'drop' } = defineProps<{
-  label: string
-  note?: string
-  tag?: string
-  tone?: 'keep' | 'drop'
-}>()
+const { label, note = '', tag = '', tone = 'drop' } = defineProps<SheetLine>()
 </script>
 
 <template>

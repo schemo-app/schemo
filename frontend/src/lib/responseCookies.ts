@@ -1,6 +1,7 @@
 import { t, type MessageKey } from '../i18n'
 import { CookieState } from '../../bindings/schemo/internal/domain'
 import type { CookieWrite, JarCookie, JarDomain } from '../../bindings/schemo/internal/domain'
+import { metaLine } from './format'
 
 const STATE_TEXTS = {
   [CookieState.CookieAdded]: 'cookies.state.added',
@@ -59,13 +60,7 @@ export function flagBadges(cookie: Pick<JarCookie, 'secure' | 'httpOnly' | 'same
 
 /** Formats cookie security flags (Secure, HttpOnly, SameSite) into a single line. */
 export function flagLabel(cookie: Pick<JarCookie, 'secure' | 'httpOnly' | 'sameSite'>): string {
-  return [
-    cookie.secure ? 'Secure' : '',
-    cookie.httpOnly ? 'HttpOnly' : '',
-    cookie.sameSite || 'Lax',
-  ]
-      .filter(Boolean)
-      .join(' · ')
+  return metaLine(cookie.secure && 'Secure', cookie.httpOnly && 'HttpOnly', cookie.sameSite || 'Lax')
 }
 
 const DAY = /^(\d{4})-(\d{1,2})-(\d{1,2})$/
@@ -92,10 +87,7 @@ export function expiryInput(expiresAt: number | null | undefined): string {
   return `${parts(expiresAt).join('-')} ${clock.join(':')}`
 }
 
-/**
- * Parses a date/time string into a timestamp.
- * Returns `null` for empty string (session), or `undefined` for invalid dates/format.
- */
+/** Parses an expiry: `null` when empty (session), `undefined` when invalid. */
 export function expiryValue(text: string): number | null | undefined {
   const written = text.trim()
   if (written === '') return null

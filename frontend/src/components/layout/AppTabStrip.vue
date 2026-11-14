@@ -79,7 +79,7 @@ const allViews = computed(() =>
     const instance = contentOf(tab.id)
     const draft =
       instance && instance.kind === TabKind.TabKindRequest
-        ? { method: instance.draft.method.value, url: instance.draft.url.value }
+        ? { method: instance.draft.method.value, url: instance.draft.url.value, protocol: instance.draft.protocol.value }
         : null
     const view = tabView(tab, {
       tree: collections.tree,

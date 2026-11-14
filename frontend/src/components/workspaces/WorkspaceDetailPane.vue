@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useColorLabels } from '../../composables/useColorLabels'
 import { computed, useTemplateRef, watch } from 'vue'
-import { Code } from '../../../bindings/schemo/internal/domain'
+import { Code, Feature } from '../../../bindings/schemo/internal/domain'
 import Button from '../ui/Button.vue'
 import ColorSwatches from '../ui/ColorSwatches.vue'
 import Segment from '../ui/Segment.vue'
@@ -14,9 +14,8 @@ import { useWorkspaceCounts } from '../../composables/useWorkspaceCounts'
 import { useNameField } from '../../composables/useNameField'
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { usePlan } from '../../composables/usePlan'
-import { FEATURES, featureRefusal } from '../../lib/onboardingFeatures'
 import { roleLabel } from '../../lib/roles'
-import { describeFailure, t, te } from '../../i18n'
+import { describeFailure, failureOf, t, te } from '../../i18n'
 
 const emit = defineEmits<{ (e: 'danger'): void; (e: 'leave'): void }>()
 
@@ -39,7 +38,7 @@ const colorLabels = useColorLabels('workspaces', WORKSPACE_COLORS)
 
 const kinds = computed(() => [
   { value: 'personal', label: t('workspaces.kindPersonal') },
-  { value: 'team', label: t('workspaces.kindTeam'), soon: !includes(FEATURES.sharedWorkspaces) },
+  { value: 'team', label: t('workspaces.kindTeam'), soon: !includes(Feature.FeatureSharedSpaces) },
 ])
 
 const kind = computed(() => workspace.value?.kind ?? 'personal')
@@ -73,17 +72,10 @@ async function write(send: () => Promise<unknown>) {
     await send()
     clearNotice()
   } catch (error) {
-    setNotice(failureText(error))
+    // The server knows the plan changed before this window does.
+    if (failureOf(error)?.code === Code.CodeFeatureRequired) void refreshPlan()
+    setNotice(describeFailure(error))
   }
-}
-
-function failureText(error: unknown): string {
-  const failure = (error as { cause?: { code?: Code; args?: Record<string, string> } })?.cause
-  if (failure?.code === Code.CodeFeatureRequired) {
-    void refreshPlan()
-    return featureRefusal(t, te, failure.args?.feature ?? '')
-  }
-  return describeFailure(error)
 }
 
 const team = useWorkspaceTeam(workspace, kind)

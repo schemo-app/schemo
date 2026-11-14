@@ -24,6 +24,7 @@ type Drafts struct {
 	files       FileSource
 	auth        AuthMaterializer
 	net         NetDefaults
+	engine      *Engine
 	ids         platform.IDGen
 	collections *workspace.Collections
 	records     *History
@@ -39,6 +40,7 @@ type DraftDeps struct {
 	Files       FileSource
 	Auth        AuthMaterializer
 	Net         NetDefaults
+	Engine      *Engine
 	IDs         platform.IDGen
 	Collections *workspace.Collections
 	History     *History
@@ -47,13 +49,12 @@ type DraftDeps struct {
 
 func NewDrafts(d DraftDeps) *Drafts {
 	return &Drafts{store: d.Store, scope: d.Scope, vars: d.Vars, jar: d.Jar, files: d.Files,
-		auth: d.Auth, net: d.Net, ids: d.IDs, collections: d.Collections, records: d.History,
+		auth: d.Auth, net: d.Net, engine: d.Engine, ids: d.IDs, collections: d.Collections, records: d.History,
 		host: d.Host}
 }
 
-// Preview is what follows from a draft without sending it: the names nothing answers, the rows the
-// authorization and the app add, the state of a fetched token, and what the levels above answer
-// for "Inherit".
+// Preview is what a draft implies without sending: unresolved names, added rows, the token state and
+// what "Inherit" resolves to.
 type Preview struct {
 	Missing   []string              `json:"missing"`
 	Projected []domain.ProjectedRow `json:"projected"`
@@ -128,13 +129,21 @@ func (s *Drafts) FromRecord(ctx context.Context, id domain.DraftID, recordID str
 	if err != nil {
 		return err
 	}
-	body, err := s.records.Body(ctx, recordID, domain.SideRequest)
+	body, err := s.records.content(ctx, recordID, domain.SideRequest)
 	if err != nil {
 		return err
 	}
 	seeded := domain.NewDraft()
 	seeded.ID = id
 	seeded.Method, seeded.URL, seeded.Body = rec.Method, rec.URL, body
+	seeded.Protocol = rec.Protocol
+	if options := rec.Options; options != nil {
+		seeded.Options = &domain.ProtocolOptions{
+			Variables: options.Variables, OperationName: options.OperationName,
+			RPCMethod: options.RPCMethod, Descriptors: options.Descriptors,
+		}
+	}
+	seeded.BodyKind = requestBodyKind(seeded)
 	seeded.Headers = s.rowsFromHeaders(rec.RequestHeaders)
 	return s.Save(ctx, seeded)
 }
@@ -191,6 +200,8 @@ func (s *Drafts) SaveAsNode(
 	return s.collections.CreateNode(ctx, workspace.RequestDraft{
 		CollectionID:  collectionID,
 		Name:          name,
+		Protocol:      d.Protocol,
+		Options:       d.Options,
 		Method:        d.Method,
 		URL:           d.URL,
 		Params:        d.Params,
@@ -205,9 +216,8 @@ func (s *Drafts) SaveAsNode(
 	})
 }
 
-// SaveAsNewCollection saves a draft as the first request of a collection made for it. It is one
-// call because it is one intention: two would leave an empty collection behind when the second
-// failed.
+// SaveAsNewCollection creates a collection with the draft as its first request, in one call so no
+// empty collection is left on failure.
 func (s *Drafts) SaveAsNewCollection(
 	ctx context.Context,
 	collectionName string,
@@ -254,24 +264,39 @@ func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 // Send sends a draft with what the levels above it answer, and answers with the send's id; the
 // record arrives as an event.
 func (s *Drafts) Send(ctx context.Context, d domain.Draft) (string, error) {
-	above := s.above(ctx, d.ID)
-	prepared, err := s.Prepared(ctx, d, above.Auth, above.Variables)
+	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return "", err
 	}
-	input := prepared.SendInput()
-	input.Node = string(d.ID)
-	return s.records.Send(ctx, input)
+	above := s.above(ctx, d.ID)
+	prepared, err := s.prepare(ctx, workspace, d, above.Auth, above.Variables)
+	if err != nil {
+		return "", err
+	}
+	prepared.Node = string(d.ID)
+	prepared.EnvironmentID, prepared.Variables = d.EnvironmentID, above.Variables
+	return s.records.send(ctx, workspace, prepared)
+}
+
+// SendMessage writes a message using the environment captured when the WebSocket was opened.
+func (s *Drafts) SendMessage(ctx context.Context, id string, message domain.SavedMessage) error {
+	return s.records.sendMessage(ctx, id, message)
 }
 
 // SendSeed sends a request that is in no tab and no tree (a history row sent again, say), and
 // leaves every draft as it is.
 func (s *Drafts) SendSeed(ctx context.Context, seed Seed) (string, error) {
-	prepared, err := s.Prepare(ctx, seed, nil)
+	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return "", err
 	}
-	return s.records.Send(ctx, prepared.SendInput())
+	draft := s.draftOfSeed(seed)
+	prepared, err := s.prepare(ctx, workspace, draft, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	prepared.EnvironmentID = draft.EnvironmentID
+	return s.records.send(ctx, workspace, prepared)
 }
 
 // CopyAs writes a draft out as a command for one tool, with the real values on it. It asks for no
@@ -342,6 +367,8 @@ func FromNode(node domain.CollectionNode) domain.Draft {
 	}
 	return domain.Draft{
 		ID:            domain.DraftID(node.ID),
+		Protocol:      node.Protocol,
+		Options:       node.Options,
 		Method:        node.Method,
 		URL:           node.URL,
 		Params:        domain.OrEmpty(node.Params),
@@ -359,6 +386,7 @@ func FromNode(node domain.CollectionNode) domain.Draft {
 // nodeFromDraft is the other direction. "Inherit" and "None" are stored as the absence of an
 // answer, which domain.Auth.Stored decides.
 func nodeFromDraft(node domain.CollectionNode, d domain.Draft) domain.CollectionNode {
+	node.Protocol, node.Options = d.Protocol, d.Options
 	node.Method = strings.TrimSpace(d.Method)
 	node.URL = d.URL
 	node.Params = d.Params
@@ -411,9 +439,8 @@ type CookieHeaders interface {
 	CookieHeader(ctx context.Context, workspace, rawURL string) (string, error)
 }
 
-// NetDefaults is what the engine decides about every request by itself: the address a typed one is
-// completed into, the name the app calls itself, and whether the server may compress. The editor
-// draws these before a send, so they are read from the engine and not guessed here.
+// NetDefaults is what the engine adds to every request (URL completion, User-Agent, compression), read
+// from it so the editor shows the same.
 type NetDefaults interface {
 	CompleteURL(raw string) string
 	WireDefaults() (userAgent string, acceptEncoding bool)
@@ -424,6 +451,7 @@ type FileSource interface {
 }
 
 type VariableSource interface {
+	Resolver(ctx context.Context, workspace string, above []domain.Variable, envID string) (func(string) (string, string), error)
 	Missing(
 		ctx context.Context,
 		above []domain.Variable,
@@ -445,8 +473,9 @@ type VariableSource interface {
 		texts []string,
 		envID string,
 	) ([]string, error)
-	MaskTexts(
+	MaskTextsIn(
 		ctx context.Context,
+		workspace string,
 		above []domain.Variable,
 		texts []string,
 		envID string,

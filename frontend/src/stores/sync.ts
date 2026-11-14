@@ -4,6 +4,7 @@ import { Sync, type SyncStatus } from '../../bindings/schemo/internal/cloud'
 import type { QueuedChange, SyncCounts, SyncWorkspace } from '../../bindings/schemo/internal/domain'
 import { SyncState } from '../../bindings/schemo/internal/domain'
 import { formatAgo, t } from '../i18n'
+import { metaLine } from '../lib/format'
 
 export const useSyncStore = defineStore('sync', () => {
   const status = ref<SyncStatus | null>(null)
@@ -67,5 +68,5 @@ export function syncLine(workspaces: SyncWorkspace[], activeId: string, waiting 
   const state = held.state === SyncState.SyncPaused
     ? t('sync.paused')
     : t('sync.synced', { when: formatAgo(held.syncedAt) })
-  return [state, pending].filter(Boolean).join(' · ')
+  return metaLine(state, pending)
 }

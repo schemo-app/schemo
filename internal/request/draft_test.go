@@ -66,7 +66,7 @@ func (r *rig) preview(t *testing.T, d domain.Draft) Preview {
 	return preview
 }
 
-func (r *rig) prepared(t *testing.T, d domain.Draft) Prepared {
+func (r *rig) prepared(t *testing.T, d domain.Draft) SendInput {
 	t.Helper()
 	prepared, err := r.Prepared(context.Background(), d, nil, nil)
 	if err != nil {
@@ -146,6 +146,15 @@ func (f fakeVars) SubstituteTexts(
 	return out, nil
 }
 
+func (f fakeVars) Resolver(ctx context.Context, _ string, above []domain.Variable, envID string) (func(string) (string, string), error) {
+	return func(text string) (string, string) {
+		values := []string{text}
+		live, _ := f.SubstituteTexts(ctx, above, values, false, envID)
+		masked, _ := f.SubstituteTexts(ctx, above, values, true, envID)
+		return live[0], masked[0]
+	}, nil
+}
+
 // ReferenceTexts is the export's rendering: a secret resolves to the shell variable it goes out
 // under rather than to its value, and a value the text spells out is masked, as the resolver does.
 func (f fakeVars) ReferenceTexts(
@@ -178,8 +187,9 @@ func (f fakeVars) ReferenceTexts(
 
 // MaskTexts is the other side of a request that has already been filled in: the fake hides its
 // secret values and resolves nothing.
-func (f fakeVars) MaskTexts(
+func (f fakeVars) MaskTextsIn(
 	_ context.Context,
+	_ string,
 	_ []domain.Variable,
 	texts []string,
 	_ string,

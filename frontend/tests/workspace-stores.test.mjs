@@ -756,6 +756,51 @@ function draftForTest(persisted = true) {
   return draft
 }
 
+test('switching protocols preserves each editor across a saved draft reload', async () => {
+  const draft = draftForTest()
+  let saved
+  globalThis.draftServices.Save = value => {
+    saved = JSON.parse(JSON.stringify(value))
+    return CancellablePromise.resolve()
+  }
+  draft.setMethod('POST')
+  draft.setBody('http body')
+  draft.setMethod('POST', 'gql')
+  draft.setBody('query Lookup { id }')
+  draft.setOptions({ variables: '{"id":7}', operationName: 'Lookup' })
+  draft.setMethod('POST', 'grpc')
+  draft.setBody('{"rpc":true}')
+  await draft.flush()
+  draft.load(saved)
+  draft.setMethod('POST', 'gql')
+  assert.equal(draft.body.value, 'query Lookup { id }')
+  assert.equal(draft.options.value.variables, '{"id":7}')
+  draft.setMethod('POST')
+  assert.equal(draft.body.value, 'http body')
+  draft.setMethod('POST', 'grpc')
+  assert.equal(draft.body.value, '{"rpc":true}')
+  draft.abandon()
+})
+
+test('an event from an older attempt cannot end a newer send', async () => {
+  const draft = draftForTest(false)
+  globalThis.draftServices.Send = () => CancellablePromise.resolve('first')
+  globalThis.recordServices.Cancel = () => CancellablePromise.resolve(false)
+  await draft.send()
+  await draft.cancel()
+
+  globalThis.draftServices.Send = () => CancellablePromise.resolve('second')
+  await draft.send()
+  draft.failSend('first')
+  await draft.finishSend({ id: 'first' })
+  assert.equal(draft.loading.value, true)
+  assert.equal(draft.pendingSendId.value, 'second')
+
+  await draft.finishSend({ id: 'second' })
+  assert.equal(draft.loading.value, false)
+  draft.abandon()
+})
+
 test('adding a response check keeps the latest script edits and their disabled flags', async () => {
   const draft = useDraft({ persisted: () => true, finished: async () => {}, scriptsLevel: () => 'draft' })
   const editorSave = deferred()

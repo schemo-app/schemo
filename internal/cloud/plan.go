@@ -37,15 +37,8 @@ func (s *Plan) Current(ctx context.Context) (domain.Plan, error) {
 	return s.store.Plan(ctx)
 }
 
-// Refresh asks the server and keeps the answer. It is asked where the answer may have moved: at
-// startup, when the connection is checked, when a window that draws a control opens, and after the
-// server refuses something for want of a feature. There is no timer: a plan changes when somebody
-// buys one.
-//
-// A server that does not answer is not a failure: the kept plan stands and is the answer, so
-// nobody gets a window offering less than they paid for because the question could not be asked.
-// A device that is signed out forgets the plan, since the last account's entitlement is not this
-// one's answer.
+// Refresh asks the server and keeps the answer. There is no timer: a plan changes when somebody buys
+// one. An unreachable server keeps the stored plan; signing out forgets it.
 func (s *Plan) Refresh(ctx context.Context) (domain.Plan, error) {
 	caller, err := s.caller.Caller(ctx)
 	if domain.CodeOf(err) == domain.CodeNotSignedIn {
@@ -67,10 +60,7 @@ func (s *Plan) Refresh(ctx context.Context) (domain.Plan, error) {
 	return held, nil
 }
 
-// Plan asks the account what the organisation is entitled to. The organisation is not named: a
-// device works in one organisation and holds no id for it, so the request leaves it empty and the
-// server resolves the one its caller works in, after checking the caller's right to read it. A
-// named one would be a stranger's organisation and refused.
+// Plan asks for the caller's organisation's entitlement; the server resolves the organisation.
 func (c *Client) Plan(ctx context.Context, caller domain.Caller) (domain.Plan, error) {
 	answer, err := callServer(c, ctx, caller,
 		func(ctx context.Context, conn *grpc.ClientConn) (*planv1.GetPlanResponse, error) {
@@ -124,9 +114,8 @@ func planOf(held *planv1.Plan, used *planv1.Usage) domain.Plan {
 // as: a bar labelled in one unit and measured in another is a bar nobody can check.
 const megabyte = 1 << 20
 
-// metersOf pairs the quotas the server caps with what it says stands against them, in kinds this
-// window knows: "collections" and "members" count things, "storage" is in megabytes. A quota with
-// no cap (or not sent) has no bar, and one capped at zero is a full bar.
+// metersOf pairs capped quotas with usage ("storage" is in megabytes). No cap means no meter; a zero
+// cap is a full one.
 func metersOf(quotas map[string]int, used *planv1.Usage) []domain.Meter {
 	if used == nil || len(quotas) == 0 {
 		return nil

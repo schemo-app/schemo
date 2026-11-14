@@ -1,6 +1,7 @@
 import { useWorkspacesStore } from '../stores/workspaces'
 import { t } from '../i18n'
 import type { Workspace } from '../../bindings/schemo/internal/domain'
+import { metaLine } from '../lib/format'
 
 export interface WorkspaceContentCount {
   value: number
@@ -17,7 +18,7 @@ export function useWorkspaceCounts() {
     const parts: string[] = []
     if (held.collections > 0) parts.push(t('counts.collections', held.collections))
     if (held.environments > 0) parts.push(t('counts.environments', held.environments))
-    return parts.length ? parts.join(' · ') : t('workspaces.empty')
+    return parts.length ? metaLine(...parts) : t('workspaces.empty')
   }
 
   /** Returns detailed array of workspace item counts with localized labels. */

@@ -1,6 +1,7 @@
 package request
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log"
@@ -82,13 +83,32 @@ func (s *History) List(
 	if err != nil {
 		return nil, err
 	}
-	return s.store.Records(ctx, workspace, source, orDefaultLimit(limit))
+	limit = orDefaultLimit(limit)
+	records, err := s.store.Records(ctx, workspace, source, limit)
+	if err != nil || (source != "" && source != domain.SourceManual) {
+		return records, err
+	}
+	known := map[string]bool{}
+	for _, record := range records {
+		known[record.ID] = true
+	}
+	for _, active := range s.activeAttempts() {
+		if active.stream == nil || active.workspace != workspace {
+			continue
+		}
+		record, ok := active.stream.activeRecord()
+		if ok && record.WorkspaceID == workspace && !known[record.ID] {
+			records = append(records, record)
+		}
+	}
+	slices.SortStableFunc(records, func(a, b domain.Record) int {
+		return cmp.Compare(b.StartedAt, a.StartedAt)
+	})
+	return records[:min(len(records), limit)], nil
 }
 
-// WorkspaceRecords is the history of one named workspace, for a reader that is not the window: the MCP
-// server reads workspaces the window is not showing. Every source is read, since an agent asking what
-// happened here last is asking about the workspace, and only what this device holds: reaching the
-// server for older rows is the history page's errand.
+// WorkspaceRecords is a workspace's local history for the MCP server, which reads workspaces the
+// window is not showing.
 //
 //wails:ignore
 func (s *History) WorkspaceRecords(
@@ -141,18 +161,38 @@ func (s *History) Page(
 
 // Record returns a single record by ID including its bodies.
 func (s *History) Record(ctx context.Context, id string) (domain.Record, error) {
-	return s.store.Record(ctx, id)
+	record, err := s.store.Record(ctx, id)
+	if errors.Is(err, domain.ErrNotFound) {
+		if active := s.findAttempt(id); active != nil && active.stream != nil {
+			workspace, scopeErr := s.scope.ActiveWorkspace(ctx)
+			if scopeErr == nil && workspace == active.workspace {
+				if record, ok := active.stream.activeRecord(); ok {
+					return record, nil
+				}
+			}
+		}
+	}
+	return record, err
 }
 
-// Body retrieves a record body, fetching and caching it from the remote source if missing.
-func (s *History) Body(ctx context.Context, id string, side domain.BodySide) (string, error) {
+// Body is a record body as the window reads it: the text, or only the flag for a binary one.
+func (s *History) Body(ctx context.Context, id string, side domain.BodySide) (domain.BodyRef, error) {
+	content, err := s.content(ctx, id, side)
+	if err != nil {
+		return domain.BodyRef{}, err
+	}
+	return domain.BodyOf(content, false), nil
+}
+
+// content reads a record body as stored, fetching and caching it from the remote source if missing.
+func (s *History) content(ctx context.Context, id string, side domain.BodySide) (string, error) {
 	body, err := s.store.ReadBody(ctx, id, side)
 	if !errors.Is(err, domain.ErrNotFound) {
 		return body, err
 	}
 
 	// Local records always contain their bodies; missing body means it was never present.
-	record, err := s.store.Record(ctx, id)
+	record, err := s.Record(ctx, id)
 	if err != nil {
 		return "", err
 	}
@@ -167,7 +207,7 @@ func (s *History) Body(ctx context.Context, id string, side domain.BodySide) (st
 	if err := s.store.SaveFetched(ctx, record.WorkspaceID, id, fetched); err != nil {
 		return "", err
 	}
-	return fetched.Bodies[side].Inline, nil
+	return fetched.Bodies[side].Content(), nil
 }
 
 // Clear deletes records by their IDs.
@@ -211,16 +251,12 @@ func orDefaultLimit(limit int) int {
 }
 
 func bodyRef(text string, truncated bool) *domain.BodyRef {
-	return &domain.BodyRef{Inline: text, Size: int64(len(text)), Truncated: truncated}
+	body := domain.BodyOf(text, truncated)
+	return &body
 }
 
-// maskedCapture is a capture as history keeps it: everything the browser reported about the request
-// goes through the same masking a send from this app does (the address, the tab it came from, the
-// body and the value of every header row), so a value this device holds as a secret is not written
-// down in the clear because it passed through a page. What came back is left as it is, as a send
-// leaves it.
-//
-// Only the values are looked at, so nothing changes for a capture that carries none of them.
+// maskedCapture masks a capture's address, tab, body and header values like a send, so a secret is
+// not stored in clear just because a page sent it.
 func (s *History) maskedCapture(
 	ctx context.Context,
 	workspace string,
@@ -256,12 +292,7 @@ func millisToMicros(ms int64) *int64 {
 	return &us
 }
 
-// UndoCookieWrites takes back what one answer wrote into the jar. The record knows what that answer
-// changed (the rows it replaced or deleted) and the jar knows how to put them back, so the two meet
-// here.
-//
-// Undoing twice is not an error: the second puts back what the first already did, and a row already
-// the way the write found it is the state the write asked for.
+// UndoCookieWrites reverts one answer's jar writes; undoing twice is harmless.
 func (s *History) UndoCookieWrites(ctx context.Context, id string) error {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -277,9 +308,7 @@ func (s *History) UndoCookieWrites(ctx context.Context, id string) error {
 	if err := s.jar.Undo(ctx, workspace, rec.CookieWrites); err != nil {
 		return err
 	}
-	// The record stops claiming what has been taken back. A write that never happened (a blocked
-	// domain, an answer this app did not send) stays: it is a fact about that answer, with nothing
-	// to undo.
+	// Drop the undone writes; never-applied ones (blocked domains) stay as facts about the answer.
 	kept := make([]domain.CookieWrite, 0, len(rec.CookieWrites))
 	for _, write := range rec.CookieWrites {
 		if write.State == domain.CookieNotSaved {

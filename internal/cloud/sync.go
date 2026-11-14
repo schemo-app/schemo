@@ -36,9 +36,8 @@ type Sync struct {
 	settle   time.Duration
 	till     time.Duration
 
-	// slot is held by whatever is changing the queue or the cursors of the workspaces: a round, a
-	// resync, a link. Two of them at once would claim the same entries, release each other's, and
-	// make two workspaces in the account for one.
+	// slot serialises everything that touches the queue or cursors (rounds, resyncs, links), so no two
+	// claim the same entries or create a workspace twice.
 	slot chan struct{}
 
 	mu         sync.Mutex
@@ -96,9 +95,8 @@ func NewSync(
 	}
 }
 
-// exclusive runs work with the slot, waiting for whatever holds it. Waiting rather than giving up
-// is what a "sync now" button needs: the edits made before the click must be covered by the round
-// it starts, and a round already going may have read the queue before them.
+// exclusive waits for the slot rather than giving up, so "sync now" covers every edit made before
+// the click.
 func (s *Sync) exclusive(ctx context.Context, work func() error) error {
 	select {
 	case s.slot <- struct{}{}:
@@ -109,8 +107,7 @@ func (s *Sync) exclusive(ctx context.Context, work func() error) error {
 	return work()
 }
 
-// Recover starts the loop and, more importantly, puts back what a crash left in flight: an entry
-// that was being sent when the process died is an entry nobody is sending.
+// Recover starts the loop and requeues entries a crash left in flight.
 //
 //wails:ignore
 func (s *Sync) Recover(ctx context.Context) error {

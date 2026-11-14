@@ -232,10 +232,7 @@ export function useTreeEdits(
   }
 }
 
-/**
- * Manages an inline name editor with validation,
- * keyboard shortcuts and automatic focus.
- */
+/** An inline name editor with validation, keys and autofocus. */
 function useInlineName<T>(
     write: (target: T, name: string) => Promise<unknown>,
 ) {

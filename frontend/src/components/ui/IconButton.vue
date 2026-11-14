@@ -77,10 +77,10 @@ const hintArmed = useHoverArrival(hintEl)
 
   <button
     v-else
+    :title="hint"
     v-bind="$attrs"
     type="button"
     :disabled
-    :title="hint"
     :class="['icon-btn', `icon-btn--${variant}`, `icon-btn--${size}`]"
   >
     <slot />

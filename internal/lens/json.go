@@ -188,9 +188,7 @@ func (p *jsonParser) stringNode(parent *node) (*node, error) {
 	return n, nil
 }
 
-// number reads the grammar of RFC 8259 §6: an optional minus, a zero or digits that do not start
-// with one, then a fraction and an exponent that each need digits. `01`, `1.` and `1e` are not
-// numbers, and a body that has them is not JSON.
+// number follows RFC 8259 §6: `01`, `1.` and `1e` are not numbers.
 func (p *jsonParser) number(parent *node) (*node, error) {
 	n := &node{kind: domain.NodeNumber, parent: parent, start: p.i, keyStart: -1}
 	p.takes("-")

@@ -96,9 +96,7 @@ const folderRefused = computed(() => startup.value?.failure?.kind === 'data-dir'
 
 const loadSession = useSessionPersistence(records, environments)
 
-// Rows the system's own menus already carry on macOS: the Edit menu's items, which work wherever
-// text is, and the ones the application menu owns. The window's drawn menu has no such menu to lean
-// on and draws them itself; the system's bar would show two of each.
+// Rows macOS menus already carry; the system bar would otherwise show them twice.
 const SYSTEM_ROWS = new Set([
   'undo',
   'redo',
@@ -150,10 +148,7 @@ function closeSheet() {
   focusUrlField()
 }
 
-/** The commands the whole window carries out, wherever the focus is: the palette, the settings
- *  window, the history, the list's side, the update check the system menu also offers, and the
- *  environments sheet. What each wears comes from the registry, so rebinding one in the settings
- *  rebinds it here. */
+/** Keys come from the registry, so a rebinding in the settings applies here. */
 function useGlobalShortcuts(environments: ReturnType<typeof useEnvironmentsStore>): void {
   const search = useSearchStore()
   const tabs = useTabsStore()
@@ -230,9 +225,7 @@ function useCollectionKeys(): void {
   useEventListener(window, 'keydown', onKeydown)
 }
 
-/** The window's own menu, sent to the system's bar on the platforms where the system draws one: the
- *  same rows, the same keys, and the same enabled and checked state the drawn menu shows. A row is
- *  not run here — the system hands its id back and the row of the drawn menu runs it. */
+/** Mirrors the drawn menu into the system bar; the system hands a row's id back for the drawn menu to run. */
 function useNativeMenu() {
   const { customTitlebar } = usePlatform()
   // The platforms that draw their own titlebar draw their own menu too — `AppMenu` owns it there,

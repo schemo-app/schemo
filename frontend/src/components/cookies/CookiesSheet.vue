@@ -8,9 +8,6 @@ import CookieList from './CookieList.vue'
 import { useCookiesStore } from '../../stores/cookies'
 import { t } from '../../i18n'
 
-// The manager window: the cookie domains on the left and, on the right, either the form that
-// writes a cookie or the domain being looked at. It holds what neither side can hold alone: the
-// confirmation that stands over everything before a domain is taken away.
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const cookies = useCookiesStore()

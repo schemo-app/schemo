@@ -7,9 +7,7 @@ import { useToast } from './useToast'
 import { useCommands } from './useCommands'
 import { t } from '../i18n'
 
-// The bookmark of a request tab: the save panel for a draft, and the save of the edits themselves
-// for a request that already lives in a collection. `can` is false for a card, which is kept by its
-// own Save.
+// `can` is false for a card, which has its own Save.
 export function useRequestSave(source: PaneSource, can: () => boolean) {
   const toast = useToast()
   const collections = useCollectionsStore()

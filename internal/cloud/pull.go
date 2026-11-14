@@ -7,22 +7,11 @@ import (
 	"time"
 )
 
-// Reading what the other devices did. The cursor is the server's own number and never a clock, and
-// the page it comes back with is applied whole, in one transaction, with the cursor moved inside
-// it: a batch half applied with the cursor already past it would lose whatever came between.
-//
-// There is no subscription here. A stream is for a device somebody is watching (another device's
-// edit arrives within the second rather than the interval) and is the window's business, which is
-// why the engine's own round is a pull and nothing more.
-//
-// The workspace is named on the wire by the id the server knows it by, RemoteID, never by the id it has
-// here. They are ids of two different rows, and a call naming the local one asks about a workspace that
-// does not exist there: the server answers "not found". Every request in this package is named the
-// same way; what this device keeps is named the other.
+// Reading what other devices did. A page is applied whole with the cursor moved in the same
+// transaction, so a half-applied batch cannot skip changes. The wire names a workspace by RemoteID,
+// never by the local id.
 
-// maxPages bounds one round's reading. A workspace with a year of history makes a first pull of
-// thousands of rows, and a round that never ended would hold the loop for as long as the workspace is
-// long. What is left over is read by the next round, from the cursor it has reached.
+// maxPages bounds one round; the next round continues from the cursor.
 const maxPages = 50
 
 // pull reads what the workspace missed, until there is nothing more or the round has had enough.
@@ -37,13 +26,9 @@ func (s *Sync) pull(ctx context.Context, caller domain.Caller, workspace domain.
 		}
 
 		if answer.Resync {
-			// The server cannot answer from where this device stands: the workspace was reset there, or
-			// this device is so far behind that the changes it missed are gone. Starting over is
-			// the only road left, and it is the one a person's own resync takes.
-			//
-			// Once per round: a server that says the same thing from a cursor of zero is one this
-			// device cannot get anywhere with, and a loop that cleared its queue every time round
-			// would empty the outbox for nothing.
+			// The server cannot answer from here (a reset, or changes long gone): start over, as a
+			// manual resync does. Only once per round, so a server that refuses cursor zero too does
+			// not empty the outbox in a loop.
 			if started {
 				return domain.Refuse(domain.CodeServerRefused, nil,
 					domain.Args{"reason": "resync"})
@@ -57,17 +42,12 @@ func (s *Sync) pull(ctx context.Context, caller domain.Caller, workspace domain.
 		}
 
 		if len(answer.Changes) > 0 {
-			// The page arrives named by the server's own id and lands in this device's own workspace,
-			// so each change is renamed before it is applied: what the store receives is the workspace
-			// as this device knows it, the same way the live half does it.
+			// Map the server's workspace id onto the local one, as the live stream does.
 			for at := range answer.Changes {
 				answer.Changes[at].WorkspaceID = workspace.ID
 			}
-			// A row the store could not write is dropped rather than allowed to stop the page: the
-			// contract says to skip an entity this build does not understand and keep the cursor
-			// moving, and a device that stopped syncing over somebody else's row would stop its own
-			// work too. This is the one thing here that is lost quietly, and it is lost on the side
-			// that did not make it.
+			// The protocol says to skip an entity this build cannot store and keep the cursor moving;
+			// one foreign row must not stop this device syncing.
 			skipped, err := s.store.ApplyPage(ctx, workspace.ID, answer.Changes, answer.Cursor)
 			if err != nil {
 				return err

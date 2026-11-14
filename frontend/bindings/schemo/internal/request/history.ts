@@ -14,10 +14,14 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as domain$0 from "../domain/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
- * Body retrieves a record body, fetching and caching it from the remote source if missing.
+ * Body is a record body as the window reads it: the text, or only the flag for a binary one.
  */
-export function Body(id: string, side: domain$0.BodySide): $CancellablePromise<string> {
+export function Body(id: string, side: domain$0.BodySide): $CancellablePromise<domain$0.BodyRef> {
     return $Call.ByID(1903354030, id, side);
 }
 
@@ -43,9 +47,8 @@ export function ClearAll(): $CancellablePromise<number> {
 }
 
 /**
- * ExportHar writes one tab's captured traffic as a HAR file and reports whether anything was
- * written: a cancelled dialog is not a failure, and a toast for it would tell the user about a file
- * that does not exist.
+ * ExportHar writes one tab's capture as a HAR file and reports whether one was written; a cancelled
+ * dialog is not a failure.
  */
 export function ExportHar(title: string, tabKey: string): $CancellablePromise<boolean> {
     return $Call.ByID(3072484595, title, tabKey);
@@ -56,6 +59,13 @@ export function ExportHar(title: string, tabKey: string): $CancellablePromise<bo
  */
 export function List(source: domain$0.RecordSource, limit: number): $CancellablePromise<domain$0.Record[] | null> {
     return $Call.ByID(2374442278, source, limit);
+}
+
+/**
+ * Live returns the current transcript of a running connection.
+ */
+export function Live(id: string, after: number): $CancellablePromise<$models.StreamSnapshot | null> {
+    return $Call.ByID(2593389968, id, after);
 }
 
 /**
@@ -73,6 +83,20 @@ export function Record(id: string): $CancellablePromise<domain$0.Record> {
 }
 
 /**
+ * ResponsePreview reads the first 256 bytes and includes the full payload only for images or video.
+ */
+export function ResponsePreview(id: string): $CancellablePromise<$models.BinaryPreview> {
+    return $Call.ByID(2471499823, id);
+}
+
+/**
+ * SaveResponseBody writes a record's response to a file the person picks.
+ */
+export function SaveResponseBody(title: string, id: string): $CancellablePromise<boolean> {
+    return $Call.ByID(136503872, title, id);
+}
+
+/**
  * Stats returns summary statistics for the active workspace.
  */
 export function Stats(): $CancellablePromise<domain$0.HistoryStats> {
@@ -80,12 +104,7 @@ export function Stats(): $CancellablePromise<domain$0.HistoryStats> {
 }
 
 /**
- * UndoCookieWrites takes back what one answer wrote into the jar. The record knows what that answer
- * changed (the rows it replaced or deleted) and the jar knows how to put them back, so the two meet
- * here.
- * 
- * Undoing twice is not an error: the second puts back what the first already did, and a row already
- * the way the write found it is the state the write asked for.
+ * UndoCookieWrites reverts one answer's jar writes; undoing twice is harmless.
  */
 export function UndoCookieWrites(id: string): $CancellablePromise<void> {
     return $Call.ByID(2204689470, id);

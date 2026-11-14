@@ -18,11 +18,8 @@ import (
 // hundred megabytes of it is neither; what was cut is said rather than silently dropped.
 const maxAgentBody = 256 << 10
 
-// appTools is what the MCP server sees of the app: the tree, the draft's masking and the history
-// joined the way this layer joins features everywhere. It reads workspaces the window is not showing,
-// so every read is addressed by a workspace rather than the scope on screen, and it masks what it hands
-// over with the same machinery that keeps a secret out of the history: the marker is the app's one
-// `••••`.
+// appTools is the app as the MCP server sees it. Reads are addressed by workspace, since agents read
+// workspaces the window is not showing, and secrets are masked as in history.
 type appTools struct {
 	workspaces   *workspace.Workspaces
 	collections  *workspace.Collections
@@ -239,10 +236,8 @@ func (t appTools) Send(ctx context.Context, requestID, agent string) (Response, 
 	if err != nil {
 		return Response{}, err
 	}
-	// The send path is the app's own, the one a run and the window's own card both take: inherited
-	// authorization and variables resolved, the pinned environment honored, and every secret left
-	// as its mask in what is written down. The agent's name rides along so the history says whose
-	// send it was.
+	// The app's own send path: inheritance, the pinned environment and masking, with the agent's name
+	// recorded in history.
 	rec, err := t.runs.Send(ctx, workspace, requestID, agent)
 	if err != nil {
 		return Response{}, err
@@ -262,11 +257,12 @@ func (t appTools) responseOf(ctx context.Context, rec domain.Record) (Response, 
 		Status:     rec.Status,
 		StatusText: rec.StatusText,
 		DurationMs: rec.DurationUs / 1000,
+		Binary:     body.Binary,
 		Workspace:  rec.WorkspaceID,
 	}
 
 	texts := make([]string, 0, 2+2*len(rec.ResponseHeaders))
-	texts = append(texts, body, rec.Error)
+	texts = append(texts, body.Inline, rec.Error)
 	for _, header := range rec.ResponseHeaders {
 		texts = append(texts, header.Name, header.Value)
 	}

@@ -74,9 +74,8 @@ func (s *Collections) duplicateCollection(
 	return s.saveTree(ctx, workspace, copied)
 }
 
-// Built in memory before anything is written: a duplicate that failed halfway would leave a
-// collection with half a tree in it. The row it is given is not what the store holds, so the
-// content is taken from the store rather than from that row.
+// copyCollection builds the copy in memory first so a failure leaves nothing half-written, reading
+// content from the store rather than the given row.
 func (s *Collections) copyCollection(
 	ctx context.Context,
 	row domain.Collection,
@@ -140,18 +139,12 @@ func (s *Collections) copyNode(
 	copied.Params = copyRows(s.ids, node.Params)
 	copied.Headers = copyRows(s.ids, node.Headers)
 	copied.PathParams = copyRows(s.ids, node.PathParams)
-	// The skip list is copied as it stands and not minted: it names jar cookies, and a copy turning
-	// off the same cookies says the same thing. The list is the copy's own so either of them can
-	// change its mind.
+	// The skip list names jar cookies, so it is copied as is, not re-minted.
 	copied.Form = copyFormRows(s.ids, node.Form)
 	return copied, nil
 }
 
-// minted gives every row an id of its own. A row is edited by id, so a copy that kept the
-// original's ids would be an edit away from changing both.
-//
-// The row is copied out of the list before it is written to and the list itself is never touched:
-// it belongs to the caller.
+// minted gives each copied row a new id, copying the rows out rather than touching the caller's slice.
 func minted[T any](ids platform.IDGen, rows []T, id func(*T) *string) []T {
 	out := make([]T, 0, len(rows))
 	for _, row := range rows {
@@ -198,9 +191,7 @@ func copyVariables(ids platform.IDGen, variables []domain.Variable) []domain.Var
 	return minted(ids, variables, func(v *domain.Variable) *string { return &v.ID })
 }
 
-// A level waiting to be written. Scripts belong to the level, not the row, and SaveScripts only
-// writes to a row that exists, so they travel beside it: in hand when a file brought them, or read
-// from `from`, the original of a duplicate (empty for an import).
+// pendingLevel is a level to write, with its scripts beside it, since SaveScripts needs the row to exist.
 type pendingLevel struct {
 	collection domain.Collection
 	from       string

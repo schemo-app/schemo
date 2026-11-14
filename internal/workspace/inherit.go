@@ -9,12 +9,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Above is everything the levels over a request answer for it, read in one walk because the same
-// caller needs both at the same moment: the authorization the nearest level that gave one answered
-// with, and the `{{tokens}}` they answer for, outermost first.
-//
-// The command line's draft is in no tree, and a deleted node is in none either. Neither is a
-// failure: "there is nothing above this request" is the answer.
+// Above reads, in one walk, the nearest level's auth and the variables of every level above a
+// request. A request in no tree has nothing above it, which is not an error.
 //
 //wails:ignore
 func (s *Collections) Above(ctx context.Context, id domain.DraftID) (Above, error) {
@@ -84,13 +80,8 @@ type runnable struct {
 	variables []domain.Variable
 }
 
-// A request is a list of one, so running a saved request and running a collection are the same
-// call. A node the collection does not have is a deletion the window has not heard about yet, not
-// an empty run.
-//
-// The tree is walked from the root rather than from the collection the window named, because a
-// folder two levels down still inherits from the levels between it and the root: a detached subtree
-// would silently lose their authorization and variables.
+// runnablesUnder lists the requests to run. Walking from the root keeps the auth and variables of
+// every level above the collection; an unknown node is an error, not an empty run.
 func runnablesUnder(tree []domain.Collection, collectionID, nodeID string) ([]runnable, error) {
 	anchor, inherited, above, ok := findCollectionInherited(tree, collectionID, nil, nil)
 	if !ok {
@@ -194,9 +185,7 @@ func runnablesIn(
 	return out
 }
 
-// findCollection looks a collection up by id, the ones inside collections included: a collection
-// answers to an id wherever it sits, because running one and dropping something into it are the
-// same kind of question.
+// findCollection finds a collection by id at any depth.
 func findCollection(tree []domain.Collection, id string) (domain.Collection, bool) {
 	for _, collection := range tree {
 		if collection.ID == id {

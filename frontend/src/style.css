@@ -1556,6 +1556,10 @@ mark.search-match.current {
   background: var(--red-soft);
 }
 
+.method-ws {
+  color: var(--tok-str);
+}
+
 .method-other {
   color: var(--accent);
 }
@@ -1989,6 +1993,7 @@ button:focus-visible,
 
 /* Navigation flyouts share the handoff's native menu surface. */
 .popover.rail-popover,
+.popover.operation-popover,
 .popover.tab-switcher {
   display: flex;
   flex-direction: column;
@@ -2006,6 +2011,11 @@ button:focus-visible,
 .popover.rail-popover {
   width: 17rem;
   max-height: min(32rem, var(--reka-popover-content-available-height));
+}
+
+.popover.operation-popover {
+  width: 18.75rem;
+  max-height: min(26.25rem, var(--reka-popover-content-available-height));
 }
 
 .popover.tab-switcher {

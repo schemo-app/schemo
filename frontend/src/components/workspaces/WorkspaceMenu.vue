@@ -8,10 +8,6 @@ import { useWorkspaceCounts } from '../../composables/useWorkspaceCounts'
 import { t } from '../../i18n'
 import { switchWorkspace } from '../../lib/switchWorkspace'
 
-// The panel under the titlebar's chip: every workspace, in the order they were made, with what each
-// holds as the row's own tooltip, so a row is one line. Choosing one moves the whole window; the
-// two rows at the foot are the ways out of the panel: a new workspace, and the window that manages the
-// existing ones.
 defineProps<{ side?: 'right' | 'bottom' }>()
 
 const workspaces = useWorkspacesStore()

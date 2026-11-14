@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import { type CancellablePromise } from '@wailsio/runtime/cancellable'
 import { useWorkspaceSnapshot } from '../composables/useWorkspaceSnapshot'
+import { useChangedEvent } from '../composables/useWailsEvent'
 import { findCollection, holderOf, trailOf } from '../lib/collectionTree'
 import { t } from '../i18n'
 import {
@@ -13,7 +14,6 @@ import {
   type DraftID,
   type Variable,
 } from '../../bindings/schemo/internal/domain'
-import { Events } from '@wailsio/runtime'
 import { Collections, type CollectionPatch } from '../../bindings/schemo/internal/workspace'
 import { Drafts, Runs, type RunProgress } from '../../bindings/schemo/internal/request'
 import { callOrToast, runOrToast } from '../lib/calls'
@@ -52,9 +52,7 @@ export const useCollectionsStore = defineStore('collections', () => {
   const pendingRemove = ref<string | null>(null)
   const pendingSection = ref<CollectionSection | null>(null)
 
-  // What the tree highlights is what the active tab is about: the strip drives the sidebar, and the
-  // sidebar never drives the strip. A request tab names its node and a collections tab its
-  // collection; the highlight and the tree's own keys are about either one.
+  // The strip drives the tree highlight, never the other way round.
   const collectionTabId = computed<string | null>(() =>
     tabs.activeKind === TabKind.TabKindCollections ? tabs.activeTab?.ref || null : null
   )
@@ -127,16 +125,7 @@ export const useCollectionsStore = defineStore('collections', () => {
   const change = async (call: Promise<unknown>) => { await write(call) }
 
   // Another window, an agent, sync or an import changed the tree: it is read again.
-  let pending: ReturnType<typeof setTimeout> | null = null
-  const offChanged = Events.On('changed', (event) => {
-    const kind = event.data?.kind
-    if ((kind !== 'collection' && kind !== 'request') || pending) return
-    pending = setTimeout(() => {
-      pending = null
-      void load()
-    }, 50)
-  })
-  onScopeDispose(() => offChanged?.())
+  useChangedEvent(['collection', 'request'], () => void load())
 
   const applyTree = <T extends { tree: Collection[] | null }>(call: CancellablePromise<T>) =>
     snapshot.take(call, (answer) => answer.tree ?? tree.value)
@@ -244,10 +233,7 @@ export const useCollectionsStore = defineStore('collections', () => {
     if (above) for (const ancestor of above.ancestors) expanded.value[ancestor.id] = true
   }
 
-  // Anything a list opens (the tree, the palette, a row of a run) opens as the tab of its node or
-  // the page of its collection, or shows the tab already open for it. A plain click lands in the
-  // preview slot and a ⌘-click keeps a tab of its own; the palette's "in the background" stages one
-  // without taking the work area. Replacing a dirty preview asks first, in tabs.open.
+  // A plain click previews, ⌘-click keeps a tab, and `background` stages one without switching to it.
   async function select(id: string, keep = false, background = false): Promise<boolean> {
     if (id === selectedId.value && !keep && !background) return true
     if (findCollection(tree.value, id)) {

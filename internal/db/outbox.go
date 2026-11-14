@@ -42,9 +42,7 @@ func enqueue(
 	}
 	switch {
 	case domain.ThroughHistory(entityType):
-		// History travels from the moment a workspace is linked: a link that uploaded a year of
-		// captured traffic would upload gigabytes. A workspace this person may not write in has no door
-		// for it, since a queue nothing drains only grows.
+		// History syncs only after linking, and never for read-only workspaces whose queue would not drain.
 		if !workspace.linked || !workspace.access.Write {
 			return nil
 		}

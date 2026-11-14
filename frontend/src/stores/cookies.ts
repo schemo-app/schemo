@@ -2,11 +2,11 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import type { CancellablePromise } from '@wailsio/runtime/cancellable'
 import { callOrToast, runOrToast } from '../lib/calls'
-import { Events } from '@wailsio/runtime'
 import { Cookies } from '../../bindings/schemo/internal/request'
 import { CookieOrigin } from '../../bindings/schemo/internal/domain'
 import type { JarCookie, JarDomain } from '../../bindings/schemo/internal/domain'
 import { useWorkspaceSnapshot } from '../composables/useWorkspaceSnapshot'
+import { useChangedEvent } from '../composables/useWailsEvent'
 
 export const useCookiesStore = defineStore('cookies', () => {
   const sheetOpen = ref(false)
@@ -117,18 +117,11 @@ export const useCookiesStore = defineStore('cookies', () => {
   }
 
   // A response, another window or sync changed the jar: an open manager reads it again.
-  let pending: ReturnType<typeof setTimeout> | null = null
-  const offChanged = Events.On('changed', (event) => {
-    const kind = event.data?.kind
-    if ((kind !== 'cookie' && kind !== 'jar_domain') || !sheetOpen.value || pending) return
-    pending = setTimeout(() => {
-      pending = null
-      if (sheetOpen.value) void load()
-    }, 50)
+  useChangedEvent(['cookie', 'jar_domain'], () => {
+    if (sheetOpen.value) void load()
   })
 
   onScopeDispose(() => {
-    offChanged?.()
     domain.value = ''
     editing.value = null
   })

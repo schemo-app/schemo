@@ -1,11 +1,6 @@
 import { TabKind, type Collection, type DraftID, type Tab } from '../../bindings/schemo/internal/domain'
 
-/**
- * The rules of the tab strip, as pure functions. A plain open lands in the preview slot, a ⌘-open
- * keeps a tab of its own, a close falls to the neighbour, pinned tabs stand first, and a page (the
- * history, the capture…) is one however it was reached. Each change answers with the strip after
- * it and the tab drafts that fell out, which the caller deletes.
- */
+/** Tab strip state; every change returns the new strip and the drafts that fell out, for the caller to delete. */
 export interface StripState {
   tabs: Tab[]
   active: string
@@ -126,10 +121,7 @@ export function activate(s: StripState, id: string): Change {
   return indexOf(s.tabs, id) < 0 ? same(s) : done(s.tabs, id)
 }
 
-/**
- * Closes the tabs `closes` names. The shown tab survives when it can; otherwise the named tab is
- * shown when it survived, and the tab that took the old place when it did not. The last tab may go.
- */
+/** Closes the matching tabs, keeping the shown one when it survives. The last tab may go. */
 export function close(s: StripState, named: string, closes: (tab: Tab, at: number) => boolean): Change {
   if (indexOf(s.tabs, named) < 0) return same(s)
   const kept = s.tabs.filter((tab, at) => !closes(tab, at))
@@ -178,10 +170,7 @@ export function move(s: StripState, id: string, to: string): Change {
   return done(tabs, s.active)
 }
 
-/**
- * Copies a request tab right after itself onto a draft the caller has copied already. The copy
- * edits no saved request: two editors of one node would be one request in two tabs.
- */
+/** Duplicates a request tab onto an already-copied draft; the copy is unsaved, so no node gets two editors. */
 export function duplicate(s: StripState, id: string, draftId: DraftID): Change {
   const source = s.tabs.find((tab) => tab.id === id)
   if (!source || isPage(source.kind)) return same(s)

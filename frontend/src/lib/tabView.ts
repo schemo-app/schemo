@@ -1,7 +1,8 @@
-import { TabKind, type Collection, type Record as RequestRecord, type Tab } from '../../bindings/schemo/internal/domain'
+import { TabKind, type Draft, type Collection, type Record as RequestRecord, type Tab } from '../../bindings/schemo/internal/domain'
 import { findCollection, findNode } from './collectionTree'
 import { addressOf } from './address'
 import { t } from '../i18n'
+import { requestLabel } from './protocol'
 
 /** What a tab draws: its name, the method it edits, and the mark that says what kind it is. All of
  *  it is read off what the window already holds — the strip stores none of it in Go. */
@@ -16,7 +17,7 @@ export function tabView(
   what: {
     tree: Collection[]
     records: RequestRecord[]
-    draft: { method: string; url: string } | null
+    draft: Pick<Draft, 'method' | 'url' | 'protocol'> | null
   }
 ): TabView {
   switch (tab.kind) {
@@ -44,19 +45,19 @@ export function tabView(
         const fallback = what.draft?.url ? addressOf(what.draft.url) : t('request.newRequestName')
         return {
           title: node.name || fallback,
-          method: what.draft?.method || node.method || 'GET',
+          method: requestLabel(what.draft ?? node),
           icon: null,
         }
       }
       if (what.draft) {
         return {
           title: what.draft.url ? addressOf(what.draft.url) : t('request.newRequestName'),
-          method: what.draft.method,
+          method: requestLabel(what.draft),
           icon: null,
         }
       }
       const record = tab.record ? what.records.find((one) => one.id === tab.record) : undefined
-      if (record) return { title: addressOf(record.url), method: record.method, icon: null }
+      if (record) return { title: addressOf(record.url), method: requestLabel(record), icon: null }
       return { title: t('request.newRequestName'), method: 'GET', icon: null }
     }
   }

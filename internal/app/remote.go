@@ -7,11 +7,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// workspaceRemote is the account's side of a workspace, as the workspace feature asks for it.
-//
-// It lives here because this is the only layer that knows both halves: the workspace feature has no
-// notion of a token (it expires and is refreshed behind the account's door) and the wire has no
-// notion of a workspace, only of a call. The two lines that join them live in the composition root.
+// workspaceRemote joins the workspace feature, which knows no tokens, to the account client, which
+// knows no workspaces.
 type workspaceRemote struct {
 	client  *cloud.Client
 	account *cloud.Account
@@ -45,11 +42,8 @@ func (r workspaceRemote) Leave(ctx context.Context, workspaceID string) error {
 	return r.client.Leave(ctx, caller, workspaceID)
 }
 
-// inviteSender is the team of a workspace in the shape a form making one asks for.
-//
-// Members returns the whole team again on every change, while a form making a workspace
-// only wants to know whether each letter went out. That difference is why this is an adapter rather
-// than a second method there.
+// inviteSender adapts Members for the create form, which needs per-address results rather than the
+// whole team.
 type inviteSender struct{ members *cloud.Members }
 
 func (s inviteSender) Invite(ctx context.Context, workspaceID, email, roleID string) error {

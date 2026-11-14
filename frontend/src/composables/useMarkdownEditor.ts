@@ -14,9 +14,7 @@ export interface Standing {
 
 export type DocCommand = 'bold' | 'italic' | 'code' | 'ul' | 'ol' | 'quote' | 'pre' | 'hr' | 'p' | 'h1' | 'h2' | 'h3'
 
-// Milkdown is the visual mode of a description: ProseMirror with the markdown as its document, so
-// what is edited and what is stored are one serialised text. It is loaded when a description is
-// first written, not before; reading a page does not need an editor.
+// Milkdown loads on the first edit; reading a description needs no editor.
 function load() {
   return Promise.all([
     import('@milkdown/kit/core'),
@@ -47,10 +45,7 @@ function load() {
 
 type Kit = Awaited<ReturnType<typeof load>>
 
-/**
- * The visual editor of a description. `onChange` hears the markdown as the document stands after a
- * change the person made; text put in from outside (`setText`) is not a change and is not heard.
- */
+/** The visual description editor; `onChange` fires for user edits, not for `setText`. */
 export function useMarkdownEditor(onChange: (markdown: string) => void) {
   const standing = reactive<Standing>({ bold: false, italic: false, ul: false, ol: false, block: 'p' })
 

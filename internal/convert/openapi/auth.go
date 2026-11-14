@@ -6,9 +6,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// operationAuth is what the operation itself asks for. An operation that says nothing about
-// security inherits the collection's (nil auth); an empty list means it asks for nothing, which is
-// `none`.
+// operationAuth: no security key inherits (nil), an empty list is `none`.
 func (r *reader) operationAuth(op operation) *domain.Auth {
 	if op.Security == nil {
 		return nil
@@ -49,9 +47,8 @@ func (r *reader) scheme(requirement requirement) *domain.Auth {
 	return r.authOf(declared, requirement[name])
 }
 
-// authOf maps one declared scheme. A scheme this app has no shape for is counted and left out, so
-// the request visibly has no authorization instead of a wrong one. The scopes ride along: an OAuth
-// 2.0 scheme is asked for with the scopes the requirement lists.
+// authOf maps one declared scheme; unknown ones are counted and left out rather than mapped wrongly.
+// OAuth 2.0 takes the requirement's scopes.
 func (r *reader) authOf(declared map[string]any, scopes []string) *domain.Auth {
 	auth := r.schemeOf(declared, scopes)
 	if auth == nil {
@@ -134,9 +131,7 @@ func (r *reader) oauth2(declared map[string]any, scopes []string) *domain.Auth {
 	}
 }
 
-// oauth2Auth is one OAuth 2.0 scheme as this app holds it: the grant, its addresses and the
-// requested scopes. The client pair points at variables, like the bearer token, so a person fills
-// them in once.
+// oauth2Auth is an OAuth 2.0 scheme whose client pair points at variables, like the bearer token.
 func (r *reader) oauth2Auth(grant, authUrl, tokenUrl string, scopes []string) *domain.Auth {
 	r.declare("clientId", "", true)
 	r.declare("clientSecret", "", true)

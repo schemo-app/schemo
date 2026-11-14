@@ -13,10 +13,7 @@ import Spinner from '../ui/Spinner.vue'
 import { useAccount } from '../../composables/useAccount'
 import { usePlan } from '../../composables/usePlan'
 import { formatDate, t } from '../../i18n'
-
-// The account: who is here and the way to the panel, then, signed in, where syncing stands, the
-// tariff and how to leave, each in a part of its own. The devices themselves, the list and ending a
-// session, live in the panel, so the pane names them and links there.
+import { metaLine } from '../../lib/format'
 
 const {
   state,
@@ -55,9 +52,7 @@ const initials = computed(() => {
   return (account.value?.email ?? '').slice(0, 1).toUpperCase()
 })
 
-// Where the sign-in goes: the app's own cloud unless somebody names a server of their own. The
-// choice lives in this window until the sign-in itself, which is the click that keeps it; the
-// status, not the pane, says which server the account is on.
+// The custom server is kept only by the sign-in click itself.
 const custom = ref(false)
 const chosen = ref('')
 
@@ -120,14 +115,12 @@ onMounted(async () => {
   void loadPlan()
 })
 
-// The other devices, in one line: their names and when they signed in. The list itself, and ending
-// a session, are the panel's; here is what a person checks before opening it. A failed read says
-// nothing here, since the sync line is where this pane reports the server being away.
+// A failed read says nothing here; the sync line reports the server being away.
 const devicesLine = computed(() => {
   const others = sessions.value.filter((one) => !one.isCurrent)
   if (!others.length) return t('account.devicesEmpty')
   return others
-    .map((one) => [one.device.name || one.device.platform, when(one.createdAt)].filter(Boolean).join(' · '))
+    .map((one) => metaLine(one.device.name || one.device.platform, when(one.createdAt)))
     .join(', ')
 })
 
@@ -138,9 +131,7 @@ function when(value: string): string {
   return formatDate(at, { day: 'numeric', month: 'long' })
 }
 
-// The devices are read when an account arrives (signed in from this pane, from another window, or
-// by a code confirmed in a browser), because the list is the server's and the pane only knows to
-// ask. A sign-out clears what is drawn; the sheet closing is when the account is read again.
+// The device list is the server's, so it is read whenever an account arrives and cleared on sign-out.
 watch(signedIn, (here) => {
   if (here) void loadSessions()
 })

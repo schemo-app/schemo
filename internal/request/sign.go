@@ -17,9 +17,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// jwtBearer mints a token here rather than being given one; what goes on the request is a bearer
-// token like any other. There is no absorb: a signature over claims is not a value a person can
-// edit, so the window shows the row.
+// jwtBearer mints the token here; no absorb, since a signature is not something to edit.
 func jwtBearer(auth domain.Auth, _ domain.AuthRequest) (domain.AuthOutput, error) {
 	secret := auth.Answer("secret")
 	if secret == "" {
@@ -60,9 +58,7 @@ func jwtBearer(auth domain.Auth, _ domain.AuthRequest) (domain.AuthOutput, error
 	return carry(auth, signed), nil
 }
 
-// signingKey is the material a token of this algorithm is signed with, and the algorithm itself.
-// HMAC takes the secret's bytes and RSA a parsed key, which is why this is a switch and not a
-// table.
+// signingKey is the key and method for the algorithm: HMAC uses the secret's bytes, RSA a parsed key.
 func signingKey(auth domain.Auth) (any, jwt.SigningMethod, error) {
 	algorithm := auth.OrDefault("algorithm")
 	if !offersOption(auth.Type, "algorithm", algorithm) {
@@ -122,9 +118,7 @@ func expiresIn(raw string) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-// awsSignature signs the request itself rather than putting a credential on it: method, address,
-// headers and body go into the signature and the signer writes the result back onto the request. No
-// absorb: an edited signature would be for something nobody sent.
+// awsSignature signs the whole request in place; no absorb, since an edited signature signs nothing sent.
 func awsSignature(auth domain.Auth, req domain.AuthRequest) (domain.AuthOutput, error) {
 	accessKey := strings.TrimSpace(auth.Answer("accessKeyId"))
 	secretKey := auth.Answer("secretAccessKey")
@@ -177,10 +171,7 @@ func awsSignature(auth domain.Auth, req domain.AuthRequest) (domain.AuthOutput, 
 	return out, nil
 }
 
-// seekable is a request's bytes in something the signer can read, rewind and close: it hashes the
-// body to sign it and goes back over it, which needs a seekable body. `http.NewRequest` wraps a
-// non-ReadCloser in a plain reader and many services refuse an unsigned body; bytes.Reader seeks
-// but does not close.
+// seekable lets the signer hash, rewind and close the body; bytes.Reader alone seeks but does not close.
 type seekable struct{ *bytes.Reader }
 
 func (seekable) Close() error { return nil }
@@ -198,9 +189,7 @@ func carry(auth domain.Auth, token string) domain.AuthOutput {
 	return header("Authorization", withPrefix(auth.Answer("prefix"), token))
 }
 
-// offersOption is whether a scheme lets a field take this value. The table is the allowlist: a
-// value the window could not have offered, like an algorithm nobody implements, is refused rather
-// than signed with.
+// offersOption allows only values the window offers, so an unknown algorithm is refused.
 func offersOption(kind domain.AuthType, key, value string) bool {
 	scheme, ok := domain.SchemeFor(kind)
 	if !ok {

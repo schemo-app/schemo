@@ -51,10 +51,8 @@ func (s *Environments) State(ctx context.Context) (domain.EnvState, error) {
 	return hideSecretValues(state), nil
 }
 
-// Save writes an environment as the window edited it: its name, colour, access and the whole list
-// of its variables in order. A secret sent without a value but with hasValue keeps the stored one,
-// since the window never holds it. A closed environment takes no variable changes; opening it is
-// part of the same save.
+// Save writes an environment as edited. A secret with hasValue but no value keeps the stored one; a
+// closed environment takes variable changes only when the same save opens it.
 func (s *Environments) Save(ctx context.Context, env domain.Environment) error {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
@@ -96,9 +94,7 @@ func (s *Environments) SaveGlobals(ctx context.Context, vars []domain.Variable) 
 	return s.store.SaveScope(ctx, workspace, nil, domain.EnvScope{}, saved)
 }
 
-// Create adds an environment at the end of the list and makes it the active one: a new environment
-// is being set up, and editing one you are not in is how mistakes happen. A base fills it with the
-// same keys, kinds and order; a secret is copied without its value.
+// Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
 func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (string, error) {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
@@ -134,9 +130,7 @@ func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (stri
 	return env.ID, s.store.SetActiveEnvironment(ctx, workspace, env.ID)
 }
 
-// Import writes an environment a file described, variables and all. Nothing is activated, and a
-// name the workspace already holds is numbered beside it rather than refused: a file arriving under a
-// taken name is not the person's mistake.
+// Import writes an environment from a file without activating it; a taken name gets a number.
 //
 //wails:ignore
 func (s *Environments) Import(ctx context.Context, draft domain.EnvironmentDraft) (string, error) {
@@ -188,9 +182,7 @@ func (s *Environments) Activate(ctx context.Context, id string) error {
 	return s.store.SetActiveEnvironment(ctx, workspace, id)
 }
 
-// EnsureDefaults gives an empty workspace the environment the app starts with, so there is
-// somewhere to type a base URL. A workspace of the account not pulled yet, or one this person may only
-// read, is left as it is: what it holds is the server's.
+// EnsureDefaults gives an empty workspace its starting environment, except unpulled or read-only ones.
 func (s *Environments) EnsureDefaults(ctx context.Context) error {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
@@ -258,8 +250,7 @@ func (s *Environments) Capture(ctx context.Context, scope domain.VarScope, name,
 	return s.write(ctx, scope, name, value, secret)
 }
 
-// Variable reads one enabled variable by name in the scope a script names: the active environment
-// or the globals. Unlike State it returns secrets: the value goes into the script sandbox only.
+// Variable reads one enabled variable for a script. Unlike State it returns secrets, for the sandbox only.
 //
 //wails:ignore
 func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name string) (string, bool, error) {
@@ -288,16 +279,14 @@ func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name
 	return "", false, nil
 }
 
-// SetVariable writes a variable by name for a script, adding it when it is new. Scripts may write
-// into a closed environment: closing is about what a person types by accident.
+// SetVariable writes a variable for a script, even into a closed environment.
 //
 //wails:ignore
 func (s *Environments) SetVariable(ctx context.Context, scope domain.VarScope, name, value string) error {
 	return s.write(ctx, scope, name, value, false)
 }
 
-// SetInScope sets a variable by name in a scope for an agent, respecting closed environments, and
-// answers with its id.
+// SetInScope writes a variable for an agent, respecting closed environments, and returns its id.
 //
 //wails:ignore
 func (s *Environments) SetInScope(ctx context.Context, scope domain.EnvScope, name, value string, secret bool) (string, error) {
@@ -394,9 +383,8 @@ func (s *Environments) writable(ctx context.Context, scope domain.EnvScope) (str
 	return workspace, state, nil
 }
 
-// savedVariables is the list the window sent, made safe to store: names trimmed and usable in a
-// `{{token}}` (or still empty, for a row being named), each name and id once, kinds text or secret,
-// positions in order, and withheld secret values taken from what is stored.
+// savedVariables validates the sent list: usable trimmed names, unique names and ids, text or secret
+// kinds, ordered positions, and withheld secrets kept from storage.
 func savedVariables(held, sent []domain.Variable) ([]domain.Variable, error) {
 	stored := map[string]domain.Variable{}
 	for _, v := range held {

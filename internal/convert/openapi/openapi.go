@@ -1,7 +1,5 @@
-// Package openapi reads an OpenAPI 3.x or Swagger 2.0 document as a collection: paths become
-// requests, tags become folders and the servers become the variable every address is written
-// against. JSON and YAML decode into one tree and are read once. It is a pure package, so a
-// document is read in a test.
+// Package openapi reads OpenAPI 3.x and Swagger 2.0 as a collection: paths become requests, tags
+// folders, and servers the base-address variable.
 package openapi
 
 import (
@@ -20,9 +18,8 @@ import (
 // method at all.
 var methods = []string{"get", "post", "put", "patch", "delete", "head", "options"}
 
-// holeServer is a server address whose host part is a hole — `<<baseUrl>>`, `{{baseUrl}}`,
-// `{baseUrl}`, with or without a scheme — and the path behind it, if any. The hole is what a
-// document leaves for whoever reads it to fill in; the path is fixed, and every request carries it.
+// holeServer matches a server whose host is a placeholder (`<<baseUrl>>`, `{{baseUrl}}`, `{baseUrl}`),
+// capturing the fixed path behind it.
 var holeServer = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9+.\-]*://)?(?:<<[^<>]+>>|\{\{[^{}]+\}\}|\{[^{}]+\})(/.*)?$`)
 
 // Import reads a document as one collection. A file that is neither version is refused rather than

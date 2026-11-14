@@ -1,8 +1,6 @@
 import type { Draft, Row } from '../../bindings/schemo/internal/domain'
 
-// The rows an address implies, and the address the rows write. The window owns the draft while it
-// is edited, so the rule that keeps the two in step lives here: the query rows follow the address
-// as it is typed, and a parameter edited as a row writes the address again.
+// Keeps the query rows and the address in step while the window edits the draft.
 
 export const mintRowId = () => crypto.randomUUID()
 
@@ -46,11 +44,7 @@ export function paramsFromUrl(address: string): Row[] {
 
 const KEPT = /[A-Za-z0-9*\-._~,[\]]/
 
-/**
- * Encodes one name or value of a query by hand: `,` and the brackets stay as typed
- * (`include=author,comments`, `filter[id][in]=1,2`), a space is `+`, and a `{{token}}` keeps its
- * braces because the resolver looks for them.
- */
+/** Encodes a query part: `,` and brackets stay as typed, `{{token}}` keeps its braces, a space is `+`. */
 export function encodeQuery(text: string): string {
   let out = ''
   for (const byte of new TextEncoder().encode(text)) {
@@ -73,11 +67,7 @@ export function urlWithParams(base: string, rows: Row[]): string {
   return hash < 0 ? `${base}?${query}` : `${base.slice(0, hash)}?${query}${base.slice(hash)}`
 }
 
-/**
- * The rows an edited address reads as, keeping what the previous rows contribute: the id of a row
- * still in the text (an open editor holds it) and every switched-off row, which the address never
- * mentions.
- */
+/** Rows for an edited address, keeping the ids of rows still present and every disabled row. */
 export function keepRowIdentities(parsed: Row[], existing: Row[]): Row[] {
   const used = existing.map(() => false)
   const out: Row[] = []

@@ -10,12 +10,7 @@ import { dotOf } from '../../lib/environmentPalette'
 import type { RequestSource } from '../../lib/requestSource'
 import { t } from '../../i18n'
 
-// The environment this one request goes out under, drawn beside the address it applies to: it is
-// the last thing a person checks before pressing send.
-//
-// Following the window is the answer a request gives until told otherwise, and the bar says so
-// by saying nothing: an unpinned request wears the plain stack, and only a pinned one is worth the
-// room a name takes. The tooltip spells out which it is and which environment.
+// A request that follows the window shows only the icon; a pinned one shows its environment's name.
 const { source } = defineProps<{ source: RequestSource }>()
 
 const environments = useEnvironmentsStore()

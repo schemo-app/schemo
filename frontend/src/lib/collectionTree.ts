@@ -5,10 +5,7 @@ export type Child =
     | { kind: 'request'; node: CollectionNode }
     | { kind: 'collection'; collection: Collection }
 
-/**
- * Merges items and child collections of a collection into a single array
- * ordered by their `position` property using a two-pointer merge pass.
- */
+/** Items and child collections merged by `position`. */
 export function childrenOf(collection: Collection): Child[] {
   const requests = collection.items ?? []
   const nested = collection.children ?? []
@@ -94,10 +91,7 @@ export function requestCount(collection: Collection): number {
   )
 }
 
-/**
- * Filters the collection tree by matching item or collection names against the query string.
- * Retains empty ancestor paths so matched nodes remain visible in context.
- */
+/** Filters by name, keeping the ancestors of every match. */
 export function filterTree(tree: Collection[], query: string): Collection[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return tree

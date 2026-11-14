@@ -6,9 +6,7 @@
 import * as domain$0 from "../../domain/models.js";
 
 /**
- * A Format is one of the five notations. FormatURL is the address alone, the one shape that is not
- * a command; FormatCurlLines is curl written for a file, one option per line, rather than for a
- * terminal.
+ * Format is a notation. FormatURL is the bare address; FormatCurlLines is curl with one option per line.
  */
 export enum Format {
     /**
@@ -106,9 +104,7 @@ export enum Reason {
 };
 
 /**
- * Request is one request as the format sees it: the address, what it carries and how it authorizes
- * itself. It is a draft's seed without the environment; where tokens resolve is the window's to
- * add.
+ * Request is a request as the format sees it: a draft's seed without the environment.
  */
 export interface Request {
     "method": string;

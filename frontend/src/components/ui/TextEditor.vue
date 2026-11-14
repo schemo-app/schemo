@@ -1,63 +1,42 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
+import { useTemplateRef, watch } from 'vue'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import type { ViewerLanguage } from '../../lib/viewerLanguage'
 import { editorLook } from '../../lib/editorLook'
-import { useSetting } from '../../composables/useSettings'
+import { useEditorView } from '../../composables/useEditorView'
 
-// A written body, painted as it will be read: the same face, palette and reader settings the answer
-// is drawn with (lib/editorLook), so an example typed here looks like the answer it stands for. The
-// grammar follows the text the caller hands over; nothing is guessed.
-const { modelValue, language = null, placeholder = '' } = defineProps<{
+// Same look as the response viewer (lib/editorLook); the grammar is the caller's, never guessed.
+const { modelValue, language = null, placeholder = '', label, compact = false } = defineProps<{
   modelValue: string
   language?: ViewerLanguage
   placeholder?: string
+  label?: string
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 
 const host = useTemplateRef<HTMLElement>('host')
-const view = shallowRef<EditorView | null>(null)
 
-// Reader settings from Go; a missing value is the default. The window's editor settings are these,
-// and both the reading and the writing obey them.
-const wrap = useSetting('wrapLines')
-const numbers = useSetting('lineNumbers')
-
-function buildState(doc: string): EditorState {
-  return EditorState.create({
+const { view } = useEditorView({
+  host,
+  text: () => modelValue,
+  rebuildOn: [() => language, () => label, () => placeholder],
+  build: (doc, look) => EditorState.create({
     doc,
     extensions: [
-      ...editorLook(language, { numbers: numbers.value, wrap: wrap.value }),
+      ...editorLook(language, { ...look, numbers: !compact && look.numbers }),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       ...(placeholder ? [placeholderExt(placeholder)] : []),
-      EditorView.contentAttributes.of({ spellcheck: 'false' }),
+      EditorView.contentAttributes.of({ spellcheck: 'false', ...(label ? { 'aria-label': label } : {}) }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
       }),
     ],
-  })
-}
-
-onMounted(() => {
-  if (!host.value) return
-  view.value = new EditorView({ state: buildState(modelValue), parent: host.value })
-})
-
-onBeforeUnmount(() => {
-  view.value?.destroy()
-  view.value = null
-})
-
-// The settings change while the field is on screen; the editor is rebuilt, the caret's place is
-// the text's own and the history is lost — a settings change is not a typing.
-watch([wrap, numbers, () => language], () => {
-  const editorView = view.value
-  if (!editorView) return
-  editorView.setState(buildState(editorView.state.doc.toString()))
+  }),
 })
 
 // Text from outside — what a caller does when an edit was cancelled. What the editor itself typed

@@ -17,10 +17,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Publications is a collection put at an address a stranger may read, as a window sees it. The page
-// belongs to the server: this service answers what the page would carry, what it would leave out,
-// and what this device knows about what is already there, without a network, so the popover opens
-// offline.
+// Publications answers what a page would carry and what this device knows about it, offline, so the
+// popover opens without a network.
 type Publications struct {
 	store        *db.Store
 	collections  Collections
@@ -50,10 +48,8 @@ func NewPublications(
 	}
 }
 
-// owningPage is the page a collection belongs to. A page is a whole tree, so a folder inside a
-// published one answers at that page rather than at its own: Collection is the folder the page is
-// of, Name is what it is called, Inside says whether it sits above the collection, and Held says if
-// one answers.
+// owningPage is the page that answers for a collection: Collection is the published folder, Inside
+// says it sits above the collection, Held says a page answers at all.
 type owningPage struct {
 	Collection string
 	Name       string
@@ -77,10 +73,8 @@ func (h owningPage) keepsPassword() bool {
 	return h.Held && h.Page.Visibility == domain.VisibilityPassword
 }
 
-// owningPageOf asks which page answers for a collection: its own when the collection holds a
-// runnable one, and otherwise the nearest folder above it that does. A folder inside a published
-// one is published by it and cannot hold a second page of its own, which the two sides have to
-// agree on.
+// owningPageOf finds the collection's own page or the nearest published folder above it; a folder
+// inside a published one cannot have its own.
 func (s *Publications) owningPageOf(ctx context.Context, workspace, collectionID string) (owningPage, error) {
 	chain, err := s.collections.PathOf(ctx, workspace, collectionID)
 	if err != nil {
@@ -163,9 +157,7 @@ type Passwords interface {
 	DeletePublicationPassword(account domain.Account, id string) error
 }
 
-// PublishRequest is what the popover is holding when the button is pressed. It is one value rather
-// than nine arguments because the window sends back exactly what Preview returned, and a call of
-// strings in a row is one transposition away from publishing the wrong environment.
+// PublishRequest is what Preview returned, sent back whole so arguments cannot be transposed.
 type PublishRequest struct {
 	Options       *domain.PublicationOptions `json:"options"`
 	Workspace     string                     `json:"workspace"`
@@ -184,9 +176,8 @@ type PublishResult struct {
 	PasswordSaved bool               `json:"passwordSaved"`
 }
 
-// Publish puts the page at an address, or replaces what that address already carries. The password
-// of a protected page is sent to the server and saved in the OS credential store; a keyring that
-// refuses does not turn a page that is up into a failed publish.
+// Publish puts up or replaces a page. A protected page's password goes to the server and the
+// keyring; a keyring failure does not fail the publish.
 func (s *Publications) Publish(ctx context.Context, request PublishRequest) (PublishResult, error) {
 	account, err := s.caller.Me(ctx)
 	if err != nil {
@@ -217,9 +208,7 @@ func (s *Publications) publish(ctx context.Context, request PublishRequest) (dom
 	if err != nil {
 		return domain.Publication{}, err
 	}
-	// A folder inside a published one has no page of its own to put up: what a publish from it
-	// carries is the page that holds it, which is the only way the folder's own requests can reach
-	// a reader without a second document claiming them as well.
+	// A folder inside a published page publishes that page.
 	owner, err := s.owningPageOf(ctx, request.Workspace, request.Collection)
 	if err != nil {
 		return domain.Publication{}, err
@@ -267,9 +256,8 @@ func (s *Publications) publish(ctx context.Context, request PublishRequest) (dom
 	return held, nil
 }
 
-// checkVisibility refuses a visibility this device does not offer, and a password the server would
-// refuse. A password-protected page may be published without one when it already holds its own,
-// which Publish decides once it knows the page.
+// checkVisibility refuses unknown visibilities and bad passwords; a protected page may omit one it
+// already has, which Publish decides.
 func checkVisibility(visibility, password string) error {
 	switch visibility {
 	case domain.VisibilityPublic, domain.VisibilityUnlisted:
@@ -285,9 +273,7 @@ func checkVisibility(visibility, password string) error {
 	}
 }
 
-// passwordFits refuses a password the server would refuse, said here so a window answers before a
-// publish goes out rather than after. It is a length and nothing else: what makes a password good
-// is not a question this device answers, and the page is served over the web's own channel.
+// passwordFits checks the server's length rule up front so the window answers before publishing.
 func passwordFits(password string) error {
 	if len(password) >= domain.PasswordLeast && len(password) <= domain.PasswordMost {
 		return nil
@@ -347,9 +333,7 @@ func (s *Publications) Unpublish(ctx context.Context, collectionID string) error
 	return s.store.SavePublication(ctx, held)
 }
 
-// Replay plays back the takedowns that never reached the server. It is the one piece of this
-// feature that runs by itself, and it runs when the window asks rather than on a timer: a page
-// taken down is taken down the next time this device has a session and the network.
+// Replay sends the takedowns that never reached the server; the window triggers it, not a timer.
 //
 //wails:ignore
 func (s *Publications) Replay(ctx context.Context) error {
@@ -583,15 +567,10 @@ func (s *Publications) rememberPassword(ctx context.Context, collection, passwor
 	return s.passwords.SetPublicationPassword(account, page.ID, password)
 }
 
-// The four things the server answers about published pages.
-//
-// Publishing is an ordinary write into the workspace the collection lives in, over the same channel and
-// token as every other write. Only the page is anonymous, and it is drawn on the server, so nothing
-// here fetches it.
+// The server side of published pages. Publishing is an ordinary workspace write; the page itself is
+// rendered by the server.
 
-// Publish puts a collection's document at an address, or replaces what that address carries. The
-// whole document travels, not the collection: the server keeps the bytes, and the digest beside
-// them lets a device tell whether a page is behind what it holds.
+// Publish uploads the whole document with its digest, which lets devices tell a page is behind.
 func (c *Client) Publish(
 	ctx context.Context,
 	caller domain.Caller,
@@ -746,9 +725,7 @@ func publicationsOf(held []*publicationv1.Publication) []domain.Publication {
 	return out
 }
 
-// visibilityName is who a page is for, in this app's words. A visibility this build has never heard
-// of is answered as none rather than the nearest one: a window that guessed would offer to publish
-// a page it does not understand.
+// visibilityName answers an unknown visibility as none rather than guessing.
 func visibilityName(held publicationv1.Visibility) string {
 	switch held {
 	case publicationv1.Visibility_VISIBILITY_PUBLIC:

@@ -7,11 +7,8 @@ import type { Meter } from '../../../bindings/schemo/internal/domain'
 import { useAccount } from '../../composables/useAccount'
 import { usePlan } from '../../composables/usePlan'
 import { formatBytes, formatDate, type MessageKey, t } from '../../i18n'
-import { TIER_FREE } from '../../lib/onboardingFeatures'
-
-// The organisation's tariff, kept here so the card says what the server last said: the way to the
-// panel for anyone with a plan at all, the free tier included. A plan nobody has named is not one
-// to draw a card about, since an empty row is worse than none.
+import { TIER_FREE } from '../../composables/usePlan'
+import { metaLine } from '../../lib/format'
 
 const { plan } = usePlan()
 const { openPanel } = useAccount()
@@ -26,9 +23,6 @@ const tierLabel = computed(() => {
   return tier ? tier[0].toUpperCase() + tier.slice(1) : ''
 })
 
-// What each kind of cap is called, and what it costs when it runs out, in the app's own words. Each
-// kind is worded on its own: a plan at its member cap with its collections at a twentieth is not a
-// plan whose collections are running out.
 const METERS: Record<string, { label: MessageKey; clause: MessageKey }> = {
   collections: { label: 'account.meter.collections', clause: 'account.limitsWhat.collections' },
   members: { label: 'account.meter.members', clause: 'account.limitsWhat.members' },
@@ -51,9 +45,7 @@ function reading(one: Meter): { value: string; share: number; tone: 'ok' | 'warn
   }
 }
 
-// The bars the free plan is read by: what stands against each cap the server sends. A paid plan
-// says its seats and dates instead, since its limits are not why anybody looks at the card. A kind
-// this build has no word for is left out rather than drawn under a name nobody chose.
+// Only the free plan shows meters; kinds this build has no words for are skipped.
 const meters = computed(() => {
   if (!free.value) return []
   return (tariff.value?.meters ?? []).flatMap((one) => {
@@ -69,7 +61,7 @@ const tariffNote = computed(() => {
   // there, because "almost" for a cap that is spent is one more thing that is not true.
   const tight = meters.value.filter((one) => one.tone !== 'ok')
   if (tight.length) {
-    const what = tight.map((one) => t(METERS[one.kind].clause)).join(' · ')
+    const what = metaLine(...tight.map((one) => t(METERS[one.kind].clause)))
     const lead = tight.some((one) => one.tone === 'bad') ? 'account.limitsSpent' : 'account.limitsAlmost'
     return t(lead, { what })
   }
@@ -79,7 +71,7 @@ const tariffNote = computed(() => {
         date: formatDate(held.planUntil, { day: 'numeric', month: 'long', year: 'numeric' }),
       })
     : ''
-  return [seats, until].filter(Boolean).join(' · ')
+  return metaLine(seats, until)
 })
 </script>
 

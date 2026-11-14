@@ -56,9 +56,7 @@ func applyRecord(
 ) error {
 	switch {
 	case change.Run != nil:
-		// A run is an entry of the log with nothing beside it: written once by id, with the records
-		// that name it arriving under their own numbers. It is not marked as owed, since the server
-		// already holds a run this device was given.
+		// Written once by id and not queued: the server already holds it.
 		return writeRun(ctx, tx, *change.Run)
 	case change.Deleted:
 		_, err := deleteRecord(ctx, tx, change.RecordID)
@@ -115,18 +113,22 @@ func writeRecord(
 		return fmt.Errorf("applying record %s: %w", record.ID, err)
 	}
 
-	// A write through here says the server holds the record: the cache mark comes off a row the log
-	// or a snapshot named, and the server's cookie writes replace the local ones, unless this
-	// device still owes a change, because an undo is its own act and must outlive the echo.
+	protocol, err := json.Marshal(record.ProtocolRecord)
+	if err != nil {
+		return fmt.Errorf("encoding protocol metadata of %s: %w", record.ID, err)
+	}
+
+	// The server holds the record now: clear the cache mark and take its cookie writes, unless a local
+	// undo is still owed.
 	_, err = tx.ExecContext(ctx,
 		`INSERT INTO records (id, workspace_id, source, method, url, status, status_text,
 		                      content_type, error, cancelled, duration_us, dns_us, connect_us,
 		                      tls_us, wait_us, download_us, request_bytes, response_bytes,
 		                      request_headers_json, response_headers_json, cookie_writes_json,
 		                      started_at, finished_at, node_id, run_id, agent, tab_id, tab_title,
-		                      tab_url, favicon_url, updated_at, remote_seq, cached_at, is_remote)
+		                      tab_url, favicon_url, updated_at, remote_seq, cached_at, is_remote, protocol_json)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-		         ?, ?, ?, ?, ?, ?, 1)
+		         ?, ?, ?, ?, ?, ?, 1, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     remote_seq = max(records.remote_seq, excluded.remote_seq),
 		     cookie_writes_json = CASE
@@ -143,16 +145,14 @@ func writeRecord(
 		string(headers), string(back), writes, record.StartedAt, finishedAt(record),
 		record.NodeID, nullIfEmpty(record.RunID), record.Agent, nullIfZero(record.TabID),
 		nullIfEmpty(record.TabTitle), nullIfEmpty(record.TabURL), nullIfEmpty(record.FavIconURL),
-		now(), seq, cachedAt, string(entityRecord))
+		now(), seq, cachedAt, string(protocol), string(entityRecord))
 	if err != nil {
 		return fmt.Errorf("applying record %s: %w", record.ID, err)
 	}
 	return nil
 }
 
-// cookieWritesJSON is what the record's row keeps of the mutation its answer made. A value the
-// server did not hand over is one it lacks or this reader may not see, and either way the copy held
-// here is the better one.
+// cookieWritesJSON keeps the local value wherever the server withheld one.
 func cookieWritesJSON(
 	ctx context.Context,
 	tx *writeTx,
@@ -211,9 +211,7 @@ func localWrites(
 			kept = append(kept, write)
 			continue
 		}
-		// A device told only what the cookie became, or only what it was, cannot say the other: the
-		// side that came flagged comes back whole, and stays flagged where the local copy is
-		// missing it too.
+		// A withheld side stays flagged when the local copy lacks it too.
 		if write.Withheld {
 			write.Value, write.Withheld = local.Value, local.Withheld
 		}

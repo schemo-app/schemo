@@ -11,8 +11,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// The prelude is embedded rather than read: it is part of the program, and a file beside the binary
-// can go missing.
+// The prelude is embedded so it cannot go missing.
 //
 //go:embed prelude.js
 var preludeSource string
@@ -36,11 +35,7 @@ func NewEngine() *Engine {
 	return &Engine{within: maxScriptDuration}
 }
 
-// Run executes one script and returns its report. A script that throws or never finishes is a
-// report as well, so the caller is not left to guess and the tab draws the same shape either way.
-//
-// The report carries no ids or timestamps (who ran, for which record, and when): the caller knows
-// those and this does not.
+// Run executes one script. A throw or a timeout is also a report, so the tab draws the same shape.
 func (e *Engine) Run(in domain.ScriptInput) domain.ScriptRun {
 	started := time.Now()
 	run := domain.ScriptRun{

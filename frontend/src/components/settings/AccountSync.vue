@@ -12,10 +12,7 @@ import { syncingOff, useSyncStore } from '../../stores/sync'
 import { useSyncStatus } from '../../composables/useAppEvents'
 import { useSetting, useSettings } from '../../composables/useSettings'
 import { useWorkspacesStore } from '../../stores/workspaces'
-
-// Where syncing stands in one coloured line, the switch for this device, and what of it may leave.
-// The pane draws the engine, so it follows it: the status as it opens and whatever the engine says
-// while somebody looks.
+import { metaLine } from '../../lib/format'
 
 const sync = useSyncStore()
 const workspaces = useWorkspacesStore()
@@ -96,9 +93,7 @@ const conflictName = computed(() => {
   return workspace?.name || held.name
 })
 
-// The one coloured line: where syncing stands and the one thing worth doing about it. Counts are of
-// the round in flight (the engine publishes them as they grow) and of the last exchange once it is
-// over.
+// Counts are of the round in flight, then of the last exchange.
 const syncRow = computed(() => {
   if (off.value) {
     return { tone: 'quiet', title: t('sync.offTitle'), note: t('sync.offNote'), action: '', act: doNothing }
@@ -139,9 +134,6 @@ function exchanging(): string {
   return t('sync.exchanging', { sent: t('counts.changes', { n: sent }), got: String(got) })
 }
 
-// The line while the server is away: the last exchange, whatever is still on this device, and when
-// the engine will try again. It is the only place the pane reports it; everything else shows the
-// last data it has.
 function downNote(): string {
   const parts: string[] = []
   const at = sync.status?.roundAt ?? 0
@@ -149,7 +141,7 @@ function downNote(): string {
   if (waiting.value) parts.push(t('sync.notSent', { n: waiting.value }))
   const retryAt = sync.status?.retryAt ?? 0
   if (retryAt) parts.push(t('sync.retryIn', { when: formatIn(retryAt) }))
-  return parts.join(' · ')
+  return metaLine(...parts)
 }
 
 /** What is still on this device, for the refusals that are not about the server being away. */
@@ -163,7 +155,7 @@ function lastExchange(): string {
   if (at) parts.push(t('sync.lastExchange', { when: formatAgo(at) }))
   if (linkedWorkspaces.value.length) parts.push(t('counts.workspaces', { n: linkedWorkspaces.value.length }))
   if (waiting.value) parts.push(t('sync.notSent', { n: waiting.value }))
-  return parts.join(' · ')
+  return metaLine(...parts)
 }
 
 function openWorkspace(): void {

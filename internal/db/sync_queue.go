@@ -78,10 +78,8 @@ func (s *Store) Owed(
 	return changes, nil
 }
 
-// parentsFirst puts a batch in the order the server can take it: by kind, as a push is made, and
-// among collections by depth. A child sent before its parent is refused and waits out a backoff;
-// the order is made before the size cut so the cut leaves the later, deeper rows for the next
-// round.
+// parentsFirst orders a batch by kind and collections by depth, before the size cut, so deeper rows
+// wait for the next round rather than being refused.
 func (s *Store) parentsFirst(
 	ctx context.Context,
 	workspaceID string,
@@ -126,10 +124,8 @@ func (s *Store) parentsFirst(
 	return waiting, nil
 }
 
-// claim marks one entry as in flight, if it is still the one the payload was built for. An edit
-// that landed after the entry was read gave it another operation id, so the payload in hand is
-// stale and the entry is left for the next round. An entry in flight is never changed: a later edit
-// makes a second entry beside it.
+// claim marks an entry in flight if its operation id is unchanged; a newer edit leaves it for the next
+// round. A later edit to an entry in flight adds a second entry.
 func (s *Store) claim(ctx context.Context, entry queueRow) (bool, error) {
 	done, err := s.db.ExecContext(ctx,
 		`UPDATE sync_queue SET status = 'sending'
@@ -266,9 +262,7 @@ func (s *Store) stuck(
 ) error {
 	what := "recording what became of " + change.Entity.ID
 	return s.inTx(ctx, what, func(tx *writeTx) error {
-		// An entry in flight whose row was edited has a second one waiting beside it, built from
-		// the live row, and the index allows one waiting entry per row. The older one has nothing
-		// the newer lacks, so it goes.
+		// An edited in-flight entry has a newer waiting one, and only one may wait per row; the old one goes.
 		gone, err := tx.ExecContext(ctx,
 			`DELETE FROM sync_queue WHERE id = ? AND status = 'sending' AND `+waitingBeside,
 			change.QueueID)
@@ -289,18 +283,15 @@ func (s *Store) stuck(
 	})
 }
 
-// waitingBeside is true of a queue entry with another for the same row that is not in flight, or an
-// in-flight one made after it. Only one entry per row may wait and the newest is built from the row
-// as it stands, so it stays.
+// waitingBeside matches an entry with a newer or not-in-flight sibling for the same row.
 const waitingBeside = `EXISTS (
 	SELECT 1 FROM sync_queue o
 	 WHERE o.workspace_id = sync_queue.workspace_id AND o.entity_type = sync_queue.entity_type
 	   AND o.entity_id = sync_queue.entity_id AND o.id <> sync_queue.id
 	   AND (o.status <> 'sending' OR o.rowid > sync_queue.rowid))`
 
-// ReleaseInFlight puts back what a batch left in flight after a crash or failed round. An entry
-// with a newer one beside it is dropped rather than put back: two waiting entries for one row
-// violate the index and would leave every other entry in flight.
+// ReleaseInFlight requeues entries left in flight; one with a newer sibling is dropped, since two
+// waiting entries would violate the index.
 func (s *Store) ReleaseInFlight(ctx context.Context) error {
 	return s.inTx(ctx, "releasing what was in flight", func(tx *writeTx) error {
 		if _, err := tx.ExecContext(ctx,

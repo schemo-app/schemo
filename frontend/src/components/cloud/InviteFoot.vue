@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { t } from '../../i18n'
 
-// Under the people of a workspace: the button that writes one more invitation, and what the cloud said.
-// Its root carries a name of its own, because a class a pane styles reaches a child's root too, and
-// every pane has a `.foot` with a line above it.
+// The root has its own class because every pane styles a `.foot`, and that would reach this root.
 const { failure = '', busy = false } = defineProps<{ failure?: string; busy?: boolean }>()
 
 defineEmits<{ (e: 'add'): void }>()

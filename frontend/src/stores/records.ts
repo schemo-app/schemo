@@ -117,9 +117,11 @@ export const useRecordsStore = defineStore('records', () => {
     records.value = [record, ...records.value.filter((one) => one.id !== record.id)]
   }
 
-  // A history row (sent by hand or captured) opens as a request tab laid out from the record: the
-  // same record twice is the same tab. A plain click lands in the preview slot and a ⌘-click keeps
-  // a tab of its own; the palette's "in the background" stages it without taking the work area.
+  function removeActive(id: string) {
+    records.value = records.value.filter(record => record.id !== id || !record.active)
+  }
+
+  // The same record always maps to the same tab.
   async function selectRecord(id: string, keep = false, background = false) {
     await tabs.openRecord(id, keep, background)
   }
@@ -153,8 +155,8 @@ export const useRecordsStore = defineStore('records', () => {
     if (!record) return null
 
     const read: RecordBodies = {
-      request: record.requestBody?.inline,
-      response: record.responseBody?.inline,
+      request: record.requestBody ?? undefined,
+      response: record.responseBody ?? undefined,
     }
     return await callOrToast((async () => {
       if (bodyMissing(record.requestBody)) {
@@ -220,6 +222,7 @@ export const useRecordsStore = defineStore('records', () => {
     olderExhausted,
     reset,
     prepend,
+    removeActive,
     selectRecord,
     openSession,
     clearSession,

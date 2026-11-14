@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import Icon, { type IconName } from '../ui/Icon.vue'
 
-// One line of a workspace's people: who, the role they hold, and a button to take them out. A role that
-// is only read is a word in a box; one that may be handed out is the application's own select,
-// which wears a frame of its own. Without `dropIcon` the cell stays, so that the buttons stay a
-// column.
+// Without `dropIcon` the cell stays, so the buttons keep their column.
 const { tint, live = false, quiet = false, dropIcon, dropTitle } = defineProps<{
   tint?: string
   live?: boolean

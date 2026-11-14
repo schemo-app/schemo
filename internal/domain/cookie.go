@@ -131,9 +131,7 @@ func parseSetCookie(line string, at time.Time) (ResponseCookie, bool) {
 	return cookie, true
 }
 
-// maxAgeSeconds reads a Max-Age value the way RFC 6265 §5.2.2 has it: digits, optionally led by a
-// minus. Anything else (a plus sign, a fraction) is an attribute to ignore, and a number too large
-// for an int64 still says "far away" in its direction.
+// maxAgeSeconds reads Max-Age per RFC 6265 §5.2.2; an overflowing number still points the right way.
 func maxAgeSeconds(value string) (int64, bool) {
 	digits := strings.TrimPrefix(value, "-")
 	if digits == "" || strings.Trim(digits, "0123456789") != "" {

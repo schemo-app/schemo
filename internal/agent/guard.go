@@ -8,9 +8,8 @@ import (
 	"sync/atomic"
 )
 
-// guard is the one door into the MCP server: nothing reaches the protocol without the token. The
-// token is held behind a pointer rather than copied into the handler, so reissuing it takes effect
-// on the next call, not the next restart.
+// guard lets nothing reach the MCP protocol without the token. The token sits behind a pointer, so a
+// rotation applies on the next call.
 type guard struct {
 	next  http.Handler
 	token atomic.Pointer[string]
@@ -39,10 +38,8 @@ func (g *guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.next.ServeHTTP(w, r)
 }
 
-// tokenOf reads the token as a client was told to send it: a Bearer credential in the Authorization
-// header (RFC 6750 §2.1, whose scheme is case-insensitive by RFC 9110 §11.1), or the query string for
-// the clients that cannot set one. RFC 6750 §5.3 advises against the query string, since URLs end up
-// in logs; the token here never leaves this machine.
+// tokenOf reads a Bearer token (RFC 6750 §2.1) or, for clients that cannot set headers, the query
+// string; the token never leaves this machine, so the query's logging risk does not apply.
 func tokenOf(r *http.Request) string {
 	if header := r.Header.Get("Authorization"); header != "" {
 		scheme, credentials, found := strings.Cut(header, " ")

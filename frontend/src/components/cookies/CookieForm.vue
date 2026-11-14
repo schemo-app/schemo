@@ -19,9 +19,7 @@ const emit = defineEmits<{
 
 const fresh = computed(() => cookie.id === '')
 
-// The domain is drawn with the dot a browser's cookie list writes it with, because that dot is how
-// far the cookie reaches: Go reads it back off this field when the row is saved, and no switch
-// beside it can disagree.
+// The leading dot is how far the cookie reaches; Go reads it back off this field.
 const name = ref(cookie.name)
 const value = ref(cookie.value)
 const domain = ref(domainLabel(cookie.domain, cookie.hostOnly))
@@ -32,9 +30,7 @@ const secure = ref(cookie.secure === true)
 const httpOnly = ref(cookie.httpOnly === true)
 const notice = ref('')
 
-// What the expiry field says, read back: `undefined` is text that names no instant, the one answer
-// this form will not save, since the alternative is a date nobody typed, kept as a session cookie
-// or as midnight of some day the person never named.
+// `undefined` is text that names no instant, which the form refuses to save.
 const at = computed(() => expiryValue(expires.value))
 
 const sameSites = ['Lax', 'Strict', 'None'].map((option) => ({ value: option, label: option }))

@@ -9,33 +9,34 @@ import { useTabsStore } from '../../stores/tabs'
 import { useTransferStore } from '../../stores/transfer'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import Icon from '../ui/Icon.vue'
+import GettingStartedCard from './GettingStartedCard.vue'
 
-// The checklist under the tree: what is left to try, and how much of it is behind the person. What
-// Go keeps is drawn here, and the cross puts the card away for good; the overview is then the Help
-// menu's to offer.
 const tabs = useTabsStore()
 const environments = useEnvironmentsStore()
 const transfer = useTransferStore()
 const workspaces = useWorkspacesStore()
-const { walked, count, percent, hidden, dismiss } = useGettingStarted()
+const { walked, hidden } = useGettingStarted()
 
 const expanded = ref(false)
 
+function freshRequest(): void {
+  if (tabs.activeKind !== TabKind.TabKindRequest) void tabs.newTab()
+}
+
 /** A row opens the place the step is walked; what the person does there is their own. A request has
  *  no place of its own yet, so those two rows lay out a fresh one. */
+const places: Record<string, () => void> = {
+  send: freshRequest,
+  save: freshRequest,
+  env: () => environments.openSheet(),
+  import: () => transfer.askImport(),
+  capture: () => void tabs.openCapture(),
+  ws: () => workspaces.openCreate(),
+}
+
 function walk(key: string): void {
   expanded.value = false
-  if (key === 'send' || key === 'save') {
-    if (tabs.activeKind !== TabKind.TabKindRequest) void tabs.newTab()
-  } else if (key === 'env') {
-    environments.openSheet()
-  } else if (key === 'import') {
-    transfer.askImport()
-  } else if (key === 'capture') {
-    void tabs.openCapture()
-  } else if (key === 'ws') {
-    workspaces.openCreate()
-  }
+  places[key]?.()
 }
 
 function overview(): void {
@@ -46,32 +47,7 @@ function overview(): void {
 
 <template>
   <div v-if="!hidden" class="gs">
-    <div class="gs-card">
-      <div class="gs-head" @click="expanded = !expanded">
-        <span class="gs-title">{{ t('gettingStarted.title') }}</span>
-        <span class="gs-count">
-          {{ t('gettingStarted.of', { n: count, total: WELCOME_STEPS.length }) }}
-        </span>
-        <Icon
-          name="ChevronDown"
-          :size="10"
-          :stroke-width="2.8"
-          class="gs-chev"
-          :class="{ up: !expanded }"
-        />
-        <button
-          type="button"
-          class="gs-x"
-          :title="t('gettingStarted.hide')"
-          @click.stop="dismiss()"
-        >
-          <Icon name="X" :size="9" :stroke-width="1.5" />
-        </button>
-      </div>
-      <div class="gs-bar">
-        <div class="gs-fill" :style="{ width: `${percent}%` }"></div>
-      </div>
-    </div>
+    <GettingStartedCard :open="expanded" @toggle="expanded = !expanded" />
 
     <div v-if="expanded" class="gs-list">
       <div class="gs-rows">
@@ -96,26 +72,7 @@ function overview(): void {
 
       <div class="gs-sep"></div>
 
-      <div class="gs-card">
-        <div class="gs-head" @click="expanded = false">
-          <span class="gs-title">{{ t('gettingStarted.title') }}</span>
-          <span class="gs-count">
-            {{ t('gettingStarted.of', { n: count, total: WELCOME_STEPS.length }) }}
-          </span>
-          <Icon name="ChevronDown" :size="10" :stroke-width="2.8" class="gs-chev" />
-          <button
-            type="button"
-            class="gs-x"
-            :title="t('gettingStarted.hide')"
-            @click.stop="dismiss()"
-          >
-            <Icon name="X" :size="9" :stroke-width="1.5" />
-          </button>
-        </div>
-        <div class="gs-bar">
-          <div class="gs-fill" :style="{ width: `${percent}%` }"></div>
-        </div>
-      </div>
+      <GettingStartedCard open @toggle="expanded = false" />
     </div>
   </div>
 </template>
@@ -126,67 +83,6 @@ function overview(): void {
 .gs {
   @apply flex-none relative;
   margin: 0 0.5rem 0.5rem;
-}
-
-.gs-card {
-  @apply flex flex-col;
-  border-radius: 0.625rem;
-  background: var(--bg);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-.gs-head {
-  @apply flex items-center flex-none;
-  height: 2.25rem;
-  padding: 0 0.25rem 0 0.75rem;
-  gap: 0.3125rem;
-}
-
-.gs-title {
-  @apply flex-1 min-w-0 truncate font-semibold;
-}
-
-.gs-count {
-  @apply flex-none text-text-tertiary text-12;
-}
-
-.gs-chev {
-  @apply flex-none text-text-tertiary;
-  margin: 0 0.125rem;
-  transition: transform 0.15s ease;
-}
-
-.gs-chev.up {
-  transform: rotate(180deg);
-}
-
-.gs-x {
-  @apply flex items-center justify-center flex-none text-text-tertiary cursor-pointer;
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 0;
-  border-radius: 0.3125rem;
-  background: transparent;
-}
-
-.gs-x:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.gs-bar {
-  @apply flex-none;
-  height: 0.1875rem;
-  margin: 0 0.75rem 0.625rem;
-  border-radius: 0.125rem;
-  background: var(--chip);
-}
-
-.gs-fill {
-  height: 100%;
-  border-radius: 0.125rem;
-  background: var(--accent);
-  transition: width 0.3s ease;
 }
 
 .gs-list {

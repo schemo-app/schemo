@@ -1,9 +1,6 @@
 package app
 
-// The two features Transfer borrows in its own shape: the environment list, whose
-// import answers with the created row while the transfer wants the list, and the draft, whose
-// copies are `request.Copy` while the transfer wants the command's text. Both are wiring, so they
-// live beside the composition root rather than in either feature.
+// Adapters giving Transfer the environment list and command copies in the shape it needs.
 
 import (
 	"context"

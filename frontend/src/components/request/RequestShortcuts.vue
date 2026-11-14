@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Protocol } from '../../../bindings/schemo/internal/domain'
 import { useCommands } from '../../composables/useCommands'
 import { usePlatform } from '../../composables/usePlatform'
 import { t } from '../../i18n'
 import { capsOf } from '../../lib/commands'
+import { protocolOf } from '../../lib/protocol'
 
+const { protocol } = defineProps<{ protocol?: Protocol }>()
 const { caps } = useCommands()
 const { isMac } = usePlatform()
 
 const shortcuts = computed(() => [
-  { label: t('request.send'), keys: caps('send') },
-  { label: t('request.pasteCurl'), keys: capsOf('mod+V', isMac.value) },
+  { label: t(protocolOf(protocol).send), keys: caps('send') },
+  ...(!protocol ? [{ label: t('request.pasteCurl'), keys: capsOf('mod+V', isMac.value) }] : []),
   { label: t('request.saveDraftTitle'), keys: caps('save') },
 ].filter(shortcut => shortcut.keys.length))
 </script>

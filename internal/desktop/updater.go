@@ -156,10 +156,8 @@ func (e *Updater) check(
 	return e.updater.Check(ctx)
 }
 
-// updatable checks if the current binary location is writable and allowed to be updated. Wails
-// stages the download and swaps the binary in the folder the executable lives in, so that folder
-// has to take a new file. It refuses updates running from mounted volumes (e.g. DMG) or read-only
-// locations.
+// updatable checks that the executable's folder can take the new binary; mounted volumes (a DMG) and
+// read-only locations are refused.
 func updatable() error {
 	target, err := installTarget()
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // RecordSource defines the origin of a request record (manual builder or browser extension).
@@ -29,11 +30,61 @@ const (
 // InlineBodyLimit specifies the maximum body payload size (64KB) kept inline with a record.
 const InlineBodyLimit = 64 << 10
 
+// BodySniffBytes is how much of a body is read to tell bytes from text: a binary format shows itself
+// in its header, and a long text is not scanned whole for one flag.
+const BodySniffBytes = 8000
+
 // BodyRef points to a request/response body payload, either inline or referenced by size.
 type BodyRef struct {
 	Inline    string `json:"inline,omitempty"`
 	Size      int64  `json:"size"`
 	Truncated bool   `json:"truncated,omitempty"`
+	Binary    bool   `json:"binary,omitempty"`
+	bytes     string
+}
+
+// BodyOf keeps a body for a record, its bytes out of Inline when they are not text.
+func BodyOf(content string, truncated bool) BodyRef {
+	ref := BodyRef{Size: int64(len(content)), Truncated: truncated, Binary: BinaryBody(content)}
+	if ref.Binary {
+		ref.bytes = content
+	} else {
+		ref.Inline = content
+	}
+	return ref
+}
+
+// Content is the body as the store keeps it: the text, or the bytes of a binary one.
+func (b BodyRef) Content() string {
+	if b.Binary {
+		return b.bytes
+	}
+	return b.Inline
+}
+
+// BinaryBody reports whether a body is bytes rather than text: a NUL, or a sequence that is not UTF-8,
+// within its first BodySniffBytes.
+func BinaryBody(content string) bool {
+	return BinarySample(content[:min(len(content), BodySniffBytes)], int64(len(content)))
+}
+
+// BinarySample is BinaryBody for the first bytes of a body of `size`, as a store reads it. A sample
+// shorter than its body may stop inside a character, which is not held against it.
+func BinarySample(sample string, size int64) bool {
+	if strings.IndexByte(sample, 0) >= 0 {
+		return true
+	}
+	if int64(len(sample)) < size {
+		for cut := 1; cut < utf8.UTFMax && cut <= len(sample); cut++ {
+			if utf8.RuneStart(sample[len(sample)-cut]) {
+				if !utf8.FullRuneInString(sample[len(sample)-cut:]) {
+					sample = sample[:len(sample)-cut]
+				}
+				break
+			}
+		}
+	}
+	return !utf8.ValidString(sample)
 }
 
 // RecordFetched contains request and response body references for remote records.
@@ -65,6 +116,7 @@ type HistoryStats struct {
 
 // RecordSummary contains lightweight metadata for rendering record lists.
 type RecordSummary struct {
+	ProtocolRecord
 	ID          string       `json:"id"`
 	WorkspaceID string       `json:"workspaceId,omitempty"`
 	Source      RecordSource `json:"source"`
@@ -108,12 +160,11 @@ type Record struct {
 	RequestBody     *BodyRef      `json:"requestBody,omitempty"`
 	ResponseBody    *BodyRef      `json:"responseBody,omitempty"`
 	Skipped         bool          `json:"skipped,omitempty"`
+	Active          bool          `json:"active,omitempty"`
 }
 
-// A record travels as a JSON document: the record itself, without the fields the envelope carries
-// and without the bodies, which travel beside it. Its secret paths are the values of credential
-// headers and of the cookies an answer wrote; the server withholds them from readers who may not
-// see secrets, and a device that keeps secrets at home withholds them itself.
+// A record syncs as a JSON document without its bodies. Credential headers and written cookies are
+// secret paths, withheld from readers who may not see secrets.
 
 // secretHeaders are the headers whose value is a credential wherever a record carries it.
 var secretHeaders = []string{"Authorization", "Cookie", "Set-Cookie", "Proxy-Authorization"}
@@ -207,6 +258,7 @@ func PairsFromMap(headers map[string]string) []HeaderPair {
 }
 
 type Response struct {
+	MessageCount  int           `json:"messageCount,omitempty"`
 	DNSUs         *int64        `json:"dnsUs,omitempty"`
 	ConnectUs     *int64        `json:"connectUs,omitempty"`
 	TLSUs         *int64        `json:"tlsUs,omitempty"`

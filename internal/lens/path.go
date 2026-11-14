@@ -58,36 +58,13 @@ func quoted(key string) string {
 
 // jsonPath writes the steps as JSONPath.
 func jsonPath(steps []step) string {
-	var b strings.Builder
-	b.WriteString("$")
-	for _, s := range steps {
-		switch {
-		case s.isIndex:
-			fmt.Fprintf(&b, "[%d]", s.index)
-		case identifier(s.key):
-			b.WriteString("." + s.key)
-		default:
-			b.WriteString("['" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(s.key) + "']")
-		}
-	}
-	return b.String()
+	escape := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
+	return chain("$", steps, true, func(key string) string { return "['" + escape.Replace(key) + "']" })
 }
 
 // accessor writes the steps as `.key`, `["key"]` and `[n]`, the chain most languages share.
 func accessor(root string, steps []step, python bool) string {
-	var b strings.Builder
-	b.WriteString(root)
-	for _, s := range steps {
-		switch {
-		case s.isIndex:
-			fmt.Fprintf(&b, "[%d]", s.index)
-		case identifier(s.key) && !python:
-			b.WriteString("." + s.key)
-		default:
-			b.WriteString("[" + quoted(s.key) + "]")
-		}
-	}
-	return b.String()
+	return chain(root, steps, !python, func(key string) string { return "[" + quoted(key) + "]" })
 }
 
 // jq writes the steps as a jq filter.
@@ -95,15 +72,22 @@ func jq(steps []step) string {
 	if len(steps) == 0 {
 		return "."
 	}
+	return chain("", steps, true, func(key string) string { return ".[" + quoted(key) + "]" })
+}
+
+// chain writes an index as `[n]`, an identifier key as `.key` when dotted, and any other key as
+// the notation brackets it.
+func chain(root string, steps []step, dotted bool, bracket func(key string) string) string {
 	var b strings.Builder
+	b.WriteString(root)
 	for _, s := range steps {
 		switch {
 		case s.isIndex:
 			fmt.Fprintf(&b, "[%d]", s.index)
-		case identifier(s.key):
+		case dotted && identifier(s.key):
 			b.WriteString("." + s.key)
 		default:
-			b.WriteString(".[" + quoted(s.key) + "]")
+			b.WriteString(bracket(s.key))
 		}
 	}
 	return b.String()

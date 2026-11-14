@@ -2,9 +2,7 @@ import { ref } from 'vue'
 import { CancelError } from '@wailsio/runtime/cancellable'
 import { describeFailure } from '../i18n'
 
-// The line of text under the rows a refusal is about. It is cleared when the next call starts, and
-// a refusal is worded by the catalogue and put there. A call the window itself cancelled has
-// nothing to say.
+// Cleared when the next call starts; a call the window cancelled stays silent.
 export function useFailure() {
   const failure = ref('')
 

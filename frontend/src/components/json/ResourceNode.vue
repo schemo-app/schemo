@@ -26,10 +26,8 @@ const emit = defineEmits<{
 const open = ref(false)
 
 
-// `<Transition>` is only mounted once a node has actually been opened: a resource list can run into
-// the hundreds, nearly all collapsed, and giving every one its own Transition instance up front was
-// measurably slower to mount (~70ms vs ~30ms at 500 resources) for an animation almost none will
-// play.
+// The Transition mounts only after the first open: hundreds of collapsed nodes mount twice as fast
+// without one each.
 const everOpened = ref(false)
 
 function toggleOpen() {

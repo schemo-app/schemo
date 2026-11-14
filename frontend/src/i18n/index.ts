@@ -2,9 +2,8 @@ import { ref, shallowRef } from 'vue'
 import english from './locales/en.json'
 import languages from './languages.json'
 
-// The panel's messages: nested JSON catalogues, `{name}` parameters and plural forms separated by
-// `|`, picked by Intl.PluralRules. English is bundled and is the fallback for every key; other
-// catalogues load when their language is chosen.
+// Nested JSON catalogues with `{name}` parameters and `|`-separated plurals. English is bundled as the
+// fallback; others load on demand.
 
 export type Locale = keyof typeof languages
 type Messages = typeof english
@@ -190,12 +189,23 @@ function words(args: Record<string, string | undefined> | null | undefined): Rec
     const value = result[field]
     if (typeof value === 'string' && te(prefix + value)) result[field] = translate(prefix + value)
   }
+  // A feature newer than this build still reads as a sentence.
+  if (typeof args?.feature === 'string' && result.feature === args.feature) result.feature = translate('errors.features.unknown')
   return result
 }
 
+/** The refusal Go sends when the plan lacks a feature, for a control that knows it in advance. */
+export function featureRefusal(feature: string): string {
+  return failureText({ code: 'featureRequired', args: { feature } }) ?? ''
+}
+
+/** The refusal an error carries from Go, if it carries one. */
+export function failureOf(error: unknown): Failure | undefined {
+  return error && typeof error === 'object' && 'cause' in error ? (error.cause as Failure | undefined) : undefined
+}
+
 export function describeFailure(error: unknown): string {
-  const cause = error && typeof error === 'object' && 'cause' in error ? (error.cause as Failure | undefined) : undefined
-  return failureText(cause) ?? String(error)
+  return failureText(failureOf(error)) ?? String(error)
 }
 
 export function formatMicros(us: number): string {
@@ -208,13 +218,13 @@ export function formatDuration(us: number): string {
   return us > 0 ? formatMicros(us) : '—'
 }
 
-export function formatClock(at: number): string {
-  return formatDate(at, { hour: '2-digit', minute: '2-digit' })
+export function formatClock(at: number, seconds = false): string {
+  return formatDate(at, { hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined })
 }
 
 const BYTE_UNITS = ['units.b', 'units.kb', 'units.mb', 'units.gb'] as const satisfies readonly MessageKey[]
 
-export function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number, precision?: number): string {
   if (bytes === 0) return `0 ${t('units.b')}`
   let value = bytes
   let unit = 0
@@ -222,7 +232,8 @@ export function formatBytes(bytes: number): string {
     value /= 1024
     unit++
   }
-  return `${formatNumber(value, value >= 100 || unit === 0 ? 0 : 1)} ${t(BYTE_UNITS[unit])}`
+  const digits = unit === 0 ? 0 : (precision ?? (value >= 100 ? 0 : 1))
+  return `${formatNumber(value, digits)} ${t(BYTE_UNITS[unit])}`
 }
 
 export function daysAgo(moment: number | Date, now = Date.now()): number {

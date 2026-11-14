@@ -136,9 +136,8 @@ func delimiterOf(text string) rune {
 	return best
 }
 
-// splitRows reads the records of delimited text the way RFC 4180 has them, with the bytes each field
-// lies in. A response is read as it came, so the reader tolerates a quote where the RFC has none and
-// rows of different widths, and leading spaces (`id, name`) are not part of a field.
+// splitRows reads RFC 4180 records with each field's byte range, tolerating stray quotes, ragged rows
+// and leading spaces.
 func splitRows(text string, delimiter rune) ([][]cell, error) {
 	// A byte order mark is no part of the first field, but the positions still count from the text.
 	base := 0

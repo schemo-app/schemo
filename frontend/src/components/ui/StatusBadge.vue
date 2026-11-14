@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { t } from '../../i18n'
-import { statusBadgeClass } from '../../lib/format'
+import { shortStatus, statusBadgeClass } from '../../lib/format'
+import type { Protocol } from '../../../bindings/schemo/internal/domain'
 
 // A status as a badge: tinted by its series, and plain where there is none to speak of. What it says
 // is the status unless the caller has more to say about it.
-defineProps<{ status: number; failed?: boolean }>()
+defineProps<{ status: number; failed?: boolean; protocol?: Protocol; statusText?: string }>()
 </script>
 
 <template>
-  <span class="badge" :class="failed ? 'badge-status-5xx' : status ? statusBadgeClass(status) : 'neutral'">
-    <slot>{{ failed ? t('history.failed') : status || '—' }}</slot>
+  <span
+    class="badge"
+    :class="statusBadgeClass(status, { failed, protocol, answered: !!statusText })"
+  >
+    <slot>{{ failed ? t('history.failed') : shortStatus(status, protocol, statusText) }}</slot>
   </span>
 </template>
 

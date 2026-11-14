@@ -10,9 +10,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	ErrConflict = errors.New("conflict")
 
-	// ErrStaleRevision is returned when a text buffer or row patch is based on a revision the draft
-	// has moved past. The caller gets the current draft back and re-sends its text, so no keystroke
-	// is dropped.
+	// ErrStaleRevision means the edit was based on an old revision; the caller gets the current draft
+	// and resends, so no keystroke is lost.
 	ErrStaleRevision = errors.New("stale revision")
 
 	// ErrNotAllowed marks an operation the current state forbids, as opposed to one that is
@@ -40,6 +39,8 @@ const (
 	CodeFileUnreadable       Code = "fileUnreadable"
 	CodeFileTooLarge         Code = "fileTooLarge"
 	CodeBadCertificate       Code = "badCertificate"
+	CodeNoReflection         Code = "noReflection"
+	CodeNoServices           Code = "noServices"
 	CodeNotJSON              Code = "notJson"
 	CodeNotPostman           Code = "notPostmanCollection"
 	CodeNotSchemo            Code = "notSchemoCollection"
@@ -61,7 +62,9 @@ const (
 	CodeNoEnvironment        Code = "noEnvironment"
 	CodeUnknownField         Code = "unknownField"
 	CodeUnknownFormat        Code = "unknownFormat"
+	CodeExportProtocol       Code = "exportProtocol"
 	CodeUnknownList          Code = "unknownList"
+	CodeLiveRequest          Code = "liveRequest"
 	CodeDraftWithoutID       Code = "draftWithoutId"
 	CodeIntoItself           Code = "intoItself"
 	CodeUnknownTheme         Code = "unknownTheme"
@@ -189,9 +192,8 @@ type Notifier interface {
 	Publish(topic string, payload any)
 }
 
-// TopicChanged is the one event a window refreshes on: something of Kind changed, in Workspace when
-// the kind belongs to one. The window reloads what it shows of that kind instead of reading a
-// payload, so every feature announces changes the same way.
+// TopicChanged is the one refresh event: Kind changed, in Workspace when it has one. Windows reload
+// instead of reading payloads.
 const TopicChanged = "changed"
 
 type Changed struct {

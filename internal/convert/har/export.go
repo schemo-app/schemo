@@ -2,6 +2,7 @@
 package har
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -111,6 +112,7 @@ type content struct {
 	Size     int64  `json:"size"`
 	MimeType string `json:"mimeType"`
 	Text     string `json:"text,omitempty"`
+	Encoding string `json:"encoding,omitempty"`
 }
 
 type timings struct {
@@ -164,10 +166,20 @@ func responseOf(record domain.Record, body string) response {
 		StatusText:  reasonPhrase(record.StatusText, record.Status),
 		Cookies:     setCookiesOf(record.ResponseHeaders),
 		Headers:     pairsOf(record.ResponseHeaders),
-		Content:     content{Size: record.ResponseBytes, MimeType: record.ContentType, Text: body},
+		Content:     contentOf(record, body),
 		RedirectURL: redirectOf(record),
 		BodySize:    record.ResponseBytes,
 	}
+}
+
+// contentOf is the response as HAR keeps it. Bytes that are not text go as base64, the encoding HAR
+// names for them: as a JSON string they would be garbled.
+func contentOf(record domain.Record, body string) content {
+	out := content{Size: record.ResponseBytes, MimeType: record.ContentType, Text: body}
+	if domain.BinaryBody(body) {
+		out.Text, out.Encoding = base64.StdEncoding.EncodeToString([]byte(body)), "base64"
+	}
+	return out
 }
 
 func timingsOf(record domain.Record) timings {

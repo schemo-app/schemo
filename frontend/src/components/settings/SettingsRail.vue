@@ -52,9 +52,6 @@ const versionLabel = computed(() =>
   [appName.value, formatVersion(version.value)].filter(Boolean).join(' ')
 )
 
-// What stands under a section's name. Two of them say something the section cannot: the proxy, what
-// it amounts to right now, and the account, who is signed in; the words for nobody being signed in
-// are the state's own.
 function line(category: (typeof CATEGORIES)[number]): string {
   // The proxy answers with nothing until its settings arrive, and a row of the rail always has a
   // second line to draw: the section's own description is what stands in for it.

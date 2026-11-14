@@ -66,7 +66,7 @@ func newStartup(in startupDeps) (startApplication, stopApplication) {
 		cancel()
 		stopping, done := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer done()
-		return errors.Join(in.Sync.Stop(stopping), jobs.Wait())
+		return errors.Join(in.Records.StopAttempts(stopping), in.Sync.Stop(stopping), jobs.Wait())
 	}
 	return start, stop
 }

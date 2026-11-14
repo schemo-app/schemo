@@ -1,6 +1,5 @@
-// Package app assembles the program: it builds every feature's service by hand, binds them to the
-// window, registers the events they publish, and answers the few ports one feature needs from
-// another. The application those services belong to (windows, menu, tray) is `internal/desktop`.
+// Package app wires every feature's service, binds them to the window and registers their events.
+// The desktop application itself is internal/desktop.
 package app
 
 import (
@@ -13,9 +12,7 @@ import (
 	"schemo/internal/platform"
 )
 
-// setup is the composition: what the app is made of and what it registers as a service of its own.
-// Everything drawn is `internal/desktop`'s; this file only says which of it exists, following the
-// framework's split into one application with windows and the services a window calls.
+// setup builds the services and registers them on the application.
 func setup(
 	app *application.App,
 	host *desktop.Host,
@@ -59,9 +56,7 @@ func setup(
 	if desktop.UseCustomTitlebar() {
 		app.Menu.Set(app.NewMenu())
 	} else {
-		// The fallback words, until the window says which language it is in: `ApplyMenu` is called
-		// again with the catalogue's own once it is settled. No rows yet either; the window sends
-		// those once it is up, and until then the bar carries the menus the system owns.
+		// English labels until the window sends its catalogue; the window's rows follow once it is up.
 		app.Menu.Set(desktop.BuildMenu(host, info.Name, desktop.EnglishMenuLabels(), nil))
 	}
 }

@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import { CancelError, type CancellablePromise } from '@wailsio/runtime/cancellable'
 import type { VarResolution } from '../lib/vars'
-import { Events } from '@wailsio/runtime'
 import { Environments, type EnvironmentInput } from '../../bindings/schemo/internal/workspace'
 import { VarScope, VariableKind } from '../../bindings/schemo/internal/domain'
 import type { EnvScope, EnvState, Environment, Variable } from '../../bindings/schemo/internal/domain'
@@ -10,6 +9,7 @@ import type { Entry } from '../../bindings/schemo/internal/convert/dotenv'
 import { markStep } from '../composables/useGettingStarted'
 import { callOrToast } from '../lib/calls'
 import { useWorkspaceSnapshot } from '../composables/useWorkspaceSnapshot'
+import { useChangedEvent } from '../composables/useWailsEvent'
 
 function scopeOf(envId: string | null): EnvScope {
   return envId === null ? {} : { environment: envId }
@@ -64,16 +64,9 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   }
 
   // A change made anywhere else (another window, an agent, sync, a script) reads the state again.
-  let pending: ReturnType<typeof setTimeout> | null = null
-  const offChanged = Events.On('changed', (event) => {
-    const kind = event.data?.kind
-    if ((kind !== 'environment' && kind !== 'variable') || envState.value === null || pending) return
-    pending = setTimeout(() => {
-      pending = null
-      if (writing === 0 && envState.value !== null) void reload().catch(() => {})
-    }, 50)
+  useChangedEvent(['environment', 'variable'], () => {
+    if (writing === 0 && envState.value !== null) void reload().catch(() => {})
   })
-  onScopeDispose(() => offChanged?.())
 
   /** Shows an edit at once and saves the scope it belongs to whole. */
   function saveScope(envId: string | null, vars: Variable[], env?: Env): Promise<EnvState> {

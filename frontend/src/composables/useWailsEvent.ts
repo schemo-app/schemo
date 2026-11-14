@@ -12,3 +12,10 @@ export function useWailsEvent<E extends Events.WailsEventName>(
   if (getCurrentScope()) tryOnScopeDispose(off)
   return off
 }
+
+/** Calls `reread` when Go announces a change to any of `kinds`. */
+export function useChangedEvent(kinds: readonly string[], reread: () => void): void {
+  useWailsEvent('changed', (event) => {
+    if (kinds.includes(event.data?.kind ?? '')) reread()
+  })
+}

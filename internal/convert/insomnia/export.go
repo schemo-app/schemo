@@ -57,7 +57,7 @@ type writtenRequest struct {
 	// PathParameters hold the values of the `:name` segments of the url, which Insomnia writes
 	// beside it and not in it.
 	PathParameters []writtenField `json:"pathParameters,omitempty"`
-	Auth           *writtenAuth   `json:"authentication,omitempty"`
+	Auth           *auth          `json:"authentication,omitempty"`
 	Body           *writtenBody   `json:"body,omitempty"`
 }
 
@@ -76,19 +76,6 @@ type writtenBody struct {
 	MimeType string         `json:"mimeType"`
 	Text     string         `json:"text,omitempty"`
 	Params   []writtenField `json:"params,omitempty"`
-}
-
-// writtenAuth is an authorization as the format holds one: the scheme's name, and under it the
-// fields of that scheme alone.
-type writtenAuth struct {
-	Type     string `json:"type"`
-	Token    string `json:"token,omitempty"`
-	Prefix   string `json:"prefix,omitempty"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-	Key      string `json:"key,omitempty"`
-	Value    string `json:"value,omitempty"`
-	In       string `json:"in,omitempty"`
 }
 
 // writtenEnvironment is one draft as the file keeps it. Insomnia orders `data` itself and says
@@ -198,10 +185,7 @@ func exportedRows(rows []domain.Row) []writtenField {
 	return out
 }
 
-// exportedParameters writes the parameter rows, and then whatever the address carried that no row
-// does: the address is this app's own source of query, and the rows usually match it. The pairs of
-// the address are written as they stand, undecoded: decoding would be an invention about what the
-// text means.
+// exportedParameters writes the rows, then the address's pairs no row covers, undecoded.
 func exportedParameters(rows []domain.Row, query []domain.QueryPair) []writtenField {
 	out := exportedRows(rows)
 	accounted := map[string]bool{}
@@ -219,28 +203,28 @@ func exportedParameters(rows []domain.Row, query []domain.QueryPair) []writtenFi
 
 // exportedAuth writes the schemes both tools hold. A scheme with no shape here is left out rather
 // than written as another: sending a credential the person never chose is worse than sending none.
-func exportedAuth(from *domain.Auth) *writtenAuth {
+func exportedAuth(from *domain.Auth) *auth {
 	if from == nil {
 		return nil
 	}
 	switch from.Type {
 	case domain.AuthNone:
-		return &writtenAuth{Type: "none"}
+		return &auth{Type: "none"}
 	case domain.AuthBearer:
-		out := &writtenAuth{Type: "bearer", Token: referenced(from.Answer("token"))}
+		out := &auth{Type: "bearer", Token: referenced(from.Answer("token"))}
 		// The default is the reader's own default, so writing it would say nothing.
 		if prefix := from.Answer("prefix"); prefix != "" && prefix != "Bearer" {
 			out.Prefix = prefix
 		}
 		return out
 	case domain.AuthBasic:
-		return &writtenAuth{
+		return &auth{
 			Type:     "basic",
 			Username: referenced(from.Answer("username")),
 			Password: referenced(from.Answer("password")),
 		}
 	case domain.AuthAPIKey:
-		return &writtenAuth{
+		return &auth{
 			Type:  "apikey",
 			Key:   referenced(from.Answer("key")),
 			Value: referenced(from.Answer("value")),

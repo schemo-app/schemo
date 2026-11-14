@@ -28,6 +28,22 @@ import (
 	"schemo/internal/platform"
 )
 
+func TestSSEErrorBodyKeepsTheRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	engine := newTestEngine(t, EngineConfig{Requests: domain.Requests{Timeout: 1}})
+	response := engine.Do(ctx, Spec{Protocol: domain.ProtocolSSE, Method: http.MethodGet, URL: server.URL})
+	if response.Status != http.StatusForbidden || response.Error != context.DeadlineExceeded.Error() || ctx.Err() != nil {
+		t.Fatalf("response = %+v, caller context = %v", response, ctx.Err())
+	}
+}
+
 func newTestEngine(t *testing.T, cfg EngineConfig) *Engine {
 	t.Helper()
 	return NewEngine(cfg, platform.NewIDGen())
@@ -288,17 +304,17 @@ func TestTrustLocalhostTakesASelfSignedCertificate(t *testing.T) {
 func TestTrustLocalhostIsOnlyForThisMachine(t *testing.T) {
 	trusting := newNetTransport(EngineConfig{TrustLocalhost: true})
 	for _, host := range []string{"127.evil.com", "127.0.0.1.nip.io", "localhost.evil.com", "10.0.0.1"} {
-		if trusting.forHost(host) != trusting.forHost("example.com") {
+		if trusting.snapshot().forHost(host) != trusting.snapshot().forHost("example.com") {
 			t.Errorf("%s was given the transport that waives certificates", host)
 		}
 	}
 	for _, host := range []string{"127.0.0.1", "::1", "localhost", "api.localhost"} {
-		if trusting.forHost(host) == trusting.forHost("example.com") {
+		if trusting.snapshot().forHost(host) == trusting.snapshot().forHost("example.com") {
 			t.Errorf("%s was not given the local transport", host)
 		}
 	}
 	strict := newNetTransport(EngineConfig{})
-	if strict.forHost("127.0.0.1") != strict.forHost("example.com") {
+	if strict.snapshot().forHost("127.0.0.1") != strict.snapshot().forHost("example.com") {
 		t.Error("the local exception is on without anybody asking for it")
 	}
 }

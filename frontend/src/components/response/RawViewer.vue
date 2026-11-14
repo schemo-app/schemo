@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
+import { useTemplateRef, watch } from 'vue'
 import { EditorState, RangeSetBuilder, StateEffect, StateField, type Text } from '@codemirror/state'
 import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view'
 import { codeFolding, foldGutter, foldKeymap } from '@codemirror/language'
 import type { ViewerLanguage } from '../../lib/viewerLanguage'
 import { editorLook } from '../../lib/editorLook'
-import { useSetting } from '../../composables/useSettings'
+import { useEditorView, type ReaderLook } from '../../composables/useEditorView'
 import { t } from '../../i18n'
 
-// CodeMirror renders the text itself, so the toolbar's search has to be decorations here rather
-// than markup on HTML.
-//
-// A grammar is laid over the text only when the text is written in it: an HTML error page read as
-// JSON comes out painted at random, every quoted run a string and every digit of `1rem` a number.
-// The caller says which it is (lib/viewerLanguage); anything else is shown as plain text.
+// CodeMirror renders the text, so search highlights are decorations. The grammar comes from the
+// caller (lib/viewerLanguage); unknown text stays plain.
 const props = defineProps<{
   text: string
   query: string
@@ -23,13 +19,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'stats', s: { count: number; index: number }): void
 }>()
-
-const host = useTemplateRef<HTMLElement>('host')
-const view = shallowRef<EditorView | null>(null)
-
-// Reader settings from Go; a missing value is the default.
-const wrap = useSetting('wrapLines')
-const numbers = useSetting('lineNumbers')
 
 const readerTheme = EditorView.theme({
   '.cm-content': { padding: '0.625rem 0' },
@@ -57,17 +46,15 @@ interface Match {
   to: number
 }
 
-// A 2 MB body can hold tens of thousands of matches, and decorating them all
-// costs more than it tells anyone.
-const MAX_MARKS = 2000
-
 function findMatches(doc: Text, query: string): Match[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return []
   const hay = doc.toString().toLowerCase()
   const out: Match[] = []
   let i = hay.indexOf(needle)
-  while (i !== -1 && out.length < MAX_MARKS) {
+  // A 2 MB body can hold tens of thousands of matches, and decorating them all costs more than it
+  // tells anyone.
+  while (i !== -1 && out.length < 2000) {
     out.push({ from: i, to: i + needle.length })
     i = hay.indexOf(needle, i + needle.length)
   }
@@ -150,12 +137,11 @@ function applyQuery(query: string) {
   emitMatchStats()
 }
 
-function buildState(doc: string): EditorState {
+function buildState(doc: string, look: ReaderLook): EditorState {
   return EditorState.create({
     doc,
     extensions: [
-      // Line numbers and wrapping are the reader's choice.
-      ...editorLook(props.language, { numbers: numbers.value, wrap: wrap.value }),
+      ...editorLook(props.language, look),
       foldGutter({ openText: '' }),
       folding,
       keymap.of(foldKeymap),
@@ -175,36 +161,17 @@ function buildState(doc: string): EditorState {
   })
 }
 
-onMounted(() => {
-  if (!host.value) return
-  view.value = new EditorView({ state: buildState(props.text), parent: host.value })
-  applyQuery(props.query)
-})
-
-onBeforeUnmount(() => {
-  view.value?.destroy()
-  view.value = null
+const host = useTemplateRef<HTMLElement>('host')
+const { view, rebuild } = useEditorView({
+  host,
+  text: () => props.text,
+  build: buildState,
+  ready: () => applyQuery(props.query),
 })
 
 // Rebuilding the state (not patching the doc) also drops folding from the previous
 // response, which would otherwise hide lines that no longer exist.
-watch(
-  () => [props.text, props.language] as const,
-  ([text]) => {
-    const editorView = view.value
-    if (!editorView) return
-    editorView.setState(buildState(text))
-    applyQuery(props.query)
-  }
-)
-
-// Wrapping and line numbers change from settings while on screen; the editor is rebuilt, folds lost.
-watch([wrap, numbers], () => {
-  const editorView = view.value
-  if (!editorView) return
-  editorView.setState(buildState(props.text))
-  applyQuery(props.query)
-})
+watch(() => [props.text, props.language] as const, ([text]) => rebuild(text))
 
 watch(() => props.query, applyQuery)
 

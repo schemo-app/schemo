@@ -62,12 +62,26 @@ type Challenge struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
+// Feature is a plan entitlement, named as the server's refusals name it.
+type Feature string
+
+const (
+	FeatureSync         Feature = "sync"
+	FeatureSharedSpaces Feature = "shared_spaces"
+	FeatureRoles        Feature = "roles"
+	FeatureHistory      Feature = "history"
+	FeatureAudit        Feature = "audit"
+	FeatureShareLinks   Feature = "share_links"
+	FeatureSecrets      Feature = "secrets"
+	FeatureBilling      Feature = "billing"
+)
+
 // Plan is what an organisation is entitled to, and how full those entitlements are.
 type Plan struct {
 	Tier      string         `json:"tier"`
 	Seats     int            `json:"seats"`
 	PlanUntil int64          `json:"planUntil,omitempty"`
-	Features  []string       `json:"features,omitempty"`
+	Features  []Feature      `json:"features,omitempty"`
 	Quotas    map[string]int `json:"quotas,omitempty"`
 	// Meters are the limits with something standing against them — what the window draws as bars.
 	// A quota with nothing counted against it is a number without a meaning for a person to read.
@@ -82,9 +96,7 @@ type Meter struct {
 	Limit int    `json:"limit"`
 }
 
-// Publication is a collection published at a public address, as this device remembers it. It is a
-// copy: the server issues the address and keeps the page, and this is its last answer, so a window
-// can draw a published collection before asking anything.
+// Publication is this device's copy of the server's last answer about a published collection.
 type Publication struct {
 	Options      *PublicationOptions `json:"options,omitempty"`
 	CollectionID string              `json:"collectionId"`
@@ -117,9 +129,7 @@ type Publication struct {
 	// is this device's own state rather than the server's.
 	PendingUnpublish bool `json:"pendingUnpublish,omitempty"`
 
-	// Outline and Changes are this device's own state: the shape of the last publish and what has
-	// changed since. No server answer carries them, so a dedicated save writes them and every other
-	// write of the row leaves them alone.
+	// Outline and Changes are local state (last published shape, changes since) with a save of their own.
 	Outline []OutlineItem `json:"outline,omitempty"`
 	Changes []PageRelease `json:"changes,omitempty"`
 }
@@ -252,9 +262,7 @@ const (
 	EntityJarDomain   EntityType = "jar_domain"
 	// EntityRecord represents history items pushed via history/v1 endpoint.
 	EntityRecord EntityType = "record"
-	// EntityRun is a collection run pushed through the same endpoint, once by id however many
-	// records name it. It is not in EntityTypes: that order is the sync endpoint's, and a run goes
-	// through history beside its records.
+	// EntityRun syncs through history beside its records, once by id, so it is not in EntityTypes.
 	EntityRun EntityType = "run"
 )
 
@@ -327,9 +335,8 @@ func (s SyncWorkspace) Exchangeable() bool {
 	return s.RemoteID != "" && s.State != SyncPaused
 }
 
-// SyncEntity is one row as it travels: an envelope and the row's data. For content kinds Data is a
-// JSON object whose secret slots are named by Secrets, and Withheld names the slots left empty; for
-// a record or a run it is the history message.
+// SyncEntity is one row on the wire. For content kinds Data is JSON with secret slots named by Secrets
+// and empty ones by Withheld; for records and runs it is the history message.
 type SyncEntity struct {
 	Kind      EntityType
 	ID        string

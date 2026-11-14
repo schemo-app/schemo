@@ -19,12 +19,8 @@ import { useSidebarToggle } from './useSidebarToggle'
 import { useTheme } from './useTheme'
 import { zoomIn, zoomOut, zoomReset } from './useZoom'
 
-// The window's own menu, for the platforms whose title bar it draws: Go builds no native menu there
-// (`desktop.ApplyMenu` steps aside), so this is the only way to Settings, About and the rest. Where
-// the system draws the bar, the same rows are sent to it instead (see useNativeMenu).
-//
-// Each row is bound to a command of the registry or a call of a store and adds no behavior of its
-// own; one the window cannot do yet is drawn disabled rather than left out.
+// The in-window menu where the app draws the title bar (Go builds no native menu there). Rows the
+// window cannot do yet are disabled rather than hidden.
 
 /** A row the menu draws: what it says, what it wears, its state, and what it does. */
 export interface MenuRow {

@@ -42,10 +42,7 @@ export function useAuthSchemes() {
       const scheme = schemeOf(type)
       return scheme ? menuName(scheme) : type
     },
-    /**
-     * The menu, in three groups: the schemes with nothing to fill in, the main ones that have fields,
-     * and the rest. A group with nothing in it is not drawn.
-     */
+    /** Grouped: schemes without fields, the main ones, the rest. Empty groups are dropped. */
     menuFor: (canInherit: boolean): MenuOption[][] => {
       const all = offered(canInherit)
       const option = (s: Scheme): MenuOption => ({

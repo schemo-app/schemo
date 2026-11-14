@@ -27,9 +27,7 @@ func NewFetcher(client *http.Client) *Fetcher {
 	return &Fetcher{client: client, MaxBytes: DefaultMaxBytes}
 }
 
-// Fetch reads a URL whole. Everything that can go wrong before the document is in hand (an
-// unresolved name, a refused connection, a timeout, a non-success answer) is one refusal naming the
-// address; which it was does not change what the person does.
+// Fetch reads a URL whole. Every failure before the document arrives is one refusal naming the address.
 func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, error) {
 	fail := func(reason string) error {
 		return domain.Refuse(domain.CodeURLUnreachable, domain.ErrNotAllowed,

@@ -13,11 +13,8 @@ import { describeFailure, t } from '../../i18n'
 
 const { refreshPlan } = usePlan()
 
-// The manager window: the workspaces on the left and, on the right, either the form that makes a new
-// one or the workspace being looked at. It holds what neither side can hold alone: which pane the
-// right-hand side shows, and the confirmation that stands over everything before a workspace is taken
-// away. It is also where deleting the workspace *on screen* stops the panels below showing a workspace
-// that no longer exists.
+// Owns the right pane and the delete confirmation, so deleting the shown workspace also clears the
+// panels below.
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const workspaces = useWorkspacesStore()
@@ -40,15 +37,11 @@ function select(id: string) {
   clearNotice()
 }
 
-// The counts are a reading of what other features hold, and nothing tells this window when a
-// collection is made, so the window reads them again when it opens rather than drawing what the
-// session started with.
+// Nothing announces new collections to this window, so counts are read on open.
 onMounted(() => {
   clearNotice()
   void workspaces.load()
-  // What the plan carries is asked again as this window opens, which is when the answer is looked
-  // at: the choice of what a workspace is meant to be is drawn here, and a tariff bought in the panel
-  // since the app started should already be offered.
+  // A plan bought in the panel since start-up should already be offered.
   void refreshPlan()
 })
 

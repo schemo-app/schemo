@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import EmptyState from './EmptyState.vue'
-import Icon from './Icon.vue'
+import Icon, { type IconName } from './Icon.vue'
 import IconButton from './IconButton.vue'
 import MarkdownText from './MarkdownText.vue'
 import TextEditor from './TextEditor.vue'
@@ -10,7 +10,7 @@ import { isCombo } from '../../lib/commands'
 import { markdownHeadings } from '../../lib/markdown'
 import { useMarkdownEditor, type DocCommand } from '../../composables/useMarkdownEditor'
 import { usePlatform } from '../../composables/usePlatform'
-import { t } from '../../i18n'
+import { t, type MessageKey } from '../../i18n'
 
 // The editor's own key, kept off the registry: it is read from the physical key like every other
 // combination, so it works on any keyboard layout.
@@ -133,6 +133,36 @@ function openLink() {
   linkUrl.value = visual.linkAtCaret() || 'https://'
   isLinkBarOpen.value = true
 }
+
+// The toolbar buttons, a separator before each group. Letters stand for the marks that have no icon.
+interface Tool {
+  key: string
+  hint: MessageKey
+  icon?: IconName
+  letter?: string
+  active?: () => boolean
+  run: () => void
+}
+
+const toolGroups: Tool[][] = [
+  [
+    { key: 'bold', hint: 'request.docs.boldTitle', letter: 'B', active: () => standing.bold, run: () => runCommand('bold') },
+    { key: 'italic', hint: 'request.docs.italicTitle', letter: 'I', active: () => standing.italic, run: () => runCommand('italic') },
+    { key: 'code', hint: 'request.docs.codeTitle', icon: 'Code', run: () => runCommand('code') },
+    { key: 'link', hint: 'request.docs.linkTitle', icon: 'Link', active: () => isLinkBarOpen.value, run: openLink },
+  ],
+  [
+    { key: 'ul', hint: 'request.docs.ulTitle', icon: 'List', active: () => standing.ul, run: () => runCommand('ul') },
+    { key: 'ol', hint: 'request.docs.olTitle', icon: 'ListOrdered', active: () => standing.ol, run: () => runCommand('ol') },
+  ],
+]
+
+const moreItems: { command: DocCommand | 'table'; label: MessageKey; icon: IconName }[] = [
+  { command: 'quote', label: 'request.docs.quote', icon: 'TextQuote' },
+  { command: 'pre', label: 'request.docs.pre', icon: 'SquareCode' },
+  { command: 'table', label: 'request.docs.table', icon: 'Table' },
+  { command: 'hr', label: 'request.docs.divider', icon: 'Minus' },
+]
 
 function applyLink() {
   const url = linkUrl.value.trim()
@@ -315,70 +345,22 @@ defineExpose({
             </div>
           </div>
 
-          <span class="doc-sep"></span>
-
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :class="{ on: standing.bold }"
-            :hint="t('request.docs.boldTitle')"
-            @mousedown.prevent="runCommand('bold')"
-          >
-            <span class="doc-letter doc-bold cap-line">B</span>
-          </IconButton>
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :class="{ on: standing.italic }"
-            :hint="t('request.docs.italicTitle')"
-            @mousedown.prevent="runCommand('italic')"
-          >
-            <span class="doc-letter doc-italic cap-line">I</span>
-          </IconButton>
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :hint="t('request.docs.codeTitle')"
-            @mousedown.prevent="runCommand('code')"
-          >
-            <Icon name="Code" :size="12" :stroke-width="1.8" />
-          </IconButton>
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :class="{ on: isLinkBarOpen }"
-            :hint="t('request.docs.linkTitle')"
-            @mousedown.prevent="openLink"
-          >
-            <Icon name="Link" :size="12" :stroke-width="1.8" />
-          </IconButton>
-
-          <span class="doc-sep"></span>
-
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :class="{ on: standing.ul }"
-            :hint="t('request.docs.ulTitle')"
-            @mousedown.prevent="runCommand('ul')"
-          >
-            <Icon name="List" :size="12" :stroke-width="1.8" />
-          </IconButton>
-          <IconButton
-            variant="bare"
-            size="bar"
-            class="doc-tb"
-            :class="{ on: standing.ol }"
-            :hint="t('request.docs.olTitle')"
-            @mousedown.prevent="runCommand('ol')"
-          >
-            <Icon name="ListOrdered" :size="12" :stroke-width="1.8" />
-          </IconButton>
+          <template v-for="(group, index) in toolGroups" :key="index">
+            <span class="doc-sep"></span>
+            <IconButton
+              v-for="tool in group"
+              :key="tool.key"
+              variant="bare"
+              size="bar"
+              class="doc-tb"
+              :class="{ on: tool.active?.() }"
+              :hint="t(tool.hint)"
+              @mousedown.prevent="tool.run()"
+            >
+              <span v-if="tool.letter" class="doc-letter cap-line" :class="`doc-${tool.key}`">{{ tool.letter }}</span>
+              <Icon v-else-if="tool.icon" :name="tool.icon" :size="12" :stroke-width="1.8" />
+            </IconButton>
+          </template>
 
           <div class="doc-more">
             <IconButton
@@ -392,21 +374,15 @@ defineExpose({
               <Icon name="Ellipsis" :size="12" :stroke-width="1.8" />
             </IconButton>
             <div v-if="isMoreMenuOpen" class="doc-pop doc-more-pop">
-              <button type="button" class="doc-more-item" @mousedown.prevent="runCommand('quote')">
-                <Icon name="TextQuote" :size="12" :stroke-width="1.8" />
-                <span class="cap-line">{{ t('request.docs.quote') }}</span>
-              </button>
-              <button type="button" class="doc-more-item" @mousedown.prevent="runCommand('pre')">
-                <Icon name="SquareCode" :size="12" :stroke-width="1.8" />
-                <span class="cap-line">{{ t('request.docs.pre') }}</span>
-              </button>
-              <button type="button" class="doc-more-item" @mousedown.prevent="runCommand('table')">
-                <Icon name="Table" :size="12" :stroke-width="1.8" />
-                <span class="cap-line">{{ t('request.docs.table') }}</span>
-              </button>
-              <button type="button" class="doc-more-item" @mousedown.prevent="runCommand('hr')">
-                <Icon name="Minus" :size="12" :stroke-width="1.8" />
-                <span class="cap-line">{{ t('request.docs.divider') }}</span>
+              <button
+                v-for="item in moreItems"
+                :key="item.command"
+                type="button"
+                class="doc-more-item"
+                @mousedown.prevent="runCommand(item.command)"
+              >
+                <Icon :name="item.icon" :size="12" :stroke-width="1.8" />
+                <span class="cap-line">{{ t(item.label) }}</span>
               </button>
             </div>
           </div>

@@ -18,11 +18,8 @@ func NewSearch(index Index, scope domain.Scope) *Search {
 	return &Search{index: index, scope: scope}
 }
 
-// Find searches every area at once or the one that was asked for. It is not called Query because
-// the name would repeat the argument's own type.
-//
-// The workspace is resolved once, here, and travels into every area as a parameter: an area that
-// resolved it again could answer about a workspace the window has already left.
+// Find searches every area or the one asked for. The workspace is resolved once so every area
+// answers about the same one.
 func (s *Search) Find(ctx context.Context, in Query) (domain.SearchResult, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -41,9 +38,7 @@ func (s *Search) Find(ctx context.Context, in Query) (domain.SearchResult, error
 		if narrowed && area.kind != *in.Kind {
 			continue
 		}
-		// An empty field is not "everything": over every area the palette offers what the user was
-		// doing last, and only the history keeps a time. Under a chosen chip the empty field means
-		// every row, because the chip says "show me these".
+		// An empty query shows recent history across all areas, but every row under a chosen area.
 		if needle == "" && !narrowed && area.kind != domain.SearchHistory {
 			continue
 		}
@@ -80,11 +75,7 @@ func (s *Search) areas() []area {
 	}
 }
 
-// Query is what the palette asks: the words typed, and the one area the user narrowed to.
-//
-// No area is nil rather than an empty word, because a kind this build does not know is one a newer
-// window asked for, and it should search nothing rather than everything. The rows a group draws are
-// not a number here: how many fit under one heading is the answer's business.
+// Query is the palette's words and optional area. An unknown area searches nothing, not everything.
 type Query struct {
 	Text string             `json:"text"`
 	Kind *domain.SearchKind `json:"kind"`
@@ -106,12 +97,8 @@ func matched(needle string, hits []domain.SearchHit) []domain.SearchHit {
 	return out
 }
 
-// The tiers are: the whole name, then a name, then an address, then a value. The needle arrives
-// folded.
-//
-// Comparison is case-insensitive the way a person expects, which is why it happens here and not in
-// SQL: SQLite folds case for ASCII alone, so a LIKE would miss a Cyrillic title typed in lower
-// case, and what is searched is whatever a person typed, in any script.
+// matchFolded tiers matches: whole name, name, address, value. Folding happens here because SQLite
+// folds ASCII only.
 func matchFolded(needle string, hit domain.SearchHit) (domain.SearchMatch, bool) {
 	title := strings.ToLower(hit.Title)
 	switch {
@@ -138,13 +125,8 @@ const (
 	perGroupOne = 20
 )
 
-// rank orders one area's answer and cuts it to what the group draws, returning the rows and how
-// many were found. The rows are sorted where they lie: the slice is the area's own and nobody else
-// holds it.
-//
-// The best kind of match comes first and, inside a kind, the newest. A row with no time at all (a
-// saved request, which never happened) keeps the order the area stored it in, which is why the sort
-// is stable.
+// rank sorts in place, best match then newest (stable, so timeless rows keep their order), and cuts
+// to limit, returning the total found.
 func rank(hits []domain.SearchHit, limit int) ([]domain.SearchHit, int) {
 	total := len(hits)
 
@@ -170,19 +152,8 @@ func rank(hits []domain.SearchHit, limit int) ([]domain.SearchHit, int) {
 	return hits, total
 }
 
-// Index is what the search reads: one method per area, all returning the same shape, so an area is
-// a line beside the others rather than a branch inside the query.
-//
-// It is one port rather than a question put to each feature: a feature that had to answer one would
-// grow a search of its own, and adding an area would touch three packages.
-//
-// The names start with Find because *db.Store implements every port and already has a
-// Collections: one type cannot carry two methods with one name, so a new area's name is checked
-// against internal/db before it is added.
-//
-// An area returns its whole set and is told nothing about the words: matching happens above,
-// because SQLite folds case for ASCII alone and names can be in any script. The schema keeps that
-// affordable, since a level is a document and history is kept to what retention leaves.
+// Index is what search reads, one Find method per area. Matching happens above, since SQLite folds
+// ASCII only. Names start with Find because *db.Store implements every port.
 type Index interface {
 	FindRequests(ctx context.Context, workspaceID string) ([]domain.SearchHit, error)
 	FindCollections(ctx context.Context, workspaceID string) ([]domain.SearchHit, error)

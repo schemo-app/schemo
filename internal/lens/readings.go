@@ -136,9 +136,7 @@ func isUUID(s string) bool {
 	return ok
 }
 
-// readUUID reads a UUID's version, and its time for versions 1, 6 and 7 (RFC 9562 §5). The time is
-// read here rather than by uuid.UUID.Time, which takes a version 6 timestamp with its version bits
-// in it.
+// readUUID reads the version and, for v1, v6 and v7, the time (RFC 9562 §5); uuid.UUID.Time misreads v6.
 func readUUID(s string) *domain.Reading {
 	id, ok := parseUUID(s)
 	if !ok {

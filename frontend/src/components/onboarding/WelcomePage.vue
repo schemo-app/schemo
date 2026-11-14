@@ -6,9 +6,6 @@ import { useTabsStore } from '../../stores/tabs'
 import FeatureMock from './FeatureMock.vue'
 import logoUrl from '../../assets/logo.svg'
 
-// The overview: what the application can do, a card apiece. A card is a line of `lib/welcome`, so a
-// new one is added to that list and needs nothing here; the first gets the wide place, the second
-// the narrow one beside it, and the rest go in the grid.
 const tabs = useTabsStore()
 
 const [hero, pair] = WELCOME

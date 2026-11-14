@@ -1,17 +1,9 @@
-/**
- * Strips the URI scheme (e.g. `https://`) from a URL string.
- * Uses regex instead of `URL` parser to preserve template variables like `{{host}}`.
- */
+/** Strips the scheme; a regex rather than `URL`, so `{{host}}` survives. */
 export function addressOf(url: string): string {
   return url.replace(/^[a-zA-Z][\w+.-]*:\/\//, '')
 }
 
-/**
- * Splits a URL into what stands before its path and the rest, at the first `/`, `?` or `#`
- * (RFC 3986 §3.2: the authority ends there). The host keeps its port and any user: this is for
- * drawing an address, and the domain of the jar is Go's to name. Preserves template syntax without
- * URL-encoding.
- */
+/** Splits at the first `/`, `?` or `#` (RFC 3986 §3.2), keeping template syntax unencoded. */
 export function splitAddress(url: string): { host: string; path: string } {
   const rest = addressOf(url)
   const cut = rest.search(/[/?#]/)

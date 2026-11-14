@@ -15,28 +15,23 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
- * Apply writes what a preview read, at the end of a level or of the top level, and returns the tree
- * and the environment list as they are now. The name fills in where the document gave none (a paste
- * of commands has no name of its own), and the token is good once: what was read is written and
- * forgotten.
+ * Apply writes what a preview read under a level and returns the updated tree and environments. The
+ * name fills in when the document has none; the token is single-use.
  */
 export function Apply(token: string, parentID: string, name: string): $CancellablePromise<$models.Summary> {
     return $Call.ByID(2803246791, token, parentID, name);
 }
 
 /**
- * Curl writes every request of a level out as a curl command, one per command, each under a `#`
- * line naming it, which is what the same paste reads back in. Secrets are as the caller asks: a
- * copy meant to be handed on names them instead of carrying them.
+ * Curl writes a level's requests as curl commands, each under a `#` name line that the paste reads
+ * back. Secrets are values or references as asked.
  */
 export function Curl(id: string, secrets: boolean): $CancellablePromise<string> {
     return $Call.ByID(3622016375, id, secrets);
 }
 
 /**
- * Export writes a collection into a file the user picks, with the format's own ending on the
- * suggested name, and returns the name the file was written under. An empty name is a cancelled
- * dialog, not an error.
+ * Export writes a collection to a file the user picks and returns its name; empty means cancelled.
  */
 export function Export(title: string, id: string, format: string, secrets: boolean): $CancellablePromise<string> {
     return $Call.ByID(1479769239, title, id, format, secrets);
@@ -97,18 +92,16 @@ export function SaveCSV(title: string, columns: string[] | null, rows: (string[]
 }
 
 /**
- * TakeImportLink reports and clears the page a followed link named. Destructive on purpose: the
- * window's mount and its event handler both call it and only the first may open the dialog; the
- * link is usually what started this app, so the mount usually finds it.
+ * TakeImportLink returns and clears the pending page link, so only the first of mount and event opens
+ * the dialog.
  */
 export function TakeImportLink(): $CancellablePromise<string> {
     return $Call.ByID(2987352499);
 }
 
 /**
- * Workspaces lists every workspace with the collections a copy could take from its top level. The source
- * that copies from another workspace draws this, and the open workspace is marked rather than left out,
- * since the window is the one that knows not to offer it.
+ * Workspaces lists every workspace with its top-level collections, the open one marked for the window
+ * to skip.
  */
 export function Workspaces(): $CancellablePromise<$models.Workspace[] | null> {
     return $Call.ByID(2981293123);

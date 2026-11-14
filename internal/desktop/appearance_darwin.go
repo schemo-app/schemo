@@ -26,9 +26,7 @@ void setAppearance(void* nsWindow, int palette) {
 	[window setAppearance:(name == nil ? nil : [NSAppearance appearanceNamed:name])];
 }
 
-// An opaque window flattens the material into its panel, so Wails' translucent backdrop alone shows
-// a solid ground instead of the desktop. Clearing the flag lets the window composite with what is
-// behind it.
+// Clearing the opaque flag lets the window composite with the desktop; otherwise the material is flat.
 void setWindowOpaque(void* nsWindow, bool opaque) {
 	NSWindow* window = (NSWindow*)nsWindow;
 	if (window == nil) {
@@ -38,13 +36,8 @@ void setWindowOpaque(void* nsWindow, bool opaque) {
 	window.opaque = opaque;
 }
 
-// The material decides how much of the desktop reaches the chrome. The default and every semantic
-// material pass almost nothing, so the glass reads as a plain colour; only .light (light chrome)
-// and .hudWindow (dark chrome) keep the hues behind them, as acrylic does on Windows.
-//
-// .light is deprecated in favour of the appearance property, but a semantic material under a forced
-// light appearance measured flatter still, so the deprecated constant is used and its warning is
-// silenced in the CFLAGS above.
+// Only .light and .hudWindow let desktop hues through, as acrylic does on Windows. .light is
+// deprecated, but semantic materials look flatter, so its warning is silenced in CFLAGS.
 void setWindowMaterial(void* nsWindow, bool dark) {
 	NSWindow* window = (NSWindow*)nsWindow;
 	if (window == nil) {

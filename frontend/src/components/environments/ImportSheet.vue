@@ -3,9 +3,6 @@ import { computed } from 'vue'
 import Sheet from '../ui/Sheet.vue'
 import { t } from '../../i18n'
 
-// What a `.env` file is about to become, before it becomes it. The three lines are the whole set of
-// decisions an import makes (which key wins, what counts as a secret, what is not read at all), so
-// they are stated once here instead of being asked per key.
 const emit = defineEmits<{ (e: 'close'): void; (e: 'choose'): void }>()
 
 

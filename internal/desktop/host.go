@@ -70,9 +70,8 @@ func (h *Host) SetLanguage(language domain.Language) {
 	h.language.Store(string(language))
 }
 
-// SetAppearance is the second of the choices a window is told rather than shown: the accent, scale
-// and code font go on the address of every window opened after this, so a window that shows a
-// picture and a version draws itself without asking the settings.
+// SetAppearance puts the accent, scale and code font on new windows' URLs, so simple windows need
+// not load settings.
 func (h *Host) SetAppearance(appearance domain.Appearance) {
 	h.appearance.Store(appearance)
 }

@@ -34,19 +34,15 @@ export function captureSessions(records: RequestRecord[], tabs: TabState[]): Cap
 }
 
 /**
- * Derives a stable key for grouping tab records.
- * Uses tabId when available, falling back to tabURL or 'unknown'; a record captured on another
- * device is prefixed, since that device numbers its tabs from its own first one — without it the
- * two devices' seventh tabs are one tab here. The Go half is `tabKeyOf` in `internal/request`.
+ * Grouping key: tabId, else tabURL, else 'unknown'. Other devices' records are prefixed because each
+ * device numbers its tabs on its own. Mirrors `tabKeyOf` in internal/request.
  */
 export function tabKeyOf(record: RequestRecord): string {
   const key = record.tabId ? String(record.tabId) : record.tabURL || 'unknown'
   return record.isRemote ? `remote:${key}` : key
 }
 
-/**
- * Groups raw network records by browser tab and sorts groups by most recent activity.
- */
+/** Groups records by browser tab, most recently active first. */
 function tabGroups(records: RequestRecord[]): TabGroup[] {
   const map = new Map<string, TabGroup>()
 
@@ -75,9 +71,7 @@ function tabGroups(records: RequestRecord[]): TabGroup[] {
   return Array.from(map.values()).sort((a, b) => b.items[0].startedAt - a.items[0].startedAt)
 }
 
-/**
- * Resolves display label for a tab group (title, hostname, or localized fallback).
- */
+/** A group's title, hostname or fallback label. */
 export function groupLabel(group: TabGroup): string {
   return group.title || hostnameOf(group.url) || t('history.tab')
 }
@@ -91,9 +85,7 @@ function hostnameOf(url: string): string {
   }
 }
 
-/**
- * Generates a deterministic hue (0-350) for tab avatar fallback based on group key hash.
- */
+/** A stable hue for a group's fallback avatar. */
 export function groupHue(key: string): number {
   let hue = 0
   for (let i = 0; i < key.length; i++) hue = (hue * 31 + key.charCodeAt(i)) >>> 0

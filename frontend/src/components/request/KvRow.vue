@@ -3,10 +3,6 @@ import Icon from '../ui/Icon.vue'
 import Checkbox from '../ui/Checkbox.vue'
 import { t } from '../../i18n'
 
-// One row of a key/value table: the box that switches it on, its name, and a value the caller
-// draws. The tools are a slot (a form has one more) and the numbers are in style.css. A table whose
-// order may be dragged says so, and the row then leads with the drag handle. A table whose rows
-// have no on and off, like an example's headers, says that too and keeps no box.
 const {
   enabled,
   name,

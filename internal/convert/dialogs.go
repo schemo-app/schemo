@@ -1,9 +1,7 @@
 package convert
 
-// The dialogs a window cannot open for itself, and the writing of an exported file. What the file
-// dialogs offer per format: the kind of file, the patterns a picker filters by (a semicolon-separated
-// list, which is how the framework reads several) and the ending a suggested name gets. The ending
-// tells whoever is handed the file which tool it is for before it is opened.
+// File dialogs per format: the description, the picker patterns (semicolon-separated, as the
+// framework reads them) and the suggested extension.
 
 import (
 	"bytes"
@@ -116,16 +114,13 @@ func (s *Transfer) PreviewUrl(
 	return preview, nil
 }
 
-// TakeImportLink reports and clears the page a followed link named. Destructive on purpose: the
-// window's mount and its event handler both call it and only the first may open the dialog; the
-// link is usually what started this app, so the mount usually finds it.
+// TakeImportLink returns and clears the pending page link, so only the first of mount and event opens
+// the dialog.
 func (s *Transfer) TakeImportLink() string {
 	return s.host.TakeImportLink()
 }
 
-// Export writes a collection into a file the user picks, with the format's own ending on the
-// suggested name, and returns the name the file was written under. An empty name is a cancelled
-// dialog, not an error.
+// Export writes a collection to a file the user picks and returns its name; empty means cancelled.
 func (s *Transfer) Export(
 	ctx context.Context,
 	title string,

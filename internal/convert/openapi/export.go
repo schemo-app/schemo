@@ -162,9 +162,8 @@ func (w *writer) operation(node domain.CollectionNode, tag string) {
 	item[methodKey(node.Method)] = op
 }
 
-// writtenResponses is a request's saved answers as the document declares them: one per example,
-// described by its name and keyed by status, with the body written as the text the example holds so
-// a round trip does not reflow it. A request with no examples gets the plain success.
+// writtenResponses declares one response per example, keyed by status with the body verbatim; no
+// examples gives the plain success.
 func writtenResponses(node domain.CollectionNode) map[string]any {
 	if len(node.Responses) == 0 {
 		return map[string]any{"200": map[string]any{"description": "Successful response"}}
@@ -197,9 +196,8 @@ func writtenResponses(node domain.CollectionNode) map[string]any {
 	return out
 }
 
-// pathOf is an address as the document writes it: the server variable comes off, a `:name` becomes
-// the template `{name}` with a parameter from the request's row, and the query string is left to
-// the rows. A `{{name}}` variable stays in the path.
+// pathOf strips the server variable, turns `:name` into `{name}` with a parameter, and leaves the query
+// to the rows; `{{name}}` stays.
 func pathOf(node domain.CollectionNode) (string, []any) {
 	path := strings.TrimPrefix(node.URL, "{{"+domain.BaseURLVariable+"}}")
 	// A query string is a URL's rows, not part of a path, and the rows are written as parameters.
@@ -241,9 +239,7 @@ func pathParameter(name string, rows []domain.Row) map[string]any {
 	return parameter
 }
 
-// headerElsewhere lists the headers a document states elsewhere: content type with the body, accept
-// with the response, authorization in the security section. Rows with these names are left out, so
-// a pasted token stays out of the file.
+// headerElsewhere are headers OpenAPI states elsewhere; their rows are dropped, so pasted tokens stay out.
 var headerElsewhere = map[string]bool{"content-type": true, "accept": true, "authorization": true}
 
 // rowParameters writes the enabled rows as the operation's parameters: a query or a header the
@@ -374,9 +370,8 @@ func (w *writer) nodeSecurity(auth *domain.Auth) []any {
 	return []any{map[string]any{name: []any{}}}
 }
 
-// nodeSchemeName names and declares the scheme a request asks for when the collection declares none
-// of its kind: the base name if free or already holding the same scheme (then shared), otherwise
-// the smallest free `_2`, `_3` … suffix.
+// nodeSchemeName names a request's scheme: the base name if free or identical, else the first free
+// `_2`, `_3` suffix.
 func (w *writer) nodeSchemeName(auth domain.Auth) string {
 	definition := schemeDefinition(auth)
 	if definition == nil {

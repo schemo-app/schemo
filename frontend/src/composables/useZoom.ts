@@ -4,10 +4,7 @@ import { DEFAULTS } from '../lib/layout'
 import { usePlatform } from './usePlatform'
 import { useSetting, useSettings } from './useSettings'
 
-// The scale, walked from the keyboard: + and − step through the three sizes, 0 goes back to the
-// middle one. These are not commands of the registry: they are not among the rebindable ones, and
-// their note under the row is where they are said. Every window installs this, so the keys work
-// wherever the person is looking.
+// Not registry commands: the zoom keys are not rebindable.
 
 const STEPS: readonly UISize[] = [UISize.SizeSmall, UISize.SizeMedium, UISize.SizeLarge]
 

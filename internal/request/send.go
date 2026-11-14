@@ -1,5 +1,4 @@
-// Package request composes, resolves and sends HTTP requests: drafts, authorization, cookies,
-// the HTTP engine, history and the response inspector.
+// Package request owns request preparation, transport and history.
 package request
 
 import (
@@ -10,44 +9,40 @@ import (
 	"schemo/internal/domain"
 )
 
-// Send starts a request and returns its id at once. The answer arrives as an event: it has to
-// outlive the call that started it, because it can be cancelled and because a slow endpoint must
-// not hold the window's promise open.
+// Send starts a request and returns its id; the answer arrives as an event, so it can be cancelled
+// and a slow endpoint does not hold the call open.
 //
 //wails:ignore
 func (s *History) Send(ctx context.Context, in SendInput) (string, error) {
-	// The workspace is read here and carried into the goroutine as a value: the attempt outlives
-	// this call, and asking again down there would write the answer into whatever workspace the user
-	// had switched to by the time it arrived.
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return "", err
 	}
+	return s.send(ctx, workspace, in)
+}
 
-	id := s.ids()
-	started := time.Now().UnixMilli()
-
-	// The attempt runs on its own context: the caller's ends when the frontend call returns, and a
-	// request must not be cancelled by the act of asking for it.
+func (s *History) send(ctx context.Context, workspace string, in SendInput) (string, error) {
+	// Wails ends the start call as soon as it receives the attempt's id.
+	attemptCtx, active, err := s.startAttempt(context.WithoutCancel(ctx), workspace, in)
+	if err != nil {
+		return "", err
+	}
 	go func() {
-		if _, err := s.runAndAnnounce(context.Background(), workspace, id, started, in); err != nil {
+		defer s.finishAttempt(active)
+		if _, err := s.runAndAnnounce(attemptCtx, active, in); err != nil {
 			s.notifier.Publish(TopicRequestFailed, RequestFailed{
-				ID:      id,
+				ID:      active.id,
 				Error:   err.Error(),
 				Failure: domain.AsFailure(err),
 			})
 		}
 	}()
 
-	return id, nil
+	return active.id, nil
 }
 
-// SendAndWait is Send for a caller that has to see the answer before it does the next thing. A
-// cancelled attempt comes back saying so rather than as an error: it was stopped on purpose.
-//
-// The workspace is the caller's, not this method's: a run resolves it once and carries it through
-// every request it sends, and asking again here would file the twentieth answer under another
-// workspace.
+// SendAndWait is Send for callers that need the answer first; a cancellation is not an error. The
+// workspace is the caller's, so a run files every answer under one workspace.
 //
 //wails:ignore
 func (s *History) SendAndWait(
@@ -55,36 +50,43 @@ func (s *History) SendAndWait(
 	workspace string,
 	in SendInput,
 ) (domain.Record, error) {
-	return s.runAndAnnounce(ctx, workspace, s.ids(), time.Now().UnixMilli(), in)
-}
-
-// runAndAnnounce is an attempt and the news of how it ended. An attempt the user stopped has
-// nothing to keep and nothing to announce: history holds what came back, and nothing did. The
-// window stopped it, so it already knows.
-func (s *History) runAndAnnounce(
-	ctx context.Context,
-	workspace, id string,
-	started int64,
-	in SendInput,
-) (domain.Record, error) {
-	rec, err := s.attempt(ctx, workspace, id, started, in)
+	attemptCtx, active, err := s.startAttempt(ctx, workspace, in)
 	if err != nil {
 		return domain.Record{}, err
 	}
-	if !rec.Cancelled {
-		s.notifier.Publish(TopicRequestFinished, RequestFinished{ID: id, Record: rec})
+	defer s.finishAttempt(active)
+	return s.runAndAnnounce(attemptCtx, active, in)
+}
+
+// runAndAnnounce reports how an attempt ended, including cancellation before a record was written.
+func (s *History) runAndAnnounce(
+	ctx context.Context,
+	active *attempt,
+	in SendInput,
+) (domain.Record, error) {
+	rec, err := s.executeAttempt(ctx, active, in)
+	if err != nil {
+		return domain.Record{}, err
 	}
+	s.notifier.Publish(TopicRequestFinished, RequestFinished{ID: active.id, Record: rec})
 	return rec, nil
 }
 
 // attempt runs one request to the end. An error here is this side failing: a transport failure
 // is the engine's to report inside the response.
-func (s *History) attempt(
+func (s *History) executeAttempt(
 	ctx context.Context,
-	workspace, id string,
-	started int64,
+	active *attempt,
 	in SendInput,
 ) (domain.Record, error) {
+	workspace, id, started := active.workspace, active.id, active.started
+	cancelled := domain.Record{
+		RecordSummary: domain.RecordSummary{ID: id, ProtocolRecord: domain.ProtocolRecord{Protocol: in.Protocol}},
+		Cancelled:     true,
+	}
+	if ctx.Err() != nil {
+		return cancelled, nil
+	}
 	pass := domain.ScriptPass{
 		// The scripts of a run share one scope, and a request sent on its own is a run of one: what
 		// the record keeps is the run it names, which for a send on its own is none.
@@ -102,27 +104,40 @@ func (s *History) attempt(
 
 	if s.screen != nil {
 		skip, err := s.screen.Before(ctx, workspace, &pass)
+		if ctx.Err() != nil {
+			return cancelled, nil
+		}
 		if err != nil {
 			return domain.Record{}, err
 		}
 		if skip {
-			// Nothing goes out, so there is no answer to fold in and nothing for history to keep.
-			// What is left is the shape of the attempt (which request it was, and that it was not
-			// sent), so whoever asked learns that rather than that a request failed.
+			// Nothing was sent: return the attempt's shape so the caller learns it was stopped, not failed.
 			return domain.Record{
 				RecordSummary: domain.RecordSummary{
-					ID:        id,
-					Source:    domain.SourceManual,
-					Method:    pass.Request.Method,
-					URL:       in.MaskedURL,
-					StartedAt: started,
+					ProtocolRecord: domain.ProtocolRecord{Protocol: in.Protocol},
+					ID:             id,
+					Source:         domain.SourceManual,
+					Method:         pass.Request.Method,
+					URL:            in.MaskedURL,
+					StartedAt:      started,
 				},
 				Skipped: true,
 			}, nil
 		}
 	}
 
+	masked := s.masked(ctx, workspace, in, pass.Request)
+	if stream := active.stream; stream != nil {
+		stream.opened = func(response *domain.Response) {
+			record := s.recordFrom(id, workspace, started, in, pass, masked, response)
+			record.Active = true
+			stream.setRecord(record)
+			s.notifier.Publish(TopicStreamOpened, RequestFinished{ID: id, Record: record})
+		}
+	}
+
 	resp, err := s.executor.Execute(ctx, Request{
+		Protocol: in.Protocol, rpc: in.rpc, Stream: active.stream,
 		ID:      id,
 		Method:  pass.Request.Method,
 		URL:     pass.Request.URL,
@@ -137,10 +152,16 @@ func (s *History) attempt(
 		return domain.Record{}, err
 	}
 	if resp.Cancelled {
-		return domain.Record{Cancelled: true}, nil
+		return cancelled, nil
+	}
+	if active.stream != nil {
+		// A disconnect still owes history its completed transcript.
+		var finish context.CancelFunc
+		ctx, finish = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer finish()
 	}
 
-	rec := s.recordFrom(id, workspace, started, in, pass, s.masked(ctx, in, pass.Request), resp)
+	rec := s.recordFrom(id, workspace, started, in, pass, masked, resp)
 	if err := s.save(ctx, workspace, rec); err != nil {
 		return domain.Record{}, err
 	}
@@ -155,26 +176,21 @@ func (s *History) attempt(
 	return rec, nil
 }
 
-// masked is the request as history keeps it. What the caller prepared is the answer until a script
-// changes the request; the mask is made where the values are, and that is not here.
-//
-// A mask that cannot be made leaves the prepared one in place: the unusable answer is the masked
-// one, because the other would be a secret written down in the clear.
-func (s *History) masked(ctx context.Context, in SendInput, sent *domain.ScriptRequest) Masked {
+// masked is the request as history keeps it. If masking fails the unmasked copy is not stored, since
+// that would write a secret in clear.
+func (s *History) masked(ctx context.Context, workspace string, in SendInput, sent *domain.ScriptRequest) Masked {
 	prepared := Masked{URL: in.MaskedURL, Headers: in.MaskedHeaders, Body: in.MaskedBody}
 	if s.mask == nil || !changed(in, sent) {
 		return prepared
 	}
-	again, err := s.mask.Mask(ctx, in, *sent)
+	again, err := s.mask.Mask(ctx, workspace, in, *sent)
 	if err != nil {
 		return prepared
 	}
 	return again
 }
 
-// runScope is where this request's `pm.variables` live: the run it belongs to, or, for a request
-// sent on its own from the command line or a card, the send itself. Every request has a scope; only
-// a run shares one between requests.
+// runScope is the scope of `pm.variables`: the run, or the send itself when it has none.
 func runScope(run string, id string) string {
 	if run != "" {
 		return run
@@ -189,12 +205,14 @@ func changed(in SendInput, sent *domain.ScriptRequest) bool {
 
 // Cancel stops an attempt by id, reporting whether anything was still running under it.
 func (s *History) Cancel(id string) bool {
-	return s.executor.Cancel(id)
+	if active := s.findAttempt(id); active != nil {
+		active.cancel()
+		return true
+	}
+	return false
 }
 
-// requestNode is the request of a collection this send came from, which is what makes that
-// request's history its own sends. A strip draft is not a request of any collection (it is where a
-// request is composed, not kept), so a record of it names no node rather than naming a draft.
+// requestNode names the source request; strip drafts are not collection requests, so they name none.
 func requestNode(node string) string {
 	if domain.IsTabDraft(domain.DraftID(node)) {
 		return ""
@@ -202,9 +220,7 @@ func requestNode(node string) string {
 	return node
 }
 
-// sentHeaders is what the record keeps: the masked rows, plus what the engine had to compute
-// itself. A Digest answer comes from a challenge that had not arrived when the request was
-// prepared, and the engine hands that one over already masked.
+// sentHeaders is the masked rows plus the engine's own, such as a Digest answer computed after preparing.
 func sentHeaders(masked []domain.HeaderPair, resp *domain.Response) []domain.HeaderPair {
 	return append(domain.OrEmpty(masked), resp.SentHeaders...)
 }
@@ -218,8 +234,13 @@ func (s *History) recordFrom(
 	masked Masked,
 	resp *domain.Response,
 ) domain.Record {
+	body, options, operation := recordRequest(masked.Body, in)
 	return domain.Record{
 		RecordSummary: domain.RecordSummary{
+			ProtocolRecord: domain.ProtocolRecord{
+				Protocol: in.Protocol, Options: options, MessageCount: resp.MessageCount,
+				Operation: operation,
+			},
 			ID:          id,
 			WorkspaceID: workspace,
 			Source:      domain.SourceManual,
@@ -245,11 +266,9 @@ func (s *History) recordFrom(
 		ResponseBytes:   int64(len(resp.Body)),
 		RequestHeaders:  sentHeaders(masked.Headers, resp),
 		ResponseHeaders: domain.OrEmpty(resp.Headers),
-		// What the exchange did to the jar, every hop of it. The engine knows the hops and asks the
-		// jar as it goes (a cookie one answer set is a cookie the next request carries), so what is
-		// left here is to keep what came back.
+		// Jar writes from every hop; the engine applied them as it went.
 		CookieWrites: domain.OrEmpty(resp.CookieWrites),
-		RequestBody:  bodyRef(masked.Body, false),
+		RequestBody:  bodyRef(body, false),
 		ResponseBody: bodyRef(resp.Body, resp.BodyTruncated),
 	}
 }

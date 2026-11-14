@@ -22,9 +22,7 @@ const pixelSize = computed(() => props.size ?? 16)
 // as a style and not as the width/height attributes: those are pixels whatever the root font is.
 const box = computed(() => rem(pixelSize.value))
 
-// A glyph carries one weight however large it is drawn: 1.8 from 14px up, and proportionally more
-// below, where a thinner line would fade. A site that draws another weight (a bolder tick, a
-// lighter tool) says so and is left alone.
+// 1.8 from 14px up and proportionally heavier below, where a thinner line fades.
 const weight = computed(() => props.strokeWidth ?? Math.max(1.8, (1.8 * 14) / pixelSize.value))
 </script>
 

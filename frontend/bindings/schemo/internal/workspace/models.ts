@@ -23,10 +23,8 @@ export interface CollectionPatch {
 }
 
 /**
- * Created is what making a workspace came to: the state a window draws, and what became of each address
- * written in the form. They are one answer rather than two calls, because the workspace exists either
- * way once the account has it: a refused letter does not undo it, and the person is owed the one
- * that failed rather than a sentence about all of them.
+ * Created is the new state plus a result per invited address: the workspace exists once the account
+ * has it, even if some invitations fail.
  */
 export interface Created {
     "workspaces": domain$0.Workspace[] | null;
@@ -82,11 +80,7 @@ export interface ProxyAddress {
 }
 
 /**
- * Query is what the palette asks: the words typed, and the one area the user narrowed to.
- * 
- * No area is nil rather than an empty word, because a kind this build does not know is one a newer
- * window asked for, and it should search nothing rather than everything. The rows a group draws are
- * not a number here: how many fit under one heading is the answer's business.
+ * Query is the palette's words and optional area. An unknown area searches nothing, not everything.
  */
 export interface Query {
     "text": string;
@@ -94,12 +88,12 @@ export interface Query {
 }
 
 /**
- * RequestDraft is what the tree asks for when a row is created: where it goes and what is already
- * known about the request. A request made by hand arrives with its method only and the next card
- * fills in the rest, while one saved from the command line is a whole request; building it empty
- * first would leave a node with no address if the second step failed.
+ * RequestDraft is a new row's place and what is known of it; a whole request is saved in one step so
+ * a failure cannot leave a node without an address.
  */
 export interface RequestDraft {
+    "protocol"?: domain$0.Protocol;
+    "options"?: domain$0.ProtocolOptions | null;
     "collectionId": string;
     "name": string;
     "description"?: string;
@@ -122,10 +116,8 @@ export interface RequestDraft {
 }
 
 /**
- * WorkspaceInput is what the create card sends: what the workspace is called, how it looks, and what it is
- * for. The kind ("Personal" or "Team") is a word this app keeps and travels with the workspace, not a
- * claim about who may enter: who is in a workspace is membership, and membership is the cloud panel's
- * to hand out.
+ * WorkspaceInput is what the create card sends. The kind is a label that travels with the workspace;
+ * membership is managed in the cloud panel.
  */
 export interface WorkspaceInput {
     "name": string;
@@ -138,9 +130,7 @@ export interface WorkspaceInput {
     "kind"?: string;
 
     /**
-     * Invites are the people written in the create form, with the role each is to be given here.
-     * They are sent the moment the workspace exists in the account, because there is nothing to invite
-     * anybody into before that.
+     * Invites go out once the account has the workspace.
      */
     "invites"?: Invitation[] | null;
 }

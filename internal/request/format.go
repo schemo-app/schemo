@@ -10,13 +10,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// FormatBody re-indents a body whose notation has a shape of its own, and returns the text it was
-// given when it cannot: a document that does not parse is the person's to finish, and a formatter
-// that rewrote half of it would make that harder.
-//
-// It lives here because reading a notation is Go's: re-typing JSON through the window's parser
-// loses the digits of a number past 2^53 and writes `1.0` as `1`. Here the document is tokenised
-// and every token is written back as the bytes it was read from.
+// FormatBody re-indents a body, returning it unchanged when it does not parse. Tokens are written
+// back as read, so large numbers and `1.0` survive, unlike a JSON round trip in the window.
 func FormatBody(kind domain.BodyKind, text string, indent domain.Indent) string {
 	var formatted string
 	var ok bool
@@ -93,9 +88,8 @@ func formatXML(text, unit string) (string, bool) {
 	return strings.Join(lines, "\n"), true
 }
 
-// xmlPieces cuts a document into the pieces it is made of, each as the bytes it came from. The
-// decoder supplies the structure and is checked for balance; a piece's text is read off the source
-// by position, which keeps a prefix, a quote and a CDATA marker as written.
+// xmlPieces cuts a document into pieces as written; the decoder checks balance and positions slice
+// the source, keeping prefixes, quotes and CDATA.
 func xmlPieces(text string) ([]xmlPiece, bool) {
 	decoder := xml.NewDecoder(strings.NewReader(text))
 	// A declared encoding is the document's own business; the text arrives already decoded.

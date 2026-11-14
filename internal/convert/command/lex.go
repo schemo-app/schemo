@@ -15,9 +15,8 @@ type optString struct {
 	set   bool
 }
 
-// splitCluster reads a word of single-dash letters the way curl does: `-sSL` is three flags, and the
-// first that takes a value takes the rest of the word with it, as in `-XPOST` or `-uuser:pass`. Any
-// other token comes back as it is.
+// splitCluster reads `-sSL` as three flags, the first value-taking flag taking the rest (`-XPOST`), as
+// curl does.
 func splitCluster(token string) []string {
 	if len(token) < 3 || token[0] != '-' || token[1] == '-' {
 		return []string{token}
@@ -290,10 +289,8 @@ func ansiCodeUnit(s string) uint16 {
 // its place, which a `\u` escape cannot carry across.
 func codeUnit(v uint16) string { return string(rune(v)) }
 
-// spaceRunes are the characters that separate the words of a pasted command, shared by the
-// tokenizer, the trimming and the detection regexes. It is not unicode.IsSpace: a browser paste
-// carries U+FEFF, which separates here, and not U+0085. They are written as code points because a
-// literal tab or non-breaking space is invisible.
+// spaceRunes separate the words of a pasted command. Unlike unicode.IsSpace they include U+FEFF,
+// which browser pastes carry, and exclude U+0085. Code points, because the literals are invisible.
 var spaceRunes = []rune{
 	0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x0020, 0x00a0, 0x1680,
 	0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,

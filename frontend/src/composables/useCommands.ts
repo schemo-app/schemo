@@ -30,9 +30,7 @@ export function useCommands() {
     return caps(id).join(isMac.value ? '' : '+')
   }
 
-  /** Whether a command may be offered on this platform at all: the plain Ctrl+R is the webview's
-   *  own reload on Windows and Linux, so the combination the run command comes with is not offered
-   *  there — one somebody picks deliberately is theirs to keep. */
+  /** Plain Ctrl+R is the webview's reload on Windows and Linux, so the default run binding is not offered there. */
   function offered(id: string): boolean {
     return id !== 'run' || isMac.value || combo(id) !== 'mod+R'
   }

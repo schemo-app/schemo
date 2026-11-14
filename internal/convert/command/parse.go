@@ -34,9 +34,8 @@ func (p pendingRequest) request() Request {
 	}
 }
 
-// A repeated name keeps the position of its first occurrence and the value of its last, which is
-// what would have been sent. Cookie is the exception: a request carries one, so repeats leave as
-// one joined header, appended last.
+// foldHeaders keeps a repeated name's first position and last value, as sent; Cookie repeats are joined
+// into one header, appended last.
 func foldHeaders(entries []headerEntry) []domain.HeaderPair {
 	var order []string
 	byKey := map[string]headerEntry{}
@@ -93,10 +92,8 @@ func withContentType(entries []headerEntry, contentType string) []headerEntry {
 	return append(out, headerEntry{name: "Content-Type", value: contentType})
 }
 
-// bodyShape is the kind of the command's data and the content type it goes with when the command
-// wrote none. Plain `-F` fields are a multipart form (the draft composes that body from rows);
-// anything else is read off the text: JSON if it parses, XML if it opens with `<`, a form for `k=v`
-// pairs, otherwise text.
+// bodyShape infers the body kind and default content type: plain `-F` fields are multipart; else
+// JSON if it parses, XML if it starts with `<`, a form for `k=v` pairs, otherwise text.
 func bodyShape(body string, form []domain.FormRow) (domain.BodyKind, string) {
 	if len(form) > 0 {
 		return domain.BodyForm, domain.MediaMultipart
@@ -145,9 +142,7 @@ func splitCredential(raw string) (string, string) {
 	return login, password
 }
 
-// A credential a command carries becomes a scheme rather than the header it looks like, so the Auth
-// chip shows what was asked for and stays editable. See writtenAuth for credentials written as an
-// `Authorization` header.
+// basicScheme turns command credentials into an auth scheme so the Auth chip stays editable.
 func basicScheme(user, password string) *domain.Auth {
 	auth := domain.NewAuth(domain.AuthBasic).With("username", user).With("password", password)
 	return &auth
@@ -381,9 +376,7 @@ func (a curlArgs) request() (pendingRequest, Reason) {
 	return result, ""
 }
 
-// auth is the scheme the flags name, or none. A bearer token wins over a login also given (curl
-// takes both and the server reads the bearer); a written header wins over both, which `writtenAuth`
-// handles.
+// auth is the scheme the flags name: a bearer beats a login, and a written header beats both (writtenAuth).
 func (a curlArgs) auth() *domain.Auth {
 	switch {
 	case a.bearer.set:
@@ -398,9 +391,8 @@ func (a curlArgs) auth() *domain.Auth {
 	return nil
 }
 
-// urlencodeData is one `--data-urlencode` argument as its part of the body. The name keeps its
-// spelling and what follows the first `=` is percent-encoded (a space as `%20`, not `+`). The
-// `@file` forms need a file this app cannot read, so they travel as written.
+// urlencodeData percent-encodes the value after the first `=` (space as `%20`); `@file` forms stay as
+// written, since the file is unreadable here.
 func urlencodeData(value string) string {
 	name, content, found := strings.Cut(value, "=")
 	if found && strings.Contains(name, "@") {
@@ -425,9 +417,8 @@ func escaped(value string) string {
 	return strings.ReplaceAll(url.QueryEscape(value), "+", "%20")
 }
 
-// The row goes with the credential: left beside the scheme it would win, since a written header is
-// what goes out, and editing the chip would do nothing. A scheme that cannot be rebuilt from a
-// header (Digest, Negotiate, NTLM) stays the header it is.
+// writtenAuth turns an Authorization header into a scheme and drops the row, which would otherwise
+// override the chip. Digest, Negotiate and NTLM stay headers.
 func writtenAuth(entries []headerEntry, auth *domain.Auth) ([]headerEntry, *domain.Auth) {
 	for i, e := range entries {
 		if !strings.EqualFold(e.name, "Authorization") {

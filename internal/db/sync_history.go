@@ -16,9 +16,7 @@ import (
 	"schemo/internal/domain"
 )
 
-// One sent request as `history/v1` carries it: the record as a JSON document, its two bodies and,
-// when the person lets runs out, what the code around it reported. The run that produced it is a
-// document of its own.
+// A sent request as history/v1 carries it: the record JSON, both bodies, and script reports when allowed.
 
 // historyEntry reads a record and everything that hangs off it.
 func historyEntry(

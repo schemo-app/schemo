@@ -1,8 +1,7 @@
 package desktop
 
-// What the app tells a window that is already open: which tab to show, that there is a collection
-// to take in, and that a release is waiting. Each waits for the page to be able to take it: a tab
-// and a release are parked until the window is ready, a link until the window asks for it.
+// Notifications for open windows: a tab to show, a link to import, a release. Each is parked until the
+// page can take it.
 
 // OpenTab switches the rail to the extension's tab, parking the request if the window can't
 // take events yet. The latest request wins: an earlier tab doesn't need reopening.
@@ -17,12 +16,8 @@ func (h *Host) OpenTab(tab int) {
 	h.Emit(EventOpenTab, tab)
 }
 
-// RequestImport opens the window's import dialog on a published page. Both halves are needed: the
-// event reaches a window that is already open, the flag one that is being created right now (a link
-// is usually what started this app).
-//
-// The flag is cleared by TakeImportLink alone, never here, which makes the two paths open the
-// dialog exactly once between them however they interleave.
+// RequestImport opens the import dialog on a page: the event reaches an open window, the flag one
+// being created. Only TakeImportLink clears the flag, so the dialog opens exactly once.
 func (h *Host) RequestImport(page string) {
 	h.mu.Lock()
 	h.pendingLink = page
@@ -31,9 +26,7 @@ func (h *Host) RequestImport(page string) {
 	h.Broadcast(EventImportLink)
 }
 
-// TakeImportLink reports and clears the page a link parked. Destructive on purpose: it is called
-// from both the mount and the event handler, and only the first caller may open the dialog, or an
-// old link would be followed again the next time the window draws.
+// TakeImportLink returns and clears the parked link, so only the first of mount and event opens it.
 func (h *Host) TakeImportLink() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -42,10 +35,8 @@ func (h *Host) TakeImportLink() string {
 	return page
 }
 
-// PublishUpdate tells every window that the update state moved, parked until the page can take one.
-// It is published on a check and on a skip, not only when a release turns up: a skip must reach the
-// windows showing the release, and the About window cannot see the update window's click.
-// The caller decides when to open the update window.
+// PublishUpdate tells every window the update state moved, including skips, which the About window
+// cannot otherwise see.
 func (h *Host) PublishUpdate(status UpdateStatus, show bool) {
 	h.mu.Lock()
 	if !h.ready.Load() {
@@ -69,12 +60,8 @@ type parkedUpdate struct {
 	show   bool
 }
 
-// RequestUpdateCheck opens the settings' updates page and asks it for a check. Both halves are
-// needed: the event reaches a page that is already open, the flag one being created right now (a
-// page that does not exist yet has nothing listening, and an open one never mounts again).
-//
-// The flag is cleared by TakeUpdateCheckRequest alone, never here, which makes the two paths
-// deliver exactly one check however they interleave.
+// RequestUpdateCheck asks the updates page for a check: the event reaches an open page, the flag one
+// being created. Only TakeUpdateCheckRequest clears the flag, so exactly one check runs.
 func (h *Host) RequestUpdateCheck() {
 	h.mu.Lock()
 	h.pendingUpdateCheck = true
@@ -85,9 +72,7 @@ func (h *Host) RequestUpdateCheck() {
 	h.ShowSettings("updates")
 }
 
-// TakeUpdateCheckRequest reports and clears a check parked by RequestUpdateCheck. Destructive on
-// purpose: it is called from both the mount and the event handler, and only the first caller may
-// act on it, or an old request would fire a check the next time the page opens.
+// TakeUpdateCheckRequest returns and clears the parked check, so only the first of mount and event runs it.
 func (h *Host) TakeUpdateCheckRequest() bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()

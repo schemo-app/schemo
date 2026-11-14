@@ -18,9 +18,8 @@ import (
 // filter: devtools and proxies read a session by name.
 var harFilter = []application.FileFilter{{DisplayName: "HAR", Pattern: "*.har"}}
 
-// ExportHar writes one tab's captured traffic as a HAR file and reports whether anything was
-// written: a cancelled dialog is not a failure, and a toast for it would tell the user about a file
-// that does not exist.
+// ExportHar writes one tab's capture as a HAR file and reports whether one was written; a cancelled
+// dialog is not a failure.
 func (s *History) ExportHar(ctx context.Context, title, tabKey string) (bool, error) {
 	data, name, err := s.har(ctx, tabKey)
 	if err != nil {
@@ -42,20 +41,15 @@ func harFileName(name string) string {
 	return desktop.SafeFileName(name, "session", ".har")
 }
 
-// har is the captured traffic of one tab as a HAR document, and a name a save dialog can open on. An empty key is the whole capture: every tab the workspace holds.
-//
-// The tab is named the way the window names it, by its id or by the page's address when the record
-// has no id, and the two sides must agree: this is the second half of `tabKeyOf` in
-// `frontend/src/lib/recordTabs.ts`.
+// har exports one tab's capture (or all of it, for an empty key) as HAR. Tab keys must match
+// tabKeyOf in frontend/src/lib/recordTabs.ts.
 func (s *History) har(ctx context.Context, tabKey string) ([]byte, string, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 
-	// The store's own read and not List: the list is capped at what the panel draws, and an export
-	// that quietly left out the two-hundred-and-first request would be a file that lies about the
-	// session it claims to be.
+	// The store's uncapped read, not List, which stops at what the panel draws.
 	records, err := s.store.Records(ctx, workspace, domain.SourceBrowser, 0)
 	if err != nil {
 		return nil, "", err
@@ -90,21 +84,17 @@ func (s *History) har(ctx context.Context, tabKey string) ([]byte, string, error
 	return data, name, nil
 }
 
-// A body that cannot be read is no body: losing the answer to a large one is no reason to write no
-// file at all. It goes through the lazy read rather than the store, so a record of another device
-// is fetched as the file is written; otherwise an export of a session kept elsewhere would be a
-// file of empty bodies.
+// body reads through the lazy loader so another device's bodies are fetched; an unreadable body is
+// written empty rather than failing the file.
 func (s *History) body(ctx context.Context, rec domain.Record, side domain.BodySide) string {
-	text, err := s.Body(ctx, rec.ID, side)
+	text, err := s.content(ctx, rec.ID, side)
 	if err != nil {
 		return ""
 	}
 	return text
 }
 
-// tabKeyOf names the tab a record was captured in. A tab's own number counts only where the record
-// was captured: another device numbers its tabs from its own first one, so a number from there is
-// prefixed, or two devices' seventh tabs would be one tab here.
+// tabKeyOf names a record's tab; other devices' tab ids are prefixed, since each device numbers its own.
 func tabKeyOf(rec domain.Record) string {
 	key := "unknown"
 	switch {

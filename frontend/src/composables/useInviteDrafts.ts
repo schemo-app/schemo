@@ -7,10 +7,7 @@ export interface InviteDraft {
   roleId: string
 }
 
-/**
- * The rows of invitations being written. They are kept here rather than sent one at a time: inviting
- * three people is three rows written one after another, and the workspace they are for may not exist yet.
- */
+/** Invitation rows kept locally, since the workspace they are for may not exist yet. */
 export function useInviteDrafts() {
   const drafts = ref<InviteDraft[]>([])
   let next = 1

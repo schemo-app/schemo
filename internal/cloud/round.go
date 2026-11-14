@@ -21,9 +21,7 @@ func (s *Sync) exchangeRound(ctx context.Context, only []string) error {
 			return err
 		}
 		s.finishRound(err)
-		// A refusal ends the round quietly: asking the same question on a timer would be refused
-		// again. A server that did not answer is not a refusal (the account is fine and the weather
-		// is not), and the loop is where backing off for it lives.
+		// A refusal ends the round quietly; an unreachable server is retried with backoff by the loop.
 		if domain.CodeOf(err) == domain.CodeServerUnreachable {
 			return err
 		}
@@ -84,10 +82,8 @@ func (s *Sync) exchangeRound(ctx context.Context, only []string) error {
 	return first
 }
 
-// exchangeWorkspace is one workspace's half of a round: what this device owes it and what it owes this
-// device. A member with a reader's role is the ordinary case of a workspace read and not written, and
-// the account's word about it was adopted at the top of the round, so the workspace is pulled and not
-// pushed into: work sent there would only come back refused.
+// exchangeWorkspace pushes and pulls one workspace; a read-only member only pulls, since pushes
+// would be refused.
 func (s *Sync) exchangeWorkspace(
 	ctx context.Context,
 	caller domain.Caller,
@@ -141,9 +137,8 @@ func isRefusal(err error) bool {
 	return domain.AsFailure(err) != nil
 }
 
-// reconcile synchronizes local workspaces with remote workspaces and updates context on account switches.
-// It reports whether it changed anything, alongside an error too: what was done before the failure
-// is still done, and the round reads the workspaces again for it.
+// reconcile pairs local and remote workspaces and handles account switches. It reports whether
+// anything changed even on error, since earlier work stays done.
 func (s *Sync) reconcile(
 	ctx context.Context,
 	caller domain.Caller,
@@ -266,9 +261,7 @@ func (p *pairing) unpaired() ([]domain.SyncWorkspace, []domain.RemoteWorkspace) 
 	return here, there
 }
 
-// adoptKinds takes what the account says about a paired workspace, what it is for and what this person
-// may do in it, as the server's word: a role taken away arrives as a reader's answer, and the round
-// that reads it stops pushing what the workspace would refuse.
+// adoptKinds applies the account's kind and access for paired workspaces; a revoked role stops pushes.
 func (s *Sync) adoptKinds(ctx context.Context, p *pairing) (bool, error) {
 	did := false
 	for _, workspace := range p.workspaces {
@@ -323,9 +316,8 @@ func (s *Sync) mirrorRemoteWorkspaces(ctx context.Context, p *pairing, mine stri
 	return did, nil
 }
 
-// createWaiting makes in the account the workspaces that are only here. A refusal of the account is
-// told to the window and the others still go on: the first is `refused`, and `err` is what failed
-// here.
+// createWaiting creates local-only workspaces in the account, continuing past failures: `refused` is
+// the account's refusal, `err` a local failure.
 func (s *Sync) createWaiting(
 	ctx context.Context,
 	caller domain.Caller,

@@ -2,7 +2,7 @@
 import { useColorLabels } from '../../composables/useColorLabels'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Members } from '../../../bindings/schemo/internal/cloud'
-import { Code, type Role } from '../../../bindings/schemo/internal/domain'
+import { Feature, type Role } from '../../../bindings/schemo/internal/domain'
 import type { InviteOutcome } from '../../../bindings/schemo/internal/workspace'
 import Button from '../ui/Button.vue'
 import ColorSwatches from '../ui/ColorSwatches.vue'
@@ -16,17 +16,10 @@ import { useWorkspacesStore } from '../../stores/workspaces'
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { usePlan } from '../../composables/usePlan'
 import { useAccount } from '../../composables/useAccount'
-import { FEATURES, featureRefusal } from '../../lib/onboardingFeatures'
-import { describeFailure, t, te } from '../../i18n'
+import { describeFailure, t } from '../../i18n'
 
-// The form that makes a workspace: a name, a colour, what the workspace is meant to be and, for one meant
-// to be worked in together, the people to invite into it.
-//
-// Creation and settings are one screen: a team's workspace is made with its first invitations written
-// down, so it does not stop at a single email field. That works because a team's workspace is made in
-// the account at once rather than by the engine's next round (there is nobody to invite into a
-// workspace the account has never heard of), which is also why making one needs the connection and the
-// plan that carries it.
+// A team workspace is created in the account at once so its invitations can go out with it, which
+// needs a sign-in and a plan that carries the feature.
 const emit = defineEmits<{ (e: 'cancel'): void; (e: 'created'): void }>()
 
 const workspaces = useWorkspacesStore()
@@ -45,14 +38,11 @@ const rolesFailed = ref('')
 const { state, loadAccount } = useAccount()
 const signedOut = computed(() => state.value !== null && state.value.signedIn !== true)
 
-const mayShare = computed(() => includes(FEATURES.sharedWorkspaces))
+const mayShare = computed(() => includes(Feature.FeatureSharedSpaces))
 
 const colorLabels = useColorLabels('workspaces', WORKSPACE_COLORS)
 
-// The choice is drawn and not offered where the plan does not carry it: the server refuses it
-// either way, and a door drawn open that answers with a refusal is worse than one that says why.
-// Without a sign-in the choice stays open: what it needs is said in the tab itself, with the way in
-// under it.
+// Without the feature the choice is disabled with the reason; signed out, the tab explains itself.
 const kinds = computed(() => [
   { value: 'personal', label: t('workspaces.kindPersonal') },
   { value: 'team', label: t('workspaces.kindTeam'), soon: !mayShare.value },
@@ -106,13 +96,11 @@ async function create() {
   try {
     made = await workspaces.create({ name: name.value, color: color.value, kind: kind.value, invites })
   } catch (error) {
-    setNotice(failureText(error))
+    setNotice(describeFailure(error))
     return
   }
 
-  // The workspace exists either way once the account has it, and a letter the server refused does not
-  // undo it: the window says which address failed and hands the rest over, with the invitations
-  // that went out already in the workspace's list.
+  // The workspace exists once the account has it; a refused invitation does not undo it.
   const refused = made.invites.filter((one) => one.failure)
   if (refused.length > 0) {
     setNotice(
@@ -127,16 +115,6 @@ async function create() {
     clearNotice()
   }
   emit('created')
-}
-
-// A refusal in words. The plan's own sentence names a feature, and the name on the wire is not a
-// word anybody reads — `lib/features.ts` is where it becomes one.
-function failureText(error: unknown): string {
-  const failure = (error as { cause?: { code?: Code; args?: Record<string, string> } })?.cause
-  if (failure?.code === Code.CodeFeatureRequired) {
-    return featureRefusal(t, te, failure.args?.feature ?? '')
-  }
-  return describeFailure(error)
 }
 
 function cancel() {

@@ -9,11 +9,50 @@ import * as command$0 from "../convert/command/models.js";
 import * as domain$0 from "../domain/models.js";
 
 /**
+ * BinaryPreview is the prefix and optional playable media of a stored response.
+ */
+export interface BinaryPreview {
+    "contentType": string;
+    "hex": string;
+    "hexBytes": number;
+    "mediaURL"?: string;
+}
+
+/**
  * Copy is the request written as a command for one tool, and what that notation had to leave out.
  */
 export interface Copy {
     "text": string;
     "omitted": command$0.Omission[] | null;
+}
+
+export interface GraphQLField {
+    "name": string;
+    "signature": string;
+    "query"?: string;
+    "variables"?: string;
+}
+
+export interface GraphQLGroup {
+    "name": string;
+    "fields": GraphQLField[] | null;
+}
+
+/**
+ * GraphQLSchema lists the operations of a schema, each with a query ready to insert.
+ */
+export interface GraphQLSchema {
+    "groups": GraphQLGroup[] | null;
+
+    /**
+     * Descriptors are the merged type definitions, kept with the request so it opens offline.
+     */
+    "descriptors": string;
+
+    /**
+     * Sources are the ones the schema was read from, each with what it gave.
+     */
+    "sources": domain$0.SchemaSource[] | null;
 }
 
 /**
@@ -43,9 +82,8 @@ export interface Paste {
 }
 
 /**
- * Preview is what follows from a draft without sending it: the names nothing answers, the rows the
- * authorization and the app add, the state of a fetched token, and what the levels above answer
- * for "Inherit".
+ * Preview is what a draft implies without sending: unresolved names, added rows, the token state and
+ * what "Inherit" resolves to.
  */
 export interface Preview {
     "missing": string[] | null;
@@ -53,6 +91,31 @@ export interface Preview {
     "auto": domain$0.ProjectedRow[] | null;
     "token"?: domain$0.AuthToken | null;
     "inherited"?: domain$0.Auth | null;
+}
+
+export interface RPCMethod {
+    "clientStreaming"?: boolean;
+    "service": string;
+    "name": string;
+    "input": string;
+    "output": string;
+    "example": string;
+    "streaming": boolean;
+}
+
+export interface RPCSchema {
+    "descriptors": string;
+    "methods": RPCMethod[] | null;
+
+    /**
+     * Warnings name the services reflection listed but could not describe.
+     */
+    "warnings"?: string[] | null;
+
+    /**
+     * Sources are the ones the schema was read from, each with what it gave.
+     */
+    "sources": domain$0.SchemaSource[] | null;
 }
 
 /**
@@ -64,9 +127,7 @@ export interface RequestFailed {
     "error": string;
 
     /**
-     * Failure is the same news in the window's terms (the code and the values its sentence needs)
-     * when the app is the side that refused. An error from the network has none, and the window
-     * shows the message beside it.
+     * Failure is the app's own refusal in the window's terms; network errors have none.
      */
     "failure"?: domain$0.Failure | null;
 }
@@ -97,11 +158,12 @@ export interface RunProgress {
 }
 
 /**
- * Seed is a whole request from outside a draft: a run's request, a followed link, a pasted
- * command, a request a script handed back. Headers are pairs because a request can carry the same
- * name twice.
+ * Seed is a whole request from outside a draft (a run, a link, a command, a script's answer).
+ * Headers are pairs because names repeat.
  */
 export interface Seed {
+    "protocol"?: domain$0.Protocol;
+    "options"?: domain$0.ProtocolOptions | null;
     "method": string;
     "url": string;
     "body": string;
@@ -120,4 +182,11 @@ export interface Seed {
      * not the window's own: a run sends requests saved with a pin.
      */
     "environmentId"?: string;
+}
+
+export interface StreamSnapshot {
+    "open": boolean;
+    "messages": domain$0.StreamMessage[] | null;
+    "count": number;
+    "first": number;
 }

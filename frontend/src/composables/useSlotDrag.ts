@@ -11,10 +11,6 @@ export interface SlotDrag {
   moved: boolean
 }
 
-const THRESHOLD = 5
-const SETTLE_QUIET = 20
-const SETTLE_MS = 45
-
 interface SlotDragOptions {
   axis: 'x' | 'y'
   ids: () => string[]
@@ -25,17 +21,13 @@ interface SlotDragOptions {
   cursor?: string
 }
 
-/**
- * The gesture of an ordered row of equal slots — the tab strip's tabs, a table's rows: a slot is
- * pressed, carried along the axis while the ones it passes slide out of the way, and let go at a
- * place in the list. The order itself is Go's: this only says where the slot landed.
- */
+/** Drag-reordering of equal slots along an axis; reports where a slot landed, since Go owns the order. */
 export function useSlotDrag({ axis, ids, size, drop, cursor = '' }: SlotDragOptions) {
   const drag = ref<SlotDrag | null>(null)
   const settle = ref<{ id: string; off: number } | null>(null)
   const noAnim = ref(false)
-  const quiet = useTimeoutFn(() => (noAnim.value = false), SETTLE_QUIET, { immediate: false })
-  const fade = useTimeoutFn(() => (settle.value = null), SETTLE_MS, { immediate: false })
+  const quiet = useTimeoutFn(() => (noAnim.value = false), 20, { immediate: false })
+  const fade = useTimeoutFn(() => (settle.value = null), 45, { immediate: false })
 
   let held: SlotDrag | null = null
   let start = 0
@@ -63,7 +55,7 @@ export function useSlotDrag({ axis, ids, size, drop, cursor = '' }: SlotDragOpti
   function onMove(e: PointerEvent): void {
     if (!held) return
     const raw = at(e) - start
-    if (!held.moved && Math.abs(raw) < THRESHOLD) return
+    if (!held.moved && Math.abs(raw) < 5) return
     if (!held.moved) {
       held.moved = true
       document.body.style.userSelect = 'none'
@@ -106,10 +98,7 @@ export function useSlotDrag({ axis, ids, size, drop, cursor = '' }: SlotDragOpti
   })
   tryOnScopeDispose(release)
 
-  /**
-   * How far the slot at an index stands from its place: the carried one by the pointer, the ones it
-   * passes a slot aside on the side it came from, and the one just let go by what is left to close.
-   */
+  /** The carried slot follows the pointer; the ones it passed shift by a slot. */
   function offsetOf(index: number, id: string): number {
     if (settle.value?.id === id) return settle.value.off
     const carried = drag.value

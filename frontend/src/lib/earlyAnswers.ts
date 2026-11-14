@@ -3,20 +3,16 @@ import type { Record as RequestRecord } from '../../bindings/schemo/internal/dom
 /** The result of an early execution attempt: either a record or an instant failure. */
 export type EarlyAnswer = { record: RequestRecord } | { failed: true }
 
-// How many answers are kept for a caller that has not asked yet: an attempt is one request, and a
-// window that never claims an answer must not grow the buffer forever.
-const LIMIT = 8
-
-// An answer that lands before the call which started the attempt has returned: the events carry it
-// here, and the caller that comes back for its id takes it out. A module singleton, like `urlFocus`
-// and `bodyFocus`, because the two sides of the race live in different modules.
+// An answer that arrives before its call returns; a module singleton because the two sides of the
+// race live in different modules.
 const held = new Map<string, EarlyAnswer>()
 
 export function holdAnswer(id: string, answer: EarlyAnswer) {
   held.delete(id)
   held.set(id, answer)
 
-  if (held.size > LIMIT) {
+  // A window that never claims its answers must not grow the buffer forever.
+  if (held.size > 8) {
     const oldest = held.keys().next().value
     if (oldest !== undefined) {
       held.delete(oldest)

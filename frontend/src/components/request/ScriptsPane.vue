@@ -24,10 +24,7 @@ function inherited(which: 'pre' | 'post'): string {
   return source.inheritedScript(which)?.text ?? ''
 }
 
-// What the boxes show: the code of the level the window is on. Reading it is the level's own
-// business (a collection card reads the node it opened, the command line reads its draft), so the
-// level is asked for and the answer is applied only when it is about that level and nobody is
-// typing in it.
+// The answer applies only while it is still about this level and nobody is typing.
 watch(
   [() => source.scriptsLevel, () => source.scripts],
   ([level]) => {

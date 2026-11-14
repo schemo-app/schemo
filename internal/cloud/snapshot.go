@@ -15,9 +15,8 @@ import (
 	snapshotv1 "github.com/schemo-app/proto/snapshot/v1"
 )
 
-// Encode writes a document as the bytes a publish carries: one JSON envelope, compressed, with the
-// digest of what it says. The digest is of the uncompressed document, and the server recomputes it
-// from the bytes it expands.
+// Encode writes a document as compressed JSON with the digest of the uncompressed bytes, which the
+// server recomputes.
 func Encode(snapshot snapshotv1.Snapshot) ([]byte, string, error) {
 	document, err := json.Marshal(snapshot)
 	if err != nil {
@@ -39,12 +38,8 @@ func Encode(snapshot snapshotv1.Snapshot) ([]byte, string, error) {
 	return packed.Bytes(), digest, nil
 }
 
-// Digest is the identity of a document's content, as both this device and the server compute it.
-// Two documents that differ only in which build wrote them, or in which language they are read in,
-// are the same document: those two fields are dropped before hashing, and everything else is
-// written in the one order that does not depend on who wrote it (keys sorted at every level,
-// numbers as written). That is what lets a device say a page is behind without publishing to find
-// out.
+// Digest hashes a document's content as the server does: the writer and language fields are dropped
+// and keys sorted, so a device can tell a page is behind without publishing.
 func Digest(document []byte) (string, error) {
 	var fields map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(document))
@@ -150,9 +145,7 @@ func outlineOf(snapshot snapshotv1.Snapshot) ([]domain.OutlineItem, error) {
 	return out, nil
 }
 
-// pending is what the collection has that the page does not: the document built now, read against
-// the outline the last publish put up. It is the entry a publish would add to the history, and the
-// same comparison the page's own record is made of.
+// pending is what changed since the last publish's outline: the entry a publish would add to history.
 func pending(
 	held domain.Publication, snapshot snapshotv1.Snapshot,
 ) ([]domain.PageItem, bool, error) {
@@ -164,9 +157,7 @@ func pending(
 	return items, cut, nil
 }
 
-// moved is what the page did not have, has otherwise and no longer has: three signs off the
-// outlines. Gone requests are said last, after the page's own order, because a request that is not
-// there has no place among the ones that are.
+// moved compares outlines into added, changed and removed items, removed ones last.
 func moved(before, now []domain.OutlineItem) ([]domain.PageItem, bool) {
 	had := make(map[string]domain.OutlineItem, len(before))
 	for _, item := range before {
@@ -210,9 +201,7 @@ func eachItem(level domain.Collection, seen func(id string)) {
 	}
 }
 
-// within keeps the outline entries one folder holds. A folder with no set of its own is the folder
-// the page is of, and every entry is already its own: filtering would be a lookup that always
-// answers yes and walks both outlines to do it.
+// within keeps a folder's outline entries; a nil set means the page's own folder and keeps all.
 func within(items []domain.OutlineItem, held map[string]bool) []domain.OutlineItem {
 	if held == nil {
 		return items
@@ -226,9 +215,7 @@ func within(items []domain.OutlineItem, held map[string]bool) []domain.OutlineIt
 	return out
 }
 
-// appended is the history a publish leaves behind: this release in front of the others, or the
-// history exactly as it was when nothing moved. A release that says nothing is not written, since
-// an entry with no requests under it says that it did not.
+// appended puts this release in front of the history; an empty release is not written.
 func appended(
 	history []domain.PageRelease,
 	items []domain.PageItem,

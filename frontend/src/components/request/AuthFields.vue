@@ -20,7 +20,6 @@ const emit = defineEmits<{
   commit: []
 }>()
 
-
 function tokensIn(value: string): boolean {
   return value.trim() !== '' && parseTokens(value).length > 0
 }
@@ -32,22 +31,23 @@ function covered(value: string): boolean {
 const revealed = ref<Record<string, boolean>>({})
 
 function valueOf(field: Field): string {
-  const given = auth.fields?.[field.key]
-  if (given !== undefined && given !== null) return given
-  return scheme?.fields?.find((schemeField) => schemeField.key === field.key)?.default ?? ''
+  return valueAt(field.key)
+}
+
+// What the person typed, or the scheme's default while they have not.
+function valueAt(key: string): string {
+  return auth.fields?.[key] ?? scheme?.fields?.find((field) => field.key === key)?.default ?? ''
+}
+
+function placeholderOf(field: Field): string | undefined {
+  return field.placeholder ? textOf(field.placeholder) : undefined
 }
 
 const fields = () => (scheme?.fields ?? []).filter(shown)
 
 function shown(field: Field): boolean {
   if (!field.when) return true
-  const held = auth.fields?.[field.when.key]
-  const answer = held !== undefined && held !== null ? held : (defaultOf(field.when.key) ?? '')
-  return (field.when.values ?? []).includes(answer)
-}
-
-function defaultOf(key: string): string {
-  return scheme?.fields?.find((field) => field.key === key)?.default ?? ''
+  return (field.when.values ?? []).includes(valueAt(field.when.key))
 }
 
 function choiceLabel(field: Field): string {
@@ -74,7 +74,7 @@ function onInput(field: Field, event: Event) {
         <input
           :type="revealed[field.key] ? 'text' : 'password'"
           :value="valueOf(field)"
-          :placeholder="field.placeholder ? textOf(field.placeholder) : undefined"
+          :placeholder="placeholderOf(field)"
           :class="{ mono: field.mono }"
           spellcheck="false"
           autocomplete="off"
@@ -96,7 +96,7 @@ function onInput(field: Field, event: Event) {
         <textarea
           v-var-peek
           :value="valueOf(field)"
-          :placeholder="field.placeholder ? textOf(field.placeholder) : undefined"
+          :placeholder="placeholderOf(field)"
           :class="{ veiled: covered(valueOf(field)) }"
           :style="{ height: field.height && scale !== 'rows' ? `${field.height}px` : undefined }"
           spellcheck="false"
@@ -130,7 +130,7 @@ function onInput(field: Field, event: Event) {
           v-var-peek
           :type="field.kind === 'number' ? 'number' : 'text'"
           :value="valueOf(field)"
-          :placeholder="field.placeholder ? textOf(field.placeholder) : undefined"
+          :placeholder="placeholderOf(field)"
           :class="{ veiled: covered(valueOf(field)) }"
           spellcheck="false"
           autocomplete="off"

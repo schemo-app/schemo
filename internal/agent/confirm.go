@@ -23,9 +23,8 @@ type ConfirmRequest struct {
 	Name      string `json:"name"`
 }
 
-// confirmations holds the sends that are waiting for an answer. The question is delivered as an
-// event and the answer arrives on a channel of its own: the tool call is in flight while the window
-// draws the question, and nothing polls.
+// confirmations holds sends awaiting an answer: the question goes out as an event and the answer comes
+// back on a channel, so nothing polls.
 type confirmations struct {
 	mu      sync.Mutex
 	pending map[string]chan bool

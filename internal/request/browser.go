@@ -19,21 +19,16 @@ import (
 	"schemo/internal/domain"
 )
 
-// Browser is what the two grants that send the person somewhere need and cannot do themselves: put
-// a page in front of them. It is declared here rather than imported, because the window is the
-// transport's business.
+// Browser shows the provider's page for the interactive grants.
 type Browser interface {
 	OpenURL(url string) error
 }
 
-// signInTimeout is how long the app waits for the person to finish. A browser left on a login
-// screen for longer is one nobody is coming back to, and the alternative to giving up is a send
-// that never returns.
+// signInTimeout is how long an interactive grant waits before giving up.
 const signInTimeout = 5 * time.Minute
 
-// signIn is the two grants that need a person: a loopback listener for the answer, a browser sent
-// to the provider, and a wait. The page shown meanwhile comes from the window (see
-// domain.SignInPages), since Go has no catalogue to word it from.
+// signIn runs an interactive grant: a loopback listener, the browser at the provider, and a wait. The
+// pages' words come from the window (domain.SignInPages).
 func signIn(
 	ctx context.Context,
 	browser Browser,
@@ -63,7 +58,7 @@ func signIn(
 	answers := make(chan signInAnswer, 1)
 	server := &http.Server{
 		Handler:           &callback{state: state, implicit: implicit, answers: answers, pages: pages},
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: domain.LoopbackHeaderTimeout,
 	}
 	go func() { _ = server.Serve(listener) }()
 	defer func() { _ = server.Close() }()
@@ -115,9 +110,7 @@ type callback struct {
 	answers  chan<- signInAnswer
 	// pages is what those answers say, in the words the window handed over.
 	pages domain.SignInPages
-	// once guards the channel: a reloaded page or two simultaneous provider requests must not block
-	// on a channel nobody reads any more. Handlers run on their own goroutines, so this is a lock
-	// rather than a flag.
+	// once guards the channel against reloads and parallel callbacks; handlers run concurrently.
 	once sync.Once
 }
 
@@ -141,9 +134,8 @@ func (c *callback) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writePage(w, pageTemplate, c.pages.Done)
 			return
 		}
-		// The implicit grant's answer is after the `#`, which a server never receives: the page
-		// reads it in the browser and hands it back in a request of its own. The state is therefore
-		// checked in that request, not here.
+		// The implicit grant's answer is in the fragment, which the server never sees: the page posts it
+		// back, and the state is checked then.
 		writePage(w, fragmentTemplate, c.pages)
 
 	case "/token":
@@ -208,10 +200,8 @@ func nonce() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// pageTemplate is one page a sign-in puts in the browser; fragmentTemplate is the implicit grant's
-// redirect page, which hands the browser's fragment back in a request of its own. Words go in
-// through html/template, not a format string: a translated sentence containing an ampersand or
-// bracket must reach the page as text, and the same escaping applies in a script context.
+// Sign-in pages shown in the browser; fragmentTemplate posts the implicit grant's fragment back.
+// html/template escapes translated text, including inside the script.
 var (
 	pageTemplate = template.Must(template.New("page").Parse(
 		`<!doctype html><meta charset="utf-8"><title>{{.Title}}</title>

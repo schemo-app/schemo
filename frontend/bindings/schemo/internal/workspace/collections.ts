@@ -19,31 +19,23 @@ import * as domain$0 from "../domain/models.js";
 import * as $models from "./models.js";
 
 /**
- * Contents reads the requests a collection holds, as its page draws them: a name, a method, an
- * address and the folder each sits in. It covers everything inside the collection, not the level
- * alone: the table is what running the collection would send, and a run reaches the whole subtree.
+ * Contents lists every request under a collection (what a run would send) with name, method, address
+ * and folder.
  */
 export function Contents(collectionID: string): $CancellablePromise<domain$0.LevelRow[] | null> {
     return $Call.ByID(3807591611, collectionID);
 }
 
 /**
- * CreateCollection adds an empty collection at the end of a level. The name is given rather than
- * invented: the window asks for it in the tree. The level is the top of the tree when parentID is
- * empty, and the collection it names otherwise; a folder inside a folder is a collection inside
- * one. The created row comes back with the tree for the reason CreateNode's does: the id is Go's to
- * mint, and a lookup by name would find the older row of the same name (a folder's name is not
- * unique, even within one level).
+ * CreateCollection adds an empty collection at the end of a level (the top when parentID is empty).
+ * It returns the new row, since names are not unique and the id is Go's.
  */
 export function CreateCollection(name: string, description: string, parentID: string): $CancellablePromise<domain$0.Collection> {
     return $Call.ByID(333955153, name, description, parentID);
 }
 
 /**
- * CreateNode adds a request to the end of a collection's level.
- * 
- * It returns the row that appeared and the tree it appeared in: the window needs the id Go minted,
- * and looking it up by name afterwards would find the older row of the same name.
+ * CreateNode adds a request at the end of a level and returns the new row with the tree.
  */
 export function CreateNode($in: $models.RequestDraft): $CancellablePromise<domain$0.CollectionNode> {
     return $Call.ByID(382650573, $in);
@@ -66,9 +58,7 @@ export function Duplicate(id: string, suffix: string): $CancellablePromise<void>
 }
 
 /**
- * Move puts a collection or request where it was dropped. The position counts the level the way
- * the tree draws it (requests and collections are one list); an empty parent is the top level,
- * which only a collection can take.
+ * Move drops a row at a position counted over the level's mixed list; only a collection may go to the top.
  */
 export function Move(id: string, parentID: string, position: number): $CancellablePromise<void> {
     return $Call.ByID(3538919356, id, parentID, position);
@@ -83,10 +73,7 @@ export function Node(id: string): $CancellablePromise<domain$0.CollectionNode> {
 }
 
 /**
- * SaveExamples writes the answers kept beside a request. The whole set arrives as the pane holds
- * it, in order; only a request has them, so a collection answers not-found like any unknown id.
- * Nothing in an example is refused: a status the server never sent and a body that is not JSON are
- * both things a person may write down.
+ * SaveExamples writes a request's examples in order; any status or body is accepted.
  */
 export function SaveExamples(id: string, examples: domain$0.ResponseExample[] | null): $CancellablePromise<domain$0.CollectionNode> {
     return $Call.ByID(1318337831, id, examples);

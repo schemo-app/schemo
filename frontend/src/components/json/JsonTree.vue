@@ -6,9 +6,6 @@ import { isContainer, jsonValueView, type JsonNode } from '../../lib/jsonTree'
 import type { InlineReadings } from '../../lib/reading'
 import { t, textOf } from '../../i18n'
 
-// A JSON body, read as a tree: every value under the key that names it, in the order it was
-// written. An answer that is JSON:API has a tree of its own; this one is for everything else the
-// server sends.
 const {
   nodes,
   readings,
