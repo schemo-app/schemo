@@ -44,6 +44,37 @@ func TestTwoDevicesShareACollection(t *testing.T) {
 	}
 }
 
+func TestInspectorSuggestsASavedRequest(t *testing.T) {
+	t.Parallel()
+	device := newDevice(t)
+	ctx := t.Context()
+
+	const template = "https://api.example.test/products/:id"
+	draft := domain.NewDraft()
+	draft.URL = template
+	saved, err := device.Drafts.SaveAsNewCollection(ctx, "Catalog", "Read product", draft)
+	if err != nil {
+		t.Fatalf("save the request: %v", err)
+	}
+	opened, err := device.Inspector.Open(`{"data":[{"type":"products","id":"p-101"}]}`, "application/json")
+	if err != nil {
+		t.Fatalf("open the response: %v", err)
+	}
+
+	const path = "$.data[0].id"
+	want := domain.Suggestion{
+		NodeID: saved.ID,
+		Name:   "Read product",
+		Method: "GET",
+		URL:    template,
+		Filled: "https://api.example.test/products/p-101",
+	}
+	got, err := device.Inspector.Suggest(ctx, opened.ID, path)
+	if err != nil || len(got) != 1 || got[0] != want {
+		t.Fatalf("Suggest(%q) = %+v, %v, want [%+v]", path, got, err, want)
+	}
+}
+
 func TestASavedRequestSendsWithASecretAndExportsWithoutIt(t *testing.T) {
 	got := make(chan string, 1)
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

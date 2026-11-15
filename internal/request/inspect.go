@@ -166,7 +166,7 @@ func (s *Inspector) TypeFormats() []domain.TypeFormat { return domain.TypeFormat
 
 // Tree supplies the collections whose requests a value is offered to.
 type Tree interface {
-	Collections(ctx context.Context, workspaceID string) ([]domain.Collection, error)
+	CollectionsWithRequestURLs(ctx context.Context, workspaceID string) ([]domain.Collection, error)
 }
 
 // most is how many requests are offered.
@@ -187,7 +187,7 @@ func (s *Inspector) Suggest(ctx context.Context, id, path string) ([]domain.Sugg
 	if err != nil {
 		return nil, err
 	}
-	tree, err := s.tree.Collections(ctx, workspace)
+	tree, err := s.tree.CollectionsWithRequestURLs(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}

@@ -50,7 +50,7 @@ type fakeTree struct {
 	err  error
 }
 
-func (t fakeTree) Collections(context.Context, string) ([]domain.Collection, error) {
+func (t fakeTree) CollectionsWithRequestURLs(context.Context, string) ([]domain.Collection, error) {
 	return t.held, t.err
 }
 

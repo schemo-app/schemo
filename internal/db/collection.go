@@ -51,9 +51,17 @@ func nodeFrom(e entity) (domain.CollectionNode, error) {
 	return n, err
 }
 
-// Collections reads the whole tree of a workspace. Tree rows carry what the sidebar draws and what
-// inheritance needs (auth, variables), not the request payloads.
+// Collections reads the workspace tree with the metadata needed for navigation and inheritance.
 func (s *Store) Collections(ctx context.Context, workspaceID string) ([]domain.Collection, error) {
+	return s.collections(ctx, workspaceID, false)
+}
+
+// CollectionsWithRequestURLs includes saved address templates so the inspector can match requests.
+func (s *Store) CollectionsWithRequestURLs(ctx context.Context, workspaceID string) ([]domain.Collection, error) {
+	return s.collections(ctx, workspaceID, true)
+}
+
+func (s *Store) collections(ctx context.Context, workspaceID string, includeURLs bool) ([]domain.Collection, error) {
 	rows, err := listEntities(ctx, s.db, workspaceID,
 		kinds(domain.EntityCollection, domain.EntityRequest), "")
 	if err != nil {
@@ -67,10 +75,14 @@ func (s *Store) Collections(ctx context.Context, workspaceID string) ([]domain.C
 			if err != nil {
 				return nil, err
 			}
-			items[n.CollectionID] = append(items[n.CollectionID], domain.CollectionNode{
+			item := domain.CollectionNode{
 				ID: n.ID, CollectionID: n.CollectionID, Name: n.Name, Position: n.Position,
 				Method: n.Method, Protocol: n.Protocol, Description: n.Description, Auth: n.Auth,
-			})
+			}
+			if includeURLs {
+				item.URL = n.URL
+			}
+			items[n.CollectionID] = append(items[n.CollectionID], item)
 			continue
 		}
 		c, err := collectionFrom(row)
