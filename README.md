@@ -21,8 +21,8 @@
   </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/media/schemo-light.png">
-  <img src="./docs/media/schemo-dark.png" alt="Schemo" width="820">
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/media/schemo-dark.png">
+  <img src="./docs/media/schemo-light.png" alt="Schemo" width="820">
 </picture>
 
 </div>
