@@ -1,10 +1,10 @@
 
 <div align="center">
   <a href="https://schemo.app">
-    <img src="./logo.svg" alt="Schemo" width="88" height="88">
+    <img src="./logo.svg" alt="Schemo" width="88" height="88" style="margin-bottom: -20px;">
   </a>
 
-  <h1>Schemo</h1>
+  <h2>Schemo</h2>
 
   <p>
     Open-source desktop API client for building, testing, and sharing requests.
