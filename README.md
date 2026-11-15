@@ -18,7 +18,7 @@
   <p>
     <a href="#features">Features</a> ·
     <a href="#installation">Installation</a> ·
-    <a href="#documentation">Documentation</a>
+    <a href="https://docs.schemo.app">Documentation</a>
   </p>
 
   <p>
