@@ -41,7 +41,10 @@ const load = await vite({
     export const draftById = id => ({ id, method: 'GET', url: '', body: '' });
     export const contentOf = id => globalThis.tabContent.instances.get(id) ?? null;
     export const keepOnly = ids => globalThis.tabContent.calls.push(['keep', ids]);
-    export const warmContent = tab => globalThis.tabContent.calls.push(['warm', tab.id]);
+    export const warmContent = tab => {
+      globalThis.tabContent.calls.push(['warm', tab.id]);
+      return globalThis.tabContent.warm?.(tab);
+    };
     export const ensureContent = tab => globalThis.tabContent.calls.push(['ensure', tab.id]);
     export const markBornEmpty = id => globalThis.tabContent.calls.push(['born', id]);
     export const dropContent = id => globalThis.tabContent.calls.push(['drop', id]);
@@ -167,6 +170,31 @@ function setupTabs() {
 }
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+
+test('a related request fills its address after the draft loads and keeps the source tab', async () => {
+  const tabs = setupTabs()
+  await tabs.load()
+  await tabs.openNode('inventory')
+  const sourceId = tabs.activeId
+  const draft = deferred()
+  const addresses = []
+  globalThis.tabContent.warm = (tab) => tab.ref === 'product' ? draft.promise : undefined
+
+  const url = 'https://api.example.test/products/p-101'
+  const opening = tabs.openNodeWithUrl('product', url)
+  await settle()
+  assert.deepEqual(addresses, [])
+  assert.equal(tabs.activeTab.ref, 'product')
+  assert.ok(tabs.tabs.some(tab => tab.id === sourceId))
+
+  draft.resolve({
+    kind: 'request',
+    node: { value: { node: { id: 'product' } } },
+    draft: { setUrl: (value) => addresses.push(value) },
+  })
+  await opening
+  assert.deepEqual(addresses, [url])
+})
 
 function setupCollections() {
   setupTabs()

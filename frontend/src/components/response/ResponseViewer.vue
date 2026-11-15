@@ -157,7 +157,7 @@ const nodeBar = useTemplateRef<InstanceType<typeof ResponseNodeBar>>('nodeBar')
 const node = computed(() => {
   if (!inspectable.value) return null
   const view = inspection.node.value
-  return view && view.path !== '$' && view.path === selected.value ? view : null
+  return view?.path === '$' ? null : view
 })
 
 // The view stays on the same reading when the response changes. Its selection belongs to the old body.

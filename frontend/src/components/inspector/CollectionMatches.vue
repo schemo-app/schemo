@@ -33,13 +33,9 @@ watch(
   { immediate: true }
 )
 
-// Opens the request as its card with the address filled in; the card is edited, not saved.
 async function open(one: Suggestion) {
   collections.reveal(one.nodeId)
-  if (!(await collections.select(one.nodeId))) return
-  const tabs = useTabsStore().pane
-  tabs?.setUrl(one.filled)
-  await tabs?.flush()
+  await useTabsStore().openNodeWithUrl(one.nodeId, one.filled)
 }
 </script>
 

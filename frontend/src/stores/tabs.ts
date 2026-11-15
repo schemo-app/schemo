@@ -155,6 +155,15 @@ export const useTabsStore = defineStore('tabs', () => {
     await open({ kind: TabKind.TabKindRequest, ref: id, draftId: id as DraftID, newTab: keep, background })
   }
 
+  async function openNodeWithUrl(id: string, url: string) {
+    await openNode(id, true)
+    const tab = activeTab.value
+    if (tab?.ref !== id || tab.kind !== TabKind.TabKindRequest) return
+    const instance = await warmContent(tab)
+    if (activeId.value !== tab.id || instance.kind !== TabKind.TabKindRequest || instance.node.value?.node.id !== id) return
+    instance.draft.setUrl(url)
+  }
+
   /** Opens a history record — sent by hand or captured: both are requests laid out from it. */
   async function openRecord(id: string, keep = false, background = false) {
     await open({ kind: TabKind.TabKindRequest, record: id, newTab: keep, background })
@@ -269,6 +278,7 @@ export const useTabsStore = defineStore('tabs', () => {
     openPublications,
     openCollection,
     openNode,
+    openNodeWithUrl,
     openRecord,
     editRecord,
     activate,
