@@ -15,13 +15,11 @@
     <a href="./LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT license"></a>
   </p>
 
-  <p>
-    <sub>
-      <a href="#features">Features</a> ·
-      <a href="#installation">Installation</a> ·
-      <a href="#documentation">Documentation</a>
-    </sub>
-  </p>
+  <sub>
+    <a href="#features">Features</a> ·
+    <a href="#installation">Installation</a> ·
+    <a href="#documentation">Documentation</a>
+  </sub>
 
   <p>
     <a href="https://schemo.app">
