@@ -10,22 +10,16 @@
   </p>
 
   <p>
-    <a href="https://github.com/schemo-app/schemo/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows%20%7C%20Linux-4f46e5" alt="Download for macOS, Windows, or Linux"></a>
-    <a href="https://github.com/schemo-app/schemo/actions/workflows/ci.yml"><img src="https://github.com/schemo-app/schemo/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-    <a href="./LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT license"></a>
+    <a href="https://github.com/schemo-app/schemo/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows%20%7C%20Linux-4f46e5" alt="Download for macOS, Windows, or Linux" align="middle"></a>
+    <a href="https://github.com/schemo-app/schemo/actions/workflows/ci.yml"><img src="https://github.com/schemo-app/schemo/actions/workflows/ci.yml/badge.svg" alt="CI" align="middle"></a>
+    <a href="./LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT license" align="middle"></a>
   </p>
-
-  <br>
 
   <p>
-    <sub>
-      <a href="#features">Features</a> ·
-      <a href="#installation">Installation</a> ·
-      <a href="#documentation">Documentation</a>
-    </sub>
+    <a href="#features">Features</a> ·
+    <a href="#installation">Installation</a> ·
+    <a href="#documentation">Documentation</a>
   </p>
-
-  <br>
 
   <p>
     <a href="https://schemo.app">
