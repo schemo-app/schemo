@@ -4,7 +4,10 @@
   </a>
 
   <h3>Schemo</h3>
+
+  <p>
   <strong>Open-source desktop API client for testing and debugging APIs</strong>
+  </p>
 
   <p>
     <a href="https://github.com/schemo-app/schemo/releases"><img src="https://img.shields.io/badge/Download-macOS%20%7C%20Windows%20%7C%20Linux-4f46e5" alt="Download for macOS, Windows, or Linux"></a>
