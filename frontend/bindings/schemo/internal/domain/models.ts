@@ -1278,7 +1278,8 @@ export interface ReadingRow {
     "value": string;
 
     /**
-     * Shape says how to draw Value: "text", "code", "time" (RFC 3339) or "colour".
+     * Shape says how to draw Value: "text" as it is, "word" through the window's catalogue,
+     * "code", "time" (RFC 3339), "date", "wallTime" or "colour".
      */
     "shape": string;
 }

@@ -236,6 +236,7 @@
     "membersLoading": "Спрашиваем облако…",
     "you": "Вы",
     "inviteEmail": "Почта",
+    "inviteAdd": "+ Добавить приглашение",
     "inviteMore": "+ ещё приглашение",
     "inviteWaiting": "Ждёт ответа",
     "inviteSince": "Приглашена · {ago}",

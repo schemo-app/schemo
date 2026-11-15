@@ -68,7 +68,7 @@ const expired = (row: ReadingRow): boolean => row.key === 'exp' && Date.parse(ro
       :key="row.key"
       :label="labelOf(row)"
       :text="row.value"
-      :mono="row.shape !== 'text'"
+      :mono="row.shape !== 'text' && row.shape !== 'word'"
     >
       <template v-if="row.shape === 'time'">
         {{ local(row.value) }}
@@ -81,7 +81,7 @@ const expired = (row: ReadingRow): boolean => row.key === 'exp' && Date.parse(ro
       <template v-else-if="row.shape === 'colour'">
         <span class="swatch" :style="{ background: row.value }"></span>{{ row.value }}
       </template>
-      <template v-else-if="row.shape === 'text'">{{ textOf(`inspector.values.${row.value}`) }}</template>
+      <template v-else-if="row.shape === 'word'">{{ textOf(`inspector.values.${row.value}`) }}</template>
     </CopyRow>
 
     <pre v-if="reading.nested" class="nested">{{ reading.nested }}</pre>

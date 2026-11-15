@@ -92,7 +92,12 @@ const {
       />
     </div>
 
-    <InviteFoot :failure :busy="asking" @add="addDraft" />
+    <InviteFoot
+      :failure
+      :busy="asking"
+      :has-invitations="drafts.length > 0 || Boolean(team?.invites?.length)"
+      @add="addDraft"
+    />
   </template>
 </template>
 

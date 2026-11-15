@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -292,6 +293,9 @@ type fakeAuth struct {
 	// shown is the same question with nobody sending — the rows the window draws — kept apart.
 	asked []domain.Auth
 	shown []domain.Auth
+	// obtained and held are what a token was asked for by hand and what its state was read for.
+	obtained []domain.Auth
+	held     []domain.Auth
 }
 
 func (f *fakeAuth) Materialize(
@@ -308,11 +312,17 @@ func (f *fakeAuth) Project(auth domain.Auth, _ domain.AuthRequest) (domain.AuthO
 	return f.answer, nil
 }
 
-// Obtain and Forget do nothing here: what these tests are about is the pipeline, and a token
-// somebody else issues is tested where it is fetched and kept.
-func (f *fakeAuth) Obtain(context.Context, domain.Auth) error { return nil }
-func (f *fakeAuth) Forget(domain.Auth)                        {}
-func (f *fakeAuth) Held(domain.Auth) domain.AuthToken         { return f.token }
+// Obtain and Held only remember what they were given: a token somebody else issues is tested where
+// it is fetched and kept.
+func (f *fakeAuth) Obtain(_ context.Context, auth domain.Auth) error {
+	f.obtained = append(f.obtained, auth)
+	return nil
+}
+func (f *fakeAuth) Forget(domain.Auth) {}
+func (f *fakeAuth) Held(auth domain.Auth) domain.AuthToken {
+	f.held = append(f.held, auth)
+	return f.token
+}
 
 func (f *fakeAuth) last() domain.Auth {
 	if len(f.asked) == 0 {
@@ -544,5 +554,36 @@ func TestARecordIsLaidOutAsAnIndependentDraft(t *testing.T) {
 	copied, err := drafts.Open(ctx, "tab:copy")
 	if err != nil || copied.URL != captured.URL || len(copied.Headers) != len(headers) {
 		t.Fatalf("copy = %+v, %v, want it to outlive the original", copied, err)
+	}
+}
+
+// A token asked for by hand goes to the resolved token URL, and is kept under the same fields a send
+// asks with, so the send uses it and the window reports it as held.
+func TestAnObtainedTokenIsTheOneASendFinds(t *testing.T) {
+	r := newRig(t)
+	d := r.request(Seed{Method: "GET", URL: "https://{{host}}/orders"})
+	d.Auth = domain.Auth{Type: domain.AuthOAuth2, Fields: map[string]string{
+		"grant": domain.GrantClientCredentials, "tokenUrl": "https://{{host}}/token",
+		"clientId": "catalog", "clientSecret": "{{token}}",
+	}}.Normalized()
+
+	if err := r.ObtainAuth(context.Background(), d); err != nil {
+		t.Fatalf("ObtainAuth: %v", err)
+	}
+	obtained := r.auth.obtained[0]
+	if got := obtained.Answer("tokenUrl"); got != "https://api.example.com/token" {
+		t.Errorf("token URL = %q, want the variable resolved", got)
+	}
+	if got := obtained.Answer("clientSecret"); got != "abc123" {
+		t.Errorf("client secret = %q, want the secret's value", got)
+	}
+
+	r.prepared(t, d)
+	if !reflect.DeepEqual(r.auth.asked[0], obtained) {
+		t.Errorf("send asked with %+v, want the fields the token was obtained with %+v", r.auth.asked[0], obtained)
+	}
+	r.preview(t, d)
+	if len(r.auth.held) == 0 || !reflect.DeepEqual(r.auth.held[len(r.auth.held)-1], obtained) {
+		t.Errorf("held was read for %+v, want %+v", r.auth.held, obtained)
 	}
 }

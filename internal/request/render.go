@@ -15,6 +15,7 @@ import (
 
 	"schemo/internal/convert/command"
 	"schemo/internal/domain"
+	"schemo/internal/workspace"
 )
 
 func partsOf(draft domain.Draft, inherits *domain.Auth, cookie string) parts {
@@ -450,13 +451,16 @@ func (s *Drafts) cookiesIn(ctx context.Context, workspace string, d domain.Draft
 }
 
 // held is the state of the token the applied authorization fetches, for schemes that fetch one.
-func (s *Drafts) held(d domain.Draft, inherits *domain.Auth) *domain.AuthToken {
-	auth := authToApply(d.Auth, inherits)
-	scheme, ok := domain.SchemeFor(auth.Type)
+// Fields that cannot be resolved yet hold no token.
+func (s *Drafts) held(ctx context.Context, d domain.Draft, above workspace.Above) *domain.AuthToken {
+	scheme, ok := domain.SchemeFor(authToApply(d.Auth, above.Auth).Type)
 	if !ok || !scheme.Fetches {
 		return nil
 	}
-	token := s.auth.Held(auth)
+	token := domain.AuthToken{}
+	if auth, err := s.liveAuth(ctx, d, above); err == nil {
+		token = s.auth.Held(auth)
+	}
 	return &token
 }
 

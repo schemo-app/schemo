@@ -256,7 +256,7 @@ func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 		Missing:   domain.OrEmpty(missing),
 		Projected: projected,
 		Auto:      auto,
-		Token:     s.held(d, above.Auth),
+		Token:     s.held(ctx, d, above),
 		Inherited: above.Auth,
 	}, nil
 }
@@ -323,12 +323,38 @@ func (s *Drafts) Paste(text string) Paste {
 
 // ObtainAuth fetches the token the draft's authorization (or the one it inherits) asks for.
 func (s *Drafts) ObtainAuth(ctx context.Context, d domain.Draft) error {
-	return s.auth.Obtain(ctx, authToApply(d.Auth, s.above(ctx, d.ID).Auth))
+	auth, err := s.liveAuth(ctx, d, s.above(ctx, d.ID))
+	if err != nil {
+		return err
+	}
+	return s.auth.Obtain(ctx, auth)
 }
 
 // ForgetAuth throws away the token that authorization holds.
 func (s *Drafts) ForgetAuth(ctx context.Context, d domain.Draft) {
-	s.auth.Forget(authToApply(d.Auth, s.above(ctx, d.ID).Auth))
+	if auth, err := s.liveAuth(ctx, d, s.above(ctx, d.ID)); err == nil {
+		s.auth.Forget(auth)
+	}
+}
+
+// liveAuth is the authorization a send applies, its fields resolved as a send resolves them: the
+// token URL needs its variables to be reached, and a token is kept under the fields it was asked
+// with, so one fetched by hand has to be the one the next send finds.
+func (s *Drafts) liveAuth(ctx context.Context, d domain.Draft, above workspace.Above) (domain.Auth, error) {
+	workspace, err := s.scope.ActiveWorkspace(ctx)
+	if err != nil {
+		return domain.Auth{}, err
+	}
+	resolve, err := s.vars.Resolver(ctx, workspace, above.Variables, d.EnvironmentID)
+	if err != nil {
+		return domain.Auth{}, err
+	}
+	auth := authToApply(d.Auth, above.Auth)
+	fields := make(map[string]string, len(auth.Fields))
+	for _, key := range domain.FieldKeys(auth.Type) {
+		fields[key], _ = resolve(auth.Answer(key))
+	}
+	return domain.Auth{Type: auth.Type, Fields: fields}, nil
 }
 
 // AuthSchemes is every way a request can authorize itself, in the order the window draws them.

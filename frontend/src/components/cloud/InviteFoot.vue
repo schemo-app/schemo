@@ -2,7 +2,11 @@
 import { t } from '../../i18n'
 
 // The root has its own class because every pane styles a `.foot`, and that would reach this root.
-const { failure = '', busy = false } = defineProps<{ failure?: string; busy?: boolean }>()
+const { failure = '', busy = false, hasInvitations = false } = defineProps<{
+  failure?: string
+  busy?: boolean
+  hasInvitations?: boolean
+}>()
 
 defineEmits<{ (e: 'add'): void }>()
 
@@ -11,7 +15,7 @@ defineEmits<{ (e: 'add'): void }>()
 <template>
   <div class="invite-foot">
     <button class="add" type="button" :disabled="busy" @click="$emit('add')">
-      {{ t('workspaces.inviteMore') }}
+      {{ t(hasInvitations ? 'workspaces.inviteMore' : 'workspaces.inviteAdd') }}
     </button>
     <span v-if="failure" class="note bad">{{ failure }}</span>
     <span v-else-if="busy" class="note">{{ t('workspaces.membersLoading') }}</span>

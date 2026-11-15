@@ -35,6 +35,28 @@ export function prettyJson(value: unknown, unit: string | number = 2): string {
   }
 }
 
+// Parse with source access and raw output are in the engine but not yet in TypeScript's lib.
+type SourceReviver = (key: string, value: unknown, context: { source?: string }) => unknown
+const sourced = JSON as unknown as {
+  parse(text: string, reviver: SourceReviver): unknown
+  rawJSON(text: string): unknown
+}
+
+/** Indents a JSON text like `prettyJson`, but an integer past 2^53 keeps the digits it was sent
+ *  with: a round trip through a number would round it. Null when the text is not JSON. */
+export function prettyJsonText(text: string, unit: string | number = 2): string | null {
+  try {
+    const value = sourced.parse(text, (_key, value, { source }) =>
+      typeof value === 'number' && !Number.isSafeInteger(value) && source && /^-?\d+$/.test(source)
+        ? sourced.rawJSON(source)
+        : value
+    )
+    return JSON.stringify(value, null, unit) ?? ''
+  } catch {
+    return null
+  }
+}
+
 /** A stretch of a text and the class of the token it is, empty for a stretch that is none. */
 export interface JsonPart {
   text: string

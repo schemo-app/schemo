@@ -124,6 +124,7 @@
     "membersLoading": "Asking the cloud…",
     "you": "You",
     "inviteEmail": "Email",
+    "inviteAdd": "+ Add invitation",
     "inviteMore": "+ another invitation",
     "inviteWaiting": "Waiting",
     "inviteSince": "Invited · {ago}",

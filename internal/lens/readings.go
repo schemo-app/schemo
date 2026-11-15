@@ -316,7 +316,7 @@ func readEpoch(text string) *domain.Reading {
 		return nil
 	}
 	return &domain.Reading{Kind: "timestamp", Rows: []domain.ReadingRow{
-		row("unit", unit, "text"), row("time", moment(at), "time"),
+		row("unit", unit, "word"), row("time", moment(at), "time"),
 	}}
 }
 
@@ -405,7 +405,7 @@ func readIP(s string) *domain.Reading {
 		scope = "multicast"
 	}
 	return &domain.Reading{Kind: "ip", Rows: []domain.ReadingRow{
-		row("version", version, "text"), row("range", scope, "text"),
+		row("version", version, "text"), row("range", scope, "word"),
 	}}
 }
 

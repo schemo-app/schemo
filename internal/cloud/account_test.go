@@ -266,7 +266,9 @@ func newAccount(t *testing.T) (*Account, *fakeKeyring, *fakeServer, *fakeBrowser
 	t.Helper()
 	store, server := &fakeKeyring{db: dbtest.New(t)}, newFakeServer()
 	browser, notifier := &fakeBrowser{}, newFakeNotifier()
-	return NewAccount(store.db, store, server, browser, notifier), store, server, browser, notifier
+	account := NewAccount(store.db, store, server, browser, notifier)
+	t.Cleanup(account.Close)
+	return account, store, server, browser, notifier
 }
 
 // tokens is the pair a confirmed code produces, good for an hour: what the app keeps in memory and

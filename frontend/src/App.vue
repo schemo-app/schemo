@@ -46,7 +46,7 @@ import { isRemoveEvent, isRenameEvent } from './lib/treeKeys'
 import { useWailsEvent } from './composables/useWailsEvent'
 import { useAppMenu } from './composables/useAppMenu'
 
-const { loadPlan } = usePlan()
+const { loadPlan, refreshPlan } = usePlan()
 
 const records = useRecordsStore()
 const collections = useCollectionsStore()
@@ -121,6 +121,11 @@ async function initializeSession() {
 onMounted(async () => {
   await loadStartup()
   if (startup.value?.ready) await initializeSession()
+})
+
+// A plan is bought in the browser, so coming back to the app is when it may have changed.
+useEventListener(window, 'focus', () => {
+  if (startup.value?.ready) void refreshPlan()
 })
 
 function openAbout() {

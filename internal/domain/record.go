@@ -376,7 +376,8 @@ type Reading struct {
 type ReadingRow struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
-	// Shape says how to draw Value: "text", "code", "time" (RFC 3339) or "colour".
+	// Shape says how to draw Value: "text" as it is, "word" through the window's catalogue,
+	// "code", "time" (RFC 3339), "date", "wallTime" or "colour".
 	Shape string `json:"shape"`
 }
 

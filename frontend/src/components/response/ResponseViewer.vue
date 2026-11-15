@@ -45,7 +45,7 @@ import { useScriptRuns } from '../../composables/useScriptRuns'
 import { useToast } from '../../composables/useToast'
 import { responseNodeActions, responseNodeSelected, responseSearchable, searchResponse } from '../../lib/intents'
 import { allResources, resourceMatchesQuery } from '../../lib/jsonapi'
-import { prettyJson } from '../../lib/json'
+import { prettyJson, prettyJsonText } from '../../lib/json'
 import { tabBadge, type BodyView } from '../../lib/responseView'
 import { callOrToast } from '../../lib/calls'
 import { formatResponse, responseParser } from '../../lib/responseFormat'
@@ -144,8 +144,11 @@ async function toggleFormatting() {
 const { runs: scriptRuns, isLoading: runsLoading } = useScriptRuns(() => record.id)
 
 const inspectable = computed(() => activeTab.value === 'body' && reader.value !== 'raw')
-// The inspector reads the same JSON value as the tree, including how it resolves duplicate keys.
-const inspectionBody = computed(() => inspectable.value ? prettyJson(jsonValue.value) : '')
+// The inspector reads the same JSON value as the tree, including how it resolves duplicate keys,
+// but parsed again from the text: the tree's value has already rounded a large integer.
+const inspectionBody = computed(() =>
+  inspectable.value ? prettyJsonText(record.responseBody) ?? prettyJson(jsonValue.value) : ''
+)
 const inspection = useInspection(() => inspectionBody.value)
 const { inlineReadings } = inspection
 

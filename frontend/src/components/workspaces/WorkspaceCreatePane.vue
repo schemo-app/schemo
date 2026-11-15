@@ -186,7 +186,7 @@ function cancel() {
           />
         </div>
 
-        <InviteFoot :failure="rolesFailed" @add="addDraft" />
+        <InviteFoot :failure="rolesFailed" :has-invitations="drafts.length > 0" @add="addDraft" />
       </div>
     </div>
 

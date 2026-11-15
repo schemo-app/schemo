@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import SettingsRow from './SettingsRow.vue'
 import SettingsSection from './SettingsSection.vue'
 import Button from '../ui/Button.vue'
@@ -10,8 +11,11 @@ import { formatBytes, formatDate, type MessageKey, t } from '../../i18n'
 import { TIER_FREE } from '../../composables/usePlan'
 import { metaLine } from '../../lib/format'
 
-const { plan } = usePlan()
+const { plan, refreshPlan } = usePlan()
 const { openPanel } = useAccount()
+
+// A plan is bought in the browser, so coming back to this window is when it may have changed.
+useEventListener(window, 'focus', () => void refreshPlan())
 
 const tariff = computed(() => (plan.value?.tier ? plan.value : null))
 const free = computed(() => tariff.value?.tier === TIER_FREE)
