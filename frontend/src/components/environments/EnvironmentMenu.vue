@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DropdownMenuItem } from 'reka-ui'
+import { DropdownMenuGroup, DropdownMenuItem } from 'reka-ui'
 import Icon from '../ui/Icon.vue'
 import { useEnvironmentsStore } from '../../stores/environments'
 import { t } from '../../i18n'
@@ -28,23 +28,25 @@ function create() {
 
 <template>
   <DropdownMenuContent class="env-menu" align="end">
-    <DropdownMenuItem
-      v-for="env in environments.environments"
-      :key="env.id"
-      class="env-row"
-      :class="{ active: env.id === environments.activeId }"
-      @select="choose(env.id)"
-    >
-      <span class="env-row-mark">
-        <span class="env-row-dot" :style="{ background: dotOf(env.color ?? '') }"></span>
-      </span>
-      <span class="env-row-name cap-line">{{ env.name }}</span>
-      <Icon v-if="env.readonly" name="Lock" :size="12" class="env-row-lock" />
-      <span class="env-row-count">{{ env.vars.length }}</span>
-      <span class="env-row-check">
-        <Icon v-if="env.id === environments.activeId" name="Check" :size="12" :stroke-width="2.6" />
-      </span>
-    </DropdownMenuItem>
+    <DropdownMenuGroup v-if="environments.environments.length" class="env-options">
+      <DropdownMenuItem
+        v-for="env in environments.environments"
+        :key="env.id"
+        class="env-row"
+        :class="{ active: env.id === environments.activeId }"
+        @select="choose(env.id)"
+      >
+        <span class="env-row-mark">
+          <span class="env-row-dot" :style="{ background: dotOf(env.color ?? '') }"></span>
+        </span>
+        <span class="env-row-name cap-line">{{ env.name }}</span>
+        <Icon v-if="env.readonly" name="Lock" :size="12" class="env-row-lock" />
+        <span class="env-row-count">{{ env.vars.length }}</span>
+        <span class="env-row-check">
+          <Icon v-if="env.id === environments.activeId" name="Check" :size="12" :stroke-width="2.6" />
+        </span>
+      </DropdownMenuItem>
+    </DropdownMenuGroup>
 
     <DropdownMenuItem class="env-row" :class="{ active: environments.activeId === null }" @select="choose(null)">
       <span class="env-row-mark"></span>

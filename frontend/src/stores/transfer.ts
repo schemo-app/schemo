@@ -97,9 +97,8 @@ export const useTransferStore = defineStore('transfer', () => {
     }
   }
 
-  // Go reads the file behind the dialog.
-  function previewFile(format: TransferFormat, title: string): Promise<Preview | null> {
-    return whileBusy(() => readPreview(Transfer.PreviewFile(title, format)))
+  function pickImport(format: TransferFormat, title: string): Promise<Preview | null> {
+    return whileBusy(() => readPreview(Transfer.PickImport(format, title)))
   }
 
   function previewPath(format: TransferFormat, path: string): Promise<Preview | null> {
@@ -140,8 +139,12 @@ export const useTransferStore = defineStore('transfer', () => {
       // toast about requests would be counting something that never happened.
       if (summary.collections === 0) {
         toast.show(
-          t('transfer.importedEnvs', { n: t('counts.environments', summary.environments) })
+          t('transfer.importedCount', { n: t('counts.environments', summary.environments) })
         )
+        return true
+      }
+      if (summary.collections > 1) {
+        toast.show(t('transfer.importedCount', { n: t('counts.collections', summary.collections) }))
         return true
       }
       toast.show(
@@ -232,7 +235,7 @@ export const useTransferStore = defineStore('transfer', () => {
     askImportPage,
     askExport,
     closeTransfer,
-    previewFile,
+    pickImport,
     previewPath,
     previewText,
     previewUrl,

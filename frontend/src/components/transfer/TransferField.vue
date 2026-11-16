@@ -55,8 +55,10 @@ const model = defineModel<string>()
 }
 
 .pick-arrow {
-  @apply absolute inset-y-0 flex items-center pointer-events-none;
+  @apply absolute pointer-events-none;
+  top: 50%;
   right: 0.625rem;
+  transform: translateY(-50%);
   color: var(--text-tertiary);
 }
 </style>

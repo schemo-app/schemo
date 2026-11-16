@@ -65,29 +65,31 @@ const editHint = computed(() => hint('environments'))
     </div>
     <PopoverContent class="bar-env-pop" align="end" :side-offset="6">
       <div class="env-head">{{ t('request.envFor') }}</div>
-      <button
-        v-for="option in options"
-        :key="option.value"
-        type="button"
-        class="env-row"
-        :class="{ active: option.value === source.environmentId }"
-        @click="pick(option.value)"
-      >
-        <span class="env-row-mark">
-          <span v-if="option.color" class="env-row-dot" :style="{ background: dotOf(option.color) }"></span>
-        </span>
-        <span class="env-row-name cap-line">{{ option.name }}</span>
-        <Icon v-if="option.readonly" name="Lock" :size="12" class="env-row-lock" />
-        <span class="env-row-count">{{ option.vars }}</span>
-        <span class="env-row-check">
-          <Icon
-            v-if="option.value === source.environmentId"
-            name="Check"
-            :size="12"
-            :stroke-width="2.6"
-          />
-        </span>
-      </button>
+      <div class="env-options">
+        <button
+          v-for="option in options"
+          :key="option.value"
+          type="button"
+          class="env-row"
+          :class="{ active: option.value === source.environmentId }"
+          @click="pick(option.value)"
+        >
+          <span class="env-row-mark">
+            <span v-if="option.color" class="env-row-dot" :style="{ background: dotOf(option.color) }"></span>
+          </span>
+          <span class="env-row-name cap-line">{{ option.name }}</span>
+          <Icon v-if="option.readonly" name="Lock" :size="12" class="env-row-lock" />
+          <span class="env-row-count">{{ option.vars }}</span>
+          <span class="env-row-check">
+            <Icon
+              v-if="option.value === source.environmentId"
+              name="Check"
+              :size="12"
+              :stroke-width="2.6"
+            />
+          </span>
+        </button>
+      </div>
 
       <div class="env-divider"></div>
 

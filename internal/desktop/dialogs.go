@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -36,13 +37,27 @@ func SafeFileName(name, fallback, extension string) string {
 
 // OpenFile returns the chosen path, or "" when the dialog was closed.
 func (h *Host) OpenFile(title string, filters ...application.FileFilter) (string, error) {
+	return h.OpenPath(title, false, filters...)
+}
+
+// OpenPath opens Wails' system chooser. macOS can accept a folder in the file chooser.
+func (h *Host) OpenPath(title string, allowFolder bool, filters ...application.FileFilter) (string, error) {
 	app := h.App()
 	if app == nil {
 		return "", errors.New("the window does not exist yet")
 	}
 	dialog := app.Dialog.OpenFile().SetTitle(title)
+	// On Windows and Linux, enabling directories switches the Wails chooser to folder-only mode.
+	if allowFolder && runtime.GOOS == "darwin" {
+		dialog.CanChooseFiles(true).CanChooseDirectories(true)
+		if window := h.MainWindow(); window != nil {
+			dialog.AttachToWindow(window)
+		}
+		// AppKit's content-type filter can make folders unselectable. Import validates the contents.
+		filters = nil
+	}
 	for _, filter := range filters {
-		dialog = dialog.AddFilter(filter.DisplayName, filter.Pattern)
+		dialog.AddFilter(filter.DisplayName, filter.Pattern)
 	}
 	path, err := dialog.PromptForSingleSelection()
 	return path, withoutCancellation(err)

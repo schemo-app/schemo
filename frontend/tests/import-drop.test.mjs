@@ -66,7 +66,7 @@ function find(root, predicate) {
     }
 }
 
-async function mount() {
+async function mount(format = 'postman') {
     ports.calls = []
     ports.transfer = reactive({
         importOpen: true, importParent: '', linkedPage: '', sources: [], busy: false,
@@ -79,7 +79,7 @@ async function mount() {
     const root = node('root')
     app = renderer.createApp(ImportDialog)
     app.mount(root)
-    find(root, element => element.props.name === 'transfer.source.postman').props.onClick()
+    find(root, element => element.props.name === `transfer.source.${format}`).props.onClick()
     await nextTick()
     ports.root = root
     return root
@@ -102,6 +102,52 @@ test('the native drop zone previews the first file and shows its name', async ()
     await drop(['/tmp/collection.json', '/tmp/other.json'])
     assert.deepEqual(ports.calls, [['postman', '/tmp/collection.json']])
     assert.ok(find(root, element => element.text === 'collection.json'))
+})
+
+test('the Insomnia drop zone previews a folder in the same dialog', async () => {
+    const root = await mount('insomnia')
+    ports.transfer.previewPath = async (...args) => {
+        ports.calls.push(args)
+        return { token: 'drop', file: 'insomnia-exports', requests: 3, collections: 2 }
+    }
+    await drop(['/tmp/insomnia-exports'])
+    assert.deepEqual(ports.calls, [['insomnia', '/tmp/insomnia-exports']])
+    assert.ok(find(root, element => element.text === 'insomnia-exports'))
+})
+
+test('choosing an Insomnia source calls the system picker and shows its preview', async () => {
+    const root = await mount('insomnia')
+    ports.transfer.pickImport = async (...args) => {
+        ports.calls.push(args)
+        return { token: 'picked', file: 'insomnia-exports', requests: 3, collections: 2 }
+    }
+    await zone(root).props.onClick()
+    await nextTick()
+    assert.deepEqual(ports.calls, [['insomnia', 'transfer.from']])
+    assert.ok(find(root, element => element.text === 'insomnia-exports'))
+})
+
+test('the import button spins while the confirmed import is pending and recovers on failure', async () => {
+    const root = await mount('insomnia')
+    let finishImport
+    ports.transfer.apply = () => new Promise(resolve => { finishImport = resolve })
+    const button = find(root, element => element.props['data-component'] === 'DialogButton' && 'primary' in element.props)
+    const spinner = () => find(button, element => element.props['data-component'] === 'Spinner')
+
+    await drop(['/tmp/insomnia-exports'])
+    assert.equal(spinner(), undefined)
+
+    const importing = button.props.onClick()
+    await nextTick()
+    assert.equal(button.props.disabled, true)
+    assert.equal(button.props['aria-busy'], true)
+    assert.ok(spinner())
+
+    finishImport(false)
+    await importing
+    await nextTick()
+    assert.equal(button.props.disabled, false)
+    assert.equal(spinner(), undefined)
 })
 
 test('empty drops, other targets, URL input and a closed dialog do not read files', async () => {

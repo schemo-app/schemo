@@ -4,13 +4,14 @@ package convert
 
 import (
 	"context"
+	"strings"
+	"sync"
+	"time"
+
 	"schemo/internal/cloud"
 	"schemo/internal/desktop"
 	"schemo/internal/domain"
 	"schemo/internal/platform"
-	"strings"
-	"sync"
-	"time"
 )
 
 // pendingTTL is how long what a preview read waits to be written. A dialog is a person deciding;
@@ -63,16 +64,6 @@ func NewTransfer(
 	}
 }
 
-// previewFile reads a file the person picked and answers what it holds, without writing anything:
-// the dialog shows the counts before the person commits.
-func (s *Transfer) previewFile(ctx context.Context, format Format, path string) (Preview, error) {
-	data, err := s.files.Read(path)
-	if err != nil {
-		return Preview{}, err
-	}
-	return s.stagePreview(format, data)
-}
-
 // previewText reads a pasted text — a collection somebody sent, or commands copied from a terminal.
 func (s *Transfer) previewText(ctx context.Context, format Format, text string) (Preview, error) {
 	return s.stagePreview(format, []byte(text))
@@ -102,24 +93,26 @@ func (s *Transfer) stagePreview(format Format, data []byte) (Preview, error) {
 	if err != nil {
 		return Preview{}, err
 	}
+	return s.stage(document, len(data)), nil
+}
 
+func (s *Transfer) stage(document domain.Document, size int) Preview {
 	token := s.ids()
 	s.mu.Lock()
 	s.staged = &stagedRead{token: token, document: document, at: time.Now()}
 	s.mu.Unlock()
 
 	requests, folders := countDocument(document)
-	out := Preview{
+	return Preview{
 		Token:        token,
 		Name:         nameOfFirst(document),
-		Size:         len(data),
+		Size:         size,
 		Collections:  len(document.Collections),
 		Requests:     requests,
 		Folders:      folders,
 		Environments: len(document.Environments),
 		Skipped:      document.Skipped,
 	}
-	return out, nil
 }
 
 // Apply writes what a preview read under a level and returns the updated tree and environments. The

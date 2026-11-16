@@ -33,18 +33,13 @@ func (r *FileReader) Read(path string) ([]byte, error) {
 
 	file, err := os.Open(path)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, domain.Refuse(domain.CodeFileMissing, domain.ErrNotFound, domain.Args{"path": path})
-		}
-		return nil, domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed,
-			domain.Args{"path": path, "reason": err.Error()})
+		return nil, ReadError(path, err)
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
-		return nil, domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed,
-			domain.Args{"path": path, "reason": err.Error()})
+		return nil, ReadError(path, err)
 	}
 	if int64(len(data)) > limit {
 		// The limit is named in the unit its sentence names, so the catalogue never has to say "bytes".
@@ -54,4 +49,13 @@ func (r *FileReader) Read(path string) ([]byte, error) {
 		})
 	}
 	return data, nil
+}
+
+// ReadError describes a failure reading a local file or directory.
+func ReadError(path string, err error) error {
+	if errors.Is(err, fs.ErrNotExist) {
+		return domain.Refuse(domain.CodeFileMissing, domain.ErrNotFound, domain.Args{"path": path})
+	}
+	return domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed,
+		domain.Args{"path": path, "reason": err.Error()})
 }

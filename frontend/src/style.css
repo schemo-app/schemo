@@ -758,9 +758,33 @@ html.window-translucent.dark body {
   border: 0;
 }
 
-.menu.env-menu {
+.menu.env-menu,
+.bar-env-pop {
   width: 15.625rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 1px;
+}
+
+.menu.env-menu {
   min-width: 0;
+  max-height: min(20rem, var(--reka-dropdown-menu-content-available-height, 100vh));
+}
+
+.bar-env-pop {
+  max-height: min(20rem, var(--reka-popover-content-available-height, 100vh));
+}
+
+.env-options {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.bar-env-pop .env-options {
+  display: flex;
+  flex-direction: column;
   gap: 1px;
 }
 
@@ -810,13 +834,6 @@ html.window-translucent.dark body {
   gap: 0.0625rem;
 }
 
-.bar-env-pop {
-  width: 15.625rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
 .save-pop {
   width: 20.625rem;
   display: flex;
@@ -826,7 +843,7 @@ html.window-translucent.dark body {
 
 .env-menu .env-row,
 .bar-env-pop .env-row {
-  @apply flex items-center w-full border-none bg-transparent text-text text-left cursor-pointer;
+  @apply flex flex-none items-center w-full border-none bg-transparent text-text text-left cursor-pointer;
   gap: 0.5625rem;
   height: 1.875rem;
   padding: 0 0.5rem;
@@ -888,6 +905,7 @@ html.window-translucent.dark body {
 
 .env-divider {
   height: 1px;
+  flex-shrink: 0;
   margin: 0.25rem 0.3125rem;
   background: var(--border);
 }

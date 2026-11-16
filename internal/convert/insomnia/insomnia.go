@@ -1,5 +1,4 @@
-// Package insomnia reads Insomnia v4 exports (`resources`) as collections and environments; v5 is
-// refused.
+// Package insomnia reads Insomnia v4 and v5 exports as collections and environments.
 package insomnia
 
 import (
@@ -16,16 +15,19 @@ import (
 // baseEnvironment is the environment Insomnia always applies, beside whichever one is selected.
 const baseEnvironment = "Base Environment"
 
-// Import reads an export as the document it holds: every workspace becomes a collection with its
-// folders and requests inside it, and the environments come alongside.
+// Import detects the export version from the document, independent of its filename.
 func Import(data []byte) (domain.Document, error) {
 	var file export
-	if err := json.Unmarshal(data, &file); err != nil {
-		return domain.Document{}, domain.Refuse(domain.CodeNotJSON, domain.ErrNotAllowed, nil)
+	if err := json.Unmarshal(data, &file); file.Type == "export" {
+		if err != nil {
+			return domain.Document{}, domain.Refuse(domain.CodeNotJSON, domain.ErrNotAllowed, nil)
+		}
+		return importV4(file)
 	}
-	if file.Type != "export" {
-		return domain.Document{}, domain.Refuse(domain.CodeNotInsomnia, domain.ErrNotAllowed, nil)
-	}
+	return importV5(data)
+}
+
+func importV4(file export) (domain.Document, error) {
 	if len(file.Resources) == 0 {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
@@ -45,7 +47,7 @@ func Import(data []byte) (domain.Document, error) {
 		collection := domain.Collection{
 			Name:        strings.TrimSpace(workspace.Name),
 			Description: strings.TrimSpace(workspace.Description),
-			Auth:        read.auth(workspace.Auth, &out),
+			Auth:        requestAuth(workspace.Auth, &out),
 			Variables:   variablesOf(workspace.Environment),
 		}
 		if collection.Name == "" {
@@ -72,20 +74,20 @@ type export struct {
 }
 
 type resource struct {
-	ID             string         `json:"_id"`
-	Type           string         `json:"_type"`
-	ParentID       string         `json:"parentId,omitempty"`
+	ID             string         `json:"_id" yaml:"-"`
+	Type           string         `json:"_type" yaml:"-"`
+	ParentID       string         `json:"parentId,omitempty" yaml:"-"`
 	Name           string         `json:"name,omitempty"`
 	Description    string         `json:"description,omitempty"`
 	Method         string         `json:"method,omitempty"`
 	URL            string         `json:"url,omitempty"`
 	Headers        []field        `json:"headers,omitempty"`
 	Parameters     []field        `json:"parameters,omitempty"`
-	PathParameters []field        `json:"pathParameters,omitempty"`
+	PathParameters []field        `json:"pathParameters,omitempty" yaml:"pathParameters"`
 	Body           *body          `json:"body,omitempty"`
-	Auth           *auth          `json:"authentication,omitempty"`
+	Auth           *auth          `json:"authentication,omitempty" yaml:"authentication"`
 	Environment    map[string]any `json:"environment,omitempty"`
-	Data           map[string]any `json:"data,omitempty"`
+	Data           map[string]any `json:"data,omitempty" yaml:"-"`
 }
 
 // field is a header, a parameter or a form field. Insomnia writes `disabled` and leaves it out when
@@ -95,12 +97,13 @@ type field struct {
 	Value       string `json:"value,omitempty"`
 	Disabled    bool   `json:"disabled,omitempty"`
 	Type        string `json:"type,omitempty"`
-	FileName    string `json:"fileName,omitempty"`
+	FileName    string `json:"fileName,omitempty" yaml:"fileName"`
 	Description string `json:"description,omitempty"`
 }
 
 type body struct {
-	MimeType string  `json:"mimeType,omitempty"`
+	MimeType string  `json:"mimeType,omitempty" yaml:"mimeType"`
+	FileName string  `json:"fileName,omitempty" yaml:"fileName"`
 	Text     string  `json:"text,omitempty"`
 	Params   []field `json:"params,omitempty"`
 }
@@ -115,12 +118,13 @@ type auth struct {
 	Key      string `json:"key,omitempty"`
 	Value    string `json:"value,omitempty"`
 	In       string `json:"in,omitempty"`
+	AddTo    string `json:"addTo,omitempty" yaml:"addTo"`
 
-	GrantType        string `json:"grantType,omitempty"`
-	AuthorizationURL string `json:"authorizationUrl,omitempty"`
-	AccessTokenURL   string `json:"accessTokenUrl,omitempty"`
-	ClientID         string `json:"clientId,omitempty"`
-	ClientSecret     string `json:"clientSecret,omitempty"`
+	GrantType        string `json:"grantType,omitempty" yaml:"grantType"`
+	AuthorizationURL string `json:"authorizationUrl,omitempty" yaml:"authorizationUrl"`
+	AccessTokenURL   string `json:"accessTokenUrl,omitempty" yaml:"accessTokenUrl"`
+	ClientID         string `json:"clientId,omitempty" yaml:"clientId"`
+	ClientSecret     string `json:"clientSecret,omitempty" yaml:"clientSecret"`
 	Scope            string `json:"scope,omitempty"`
 }
 
@@ -163,7 +167,7 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 			r.level(one.ID, &nested, out)
 			into.Children = append(into.Children, nested)
 		case "request":
-			node := r.request(one, out)
+			node := requestNode(one, out)
 			node.Position = position
 			position++
 			into.Items = append(into.Items, node)
@@ -225,8 +229,8 @@ func renumber(vars []domain.Variable) []domain.Variable {
 // its own JSON, since requests substitute text and flattening nested objects would invent names.
 func variablesOf(data map[string]any) []domain.Variable {
 	out := []domain.Variable{}
-	for _, name := range slices.Sorted(maps.Keys(data)) {
-		name = strings.TrimSpace(name)
+	for _, key := range slices.Sorted(maps.Keys(data)) {
+		name := strings.TrimSpace(key)
 		if name == "" {
 			continue
 		}
@@ -236,7 +240,7 @@ func variablesOf(data map[string]any) []domain.Variable {
 		}
 		out = append(out, domain.Variable{
 			Name:     name,
-			Value:    domain.ValueText(data[name]),
+			Value:    domain.ValueText(data[key]),
 			Kind:     kind,
 			Enabled:  true,
 			Position: len(out) + 1,
@@ -245,12 +249,12 @@ func variablesOf(data map[string]any) []domain.Variable {
 	return out
 }
 
-func (r *reader) request(from resource, out *domain.Document) domain.CollectionNode {
+func requestNode(from resource, out *domain.Document) domain.CollectionNode {
 	node := domain.CollectionNode{
 		Name:        strings.TrimSpace(from.Name),
 		Method:      strings.ToUpper(strings.TrimSpace(from.Method)),
 		Description: strings.TrimSpace(from.Description),
-		Auth:        r.auth(from.Auth, out),
+		Auth:        requestAuth(from.Auth, out),
 	}
 	if node.Name == "" {
 		node.Name = domain.UntitledRequest
@@ -294,7 +298,7 @@ func (r *reader) request(from resource, out *domain.Document) domain.CollectionN
 		node.URL += separator + strings.Join(query, "&")
 	}
 
-	r.body(&node, from.Body, out)
+	applyBody(&node, from.Body, out)
 	return node
 }
 
@@ -316,10 +320,14 @@ func addressOf(from resource) (string, []domain.Row) {
 	return templated(from.URL), rows
 }
 
-// body reads what a request sends. A mime type this app has no kind for is written as the text it
+// applyBody reads what a request sends. A mime type this app has no kind for is written as the text it
 // carried, because the text is what the request would send.
-func (r *reader) body(node *domain.CollectionNode, from *body, out *domain.Document) {
+func applyBody(node *domain.CollectionNode, from *body, out *domain.Document) {
 	if from == nil {
+		return
+	}
+	if from.FileName != "" {
+		out.LeftOut(domain.CodeSkippedBinaryFile, 1)
 		return
 	}
 	mime := domain.MediaTypeOf(from.MimeType)
@@ -363,8 +371,8 @@ func (r *reader) body(node *domain.CollectionNode, from *body, out *domain.Docum
 	}
 }
 
-// auth maps an export's scheme; an unknown one is counted and becomes `none`, not inherited credentials.
-func (r *reader) auth(from *auth, out *domain.Document) *domain.Auth {
+// requestAuth maps an export's scheme; an unknown one is counted and becomes `none`, not inherited credentials.
+func requestAuth(from *auth, out *domain.Document) *domain.Auth {
 	if from == nil || from.Disabled {
 		return nil
 	}
@@ -387,7 +395,7 @@ func (r *reader) auth(from *auth, out *domain.Document) *domain.Auth {
 		}}
 	case "apikey":
 		place := domain.PlaceHeader
-		if strings.EqualFold(from.In, domain.PlaceQuery) {
+		if strings.EqualFold(from.In, domain.PlaceQuery) || strings.EqualFold(from.AddTo, domain.PlaceQuery) {
 			place = domain.PlaceQuery
 		}
 		return &domain.Auth{Type: domain.AuthAPIKey, Fields: map[string]string{

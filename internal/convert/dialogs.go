@@ -5,6 +5,7 @@ package convert
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -39,18 +40,20 @@ func (s *Transfer) SaveCSV(title string, columns []string, rows [][]string) (boo
 	return true, nil
 }
 
-// PreviewFile asks for a file and reads it without writing anything: the dialog shows what the file
-// holds before the person commits. A nil preview is a cancelled dialog, not a failure.
-func (s *Transfer) PreviewFile(
+// PickImport opens the system picker for a local import. A nil preview means cancellation.
+func (s *Transfer) PickImport(
 	ctx context.Context,
-	title string,
-	format string,
+	format, title string,
 ) (*Preview, error) {
 	parsed, err := FormatOf(format)
 	if err != nil {
 		return nil, err
 	}
-	path, err := s.host.OpenFile(title, filterOf(parsed)...)
+	kind := kindOf(parsed)
+	path, err := s.host.OpenPath(title, kind.folders, application.FileFilter{
+		DisplayName: kind.name,
+		Pattern:     kind.importPattern(),
+	})
 	if err != nil || path == "" {
 		return nil, err
 	}
@@ -58,22 +61,16 @@ func (s *Transfer) PreviewFile(
 	if err != nil {
 		return nil, err
 	}
-	preview.File = filepath.Base(path)
 	return &preview, nil
 }
 
-// PreviewPath reads a dropped file with the same limits and preview as a picked file.
+// PreviewPath reads a dropped file or folder the same way as a picked path.
 func (s *Transfer) PreviewPath(ctx context.Context, format string, path string) (Preview, error) {
 	parsed, err := FormatOf(format)
 	if err != nil {
 		return Preview{}, err
 	}
-	preview, err := s.previewFile(ctx, parsed, path)
-	if err != nil {
-		return Preview{}, err
-	}
-	preview.File = filepath.Base(path)
-	return preview, nil
+	return s.previewFile(ctx, parsed, path)
 }
 
 // PreviewText reads a text the window already holds, such as pasted commands, and names it the way
@@ -171,9 +168,15 @@ func (s *Transfer) ExportText(
 }
 
 type fileKind struct {
-	name    string
-	pattern string
-	suffix  string
+	name          string
+	pattern       string
+	importFormats string
+	suffix        string
+	folders       bool
+}
+
+func (kind fileKind) importPattern() string {
+	return cmp.Or(kind.importFormats, kind.pattern)
 }
 
 func kindOf(format Format) fileKind {
@@ -198,16 +201,18 @@ func kindOf(format Format) fileKind {
 		}
 	case FormatInsomnia:
 		return fileKind{
-			name:    "Insomnia export",
-			pattern: "*.json",
-			suffix:  ".insomnia.json",
+			name:          "Insomnia export",
+			pattern:       "*.json",
+			importFormats: "*.json;*.yaml;*.yml",
+			suffix:        ".insomnia.json",
+			folders:       true,
 		}
 	case FormatHAR:
 		return fileKind{name: "HAR file", pattern: "*.har", suffix: ".har"}
 	}
 	// A paste of commands is not a file, and a dialog for it is never asked for: this is the shape
 	// of an answer, not a format anybody picked.
-	return fileKind{name: "File", pattern: "*", suffix: ""}
+	return fileKind{name: "File", pattern: "*"}
 }
 
 func filterOf(format Format) []application.FileFilter {

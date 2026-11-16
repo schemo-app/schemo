@@ -54,15 +54,14 @@ export function ImportFromWorkspace(workspace: string, ids: string[] | null, par
 }
 
 /**
- * PreviewFile asks for a file and reads it without writing anything: the dialog shows what the file
- * holds before the person commits. A nil preview is a cancelled dialog, not a failure.
+ * PickImport opens the system picker for a local import. A nil preview means cancellation.
  */
-export function PreviewFile(title: string, format: string): $CancellablePromise<$models.Preview | null> {
-    return $Call.ByID(1857362165, title, format);
+export function PickImport(format: string, title: string): $CancellablePromise<$models.Preview | null> {
+    return $Call.ByID(170960105, format, title);
 }
 
 /**
- * PreviewPath reads a dropped file with the same limits and preview as a picked file.
+ * PreviewPath reads a dropped file or folder the same way as a picked path.
  */
 export function PreviewPath(format: string, path: string): $CancellablePromise<$models.Preview> {
     return $Call.ByID(2623847340, format, path);

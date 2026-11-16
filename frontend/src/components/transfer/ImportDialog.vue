@@ -6,6 +6,7 @@ import FileDrop from '../ui/FileDrop.vue'
 import Segment from '../ui/Segment.vue'
 import DialogButton from '../ui/DialogButton.vue'
 import Modal from '../ui/Modal.vue'
+import Spinner from '../ui/Spinner.vue'
 import TransferCheck from './TransferCheck.vue'
 import TransferField from './TransferField.vue'
 import TransferRow from './TransferRow.vue'
@@ -37,6 +38,7 @@ const source = ref<Source | null>(null)
 const via = ref<Via>('file')
 // What Go last read: the token is good once, and the card and the button count what it names.
 const preview = ref<Preview | null>(null)
+const importing = ref(false)
 // A read answered after the dialog moved on would import the wrong thing.
 let latestRead = 0
 const url = ref('')
@@ -120,6 +122,7 @@ const places = computed(() => {
 })
 
 const newName = computed(() => {
+  if ((preview.value?.collections ?? 0) > 1) return t('transfer.separate')
   if (preview.value?.name) return t('transfer.newCollection', { name: preview.value.name })
   if (source.value === 'curl') {
     return t('transfer.newCollection', { name: t('transfer.fromCurl') })
@@ -133,7 +136,7 @@ const targets = computed(() => {
 })
 
 const ready = computed(() => {
-  if (transfer.busy) return false
+  if (transfer.busy || importing.value) return false
   if (source.value === 'ws') return pickedIds.value.length > 0
   const read = preview.value
   if (!read) return false
@@ -239,8 +242,8 @@ function pickWorkspace(id = '') {
 
 async function pickFile() {
   const id = format.value
-  if (!id) return
-  await showPreview(transfer.previewFile(id, t('transfer.pickFile', { source: nameOf(id) })))
+  if (!id || transfer.busy) return
+  await showPreview(transfer.pickImport(id, title.value))
 }
 
 async function readUrl() {
@@ -261,28 +264,33 @@ async function previewCurl() {
 
 function readFile([path]: string[]) {
   const id = format.value
-  if (!transfer.importOpen || via.value !== 'file' || !id || !path) return
+  if (!transfer.importOpen || transfer.busy || via.value !== 'file' || !id || !path) return
   void showPreview(transfer.previewPath(id, path))
 }
 
 async function commit() {
   if (!ready.value) return
-  if (source.value === 'ws') {
-    const chosen = workspace.value
-    if (!chosen) return
-    const done = await transfer.importFromWorkspace(
-      chosen.id,
-      pickedIds.value,
-      target.value,
-      chosen.name
-    )
-    if (done) transfer.closeTransfer()
-    return
-  }
-  const read = preview.value
-  if (!read) return
-  if (await transfer.apply(read.token, target.value, t('transfer.fromCurl'))) {
-    transfer.closeTransfer()
+  importing.value = true
+  try {
+    if (source.value === 'ws') {
+      const chosen = workspace.value
+      if (!chosen) return
+      const done = await transfer.importFromWorkspace(
+        chosen.id,
+        pickedIds.value,
+        target.value,
+        chosen.name
+      )
+      if (done) transfer.closeTransfer()
+      return
+    }
+    const read = preview.value
+    if (!read) return
+    if (await transfer.apply(read.token, target.value, t('transfer.fromCurl'))) {
+      transfer.closeTransfer()
+    }
+  } finally {
+    importing.value = false
   }
 }
 </script>
@@ -347,7 +355,7 @@ async function commit() {
           as="button"
           type="button"
           class="drop"
-          :disabled="!transfer.importOpen"
+          :disabled="!transfer.importOpen || transfer.busy"
           @files="readFile"
           @click="pickFile"
         >
@@ -394,7 +402,16 @@ async function commit() {
 
     <template v-if="source" #foot>
       <DialogButton @click="transfer.closeTransfer()">{{ t('transfer.cancel') }}</DialogButton>
-      <DialogButton primary :disabled="!ready" @click="commit">{{ primaryLabel }}</DialogButton>
+      <DialogButton
+        primary
+        class="inline-flex items-center gap-1.5"
+        :disabled="!ready"
+        :aria-busy="importing || undefined"
+        @click="commit"
+      >
+        <Spinner v-if="importing" aria-hidden="true" />
+        {{ primaryLabel }}
+      </DialogButton>
     </template>
   </Modal>
 </template>
