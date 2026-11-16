@@ -15,25 +15,10 @@ import (
 const (
 	deepLinkScheme = platform.Scheme
 
-	windowMain        = "main"
-	windowAbout       = "about"
-	windowSettings    = "settings"
-	windowUpdate      = "update"
-	aboutWidth        = 336
-	aboutHeightBarred = 439
-	aboutHeightInset  = 415
-	updateWidth       = 560
-	updateHeight      = 488
-	settingsWidth     = 1160
-	settingsHeight    = 760
-	settingsMinWidth  = 820
-	settingsMinHeight = 560
-	// The window the app is opened in, which is the one size nobody chose: everything below it
-	// belongs to a window opened on purpose.
-	mainWidth     = 1280
-	mainHeight    = 820
-	mainMinWidth  = 900
-	mainMinHeight = 600
+	windowMain     = "main"
+	windowAbout    = "about"
+	windowSettings = "settings"
+	windowUpdate   = "update"
 )
 
 var singleInstanceKey = [32]byte([]byte("schemo-v3-single-instance-key-01"))

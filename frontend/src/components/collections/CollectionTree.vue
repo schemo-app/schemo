@@ -361,7 +361,6 @@ defineExpose({ cancelTop })
       </div>
     </Teleport>
 
-
     <DeleteNodeDialog
       v-if="confirming"
       :open="true"

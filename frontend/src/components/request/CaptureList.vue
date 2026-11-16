@@ -9,7 +9,6 @@ import { t } from '../../i18n'
 // made from the inspector, where the value is, and managed here, where the request is.
 const { source } = defineProps<{ source: RequestSource }>()
 
-
 /** Where a rule reads, in the words a person would say it. */
 function from(rule: Capture): string {
   switch (rule.source) {

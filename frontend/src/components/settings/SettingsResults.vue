@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import Icon from '../ui/Icon.vue'
+import EmptyState from '../ui/EmptyState.vue'
 import { nameKey, type CategoryId } from '../../lib/settingsCategories'
 import { t } from '../../i18n'
 import type { SettingsHit } from '../../lib/settingsIndex'
@@ -9,7 +10,6 @@ import type { SettingsHit } from '../../lib/settingsIndex'
 // name picked out. The whole line is the button: a row is a way into its section.
 const { hits } = defineProps<{ hits: SettingsHit[] }>()
 const emit = defineEmits<{ (e: 'pick', tab: CategoryId): void }>()
-
 
 const groups = computed(() => {
   const out: { tab: CategoryId; name: string; items: SettingsHit[] }[] = []
@@ -49,10 +49,7 @@ const groups = computed(() => {
     </div>
   </div>
 
-  <div v-else class="empty">
-    <span class="empty-title">{{ t('settings.search.none') }}</span>
-    <span class="empty-hint">{{ t('settings.search.hint') }}</span>
-  </div>
+  <EmptyState v-else :title="t('settings.search.none')" :text="t('settings.search.hint')" />
 </template>
 
 <style scoped>
@@ -112,19 +109,5 @@ const groups = computed(() => {
 
 .caret {
   @apply flex-none text-text-tertiary;
-}
-
-.empty {
-  @apply flex flex-col items-center text-center;
-  gap: 0.3125rem;
-  padding: 3.75rem 1.5rem;
-}
-
-.empty-title {
-  @apply text-15 font-semibold;
-}
-
-.empty-hint {
-  @apply text-13 text-text-secondary;
 }
 </style>

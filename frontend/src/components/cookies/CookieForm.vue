@@ -16,7 +16,6 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
-
 const fresh = computed(() => cookie.id === '')
 
 // The leading dot is how far the cookie reaches; Go reads it back off this field.

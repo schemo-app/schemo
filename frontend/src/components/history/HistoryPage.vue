@@ -9,7 +9,7 @@ import { methodInkClass, metaLine } from '../../lib/format'
 import { protocolOf, requestLabel } from '../../lib/protocol'
 import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
 import { durationLabel, isSlow, recordSize } from '../../lib/requestRecord'
-import { daysAgo, formatClock, t } from '../../i18n'
+import { daysAgo, formatClock, t, type MessageKey } from '../../i18n'
 import { useHarExport } from '../../composables/useHarExport'
 import { useLoadOlder } from '../../composables/useLoadOlder'
 import { useRecordFilter } from '../../composables/useRecordFilter'
@@ -35,16 +35,19 @@ const clearOpen = ref(false)
 
 const scrollEl = useTemplateRef<HTMLElement>('scrollEl')
 
-const sources = computed(() => [
-  { value: 'all', label: t('history.filterAll') },
-  { value: 'manual', label: t('history.filterManual') },
-  { value: 'browser', label: t('history.filterBrowser') },
-  { value: 'mcp', label: t('history.filterMcp') },
-])
+const sourceLabels = {
+  all: 'history.filterAll',
+  manual: 'history.filterManual',
+  browser: 'history.filterBrowser',
+  mcp: 'history.filterMcp',
+} as const satisfies Record<Source, MessageKey>
+
+const sources = computed(() =>
+  (Object.keys(sourceLabels) as Source[]).map((value) => ({ value, label: t(sourceLabels[value]) })),
+)
 
 function sourceOf(record: RequestRecord): Exclude<Source, 'all'> {
   if (record.agent) return 'mcp'
-
   return record.source === RecordSource.SourceBrowser ? 'browser' : 'manual'
 }
 
@@ -121,10 +124,7 @@ const sourceIcons = { manual: 'MousePointer2', browser: 'Globe', mcp: 'Asterisk'
 
 function sourceText(record: RequestRecord): string {
   if (record.agent) return t('history.sourceAgent', { agent: record.agent })
-
-  return record.source === RecordSource.SourceBrowser
-      ? t('history.filterBrowser')
-      : t('history.filterManual')
+  return t(sourceLabels[sourceOf(record)])
 }
 
 // A plain click selects the preview; Cmd/Ctrl-click opens a separate tab.

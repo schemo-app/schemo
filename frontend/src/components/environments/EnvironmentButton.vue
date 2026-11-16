@@ -10,7 +10,6 @@ import { t } from '../../i18n'
 // A component of its own because the titlebar draws it in two places.
 const environments = useEnvironmentsStore()
 
-
 const activeEnvName = computed(() => environments.activeEnvironment?.name ?? t('titlebar.noEnvironment'))
 
 // The colour is the palette's word, and which mark it turns into is the palette's business: the dot

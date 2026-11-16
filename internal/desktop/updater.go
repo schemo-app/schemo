@@ -129,7 +129,8 @@ func (e *Updater) Stage(ctx context.Context, channel domain.UpdateChannel, versi
 func (e *Updater) Install(ctx context.Context, staged stagedRelease) error {
 	if e.installPackage == nil {
 		err := e.updater.Restart(ctx)
-		if err != nil {
+		// A pending restart means an earlier call already handed the folder to the helper.
+		if err != nil && !errors.Is(err, wailsupdater.ErrRestartPending) {
 			staged.discard()
 		}
 		return err

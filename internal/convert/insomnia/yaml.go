@@ -89,17 +89,13 @@ func importV5(data []byte) (domain.Document, error) {
 
 	if len(file.Collection) > 0 {
 		collection := domain.Collection{
-			Name:        cmp.Or(strings.TrimSpace(file.Name), "Insomnia"),
+			Name:        cmp.Or(strings.TrimSpace(file.Name), untitledCollection),
 			Description: strings.TrimSpace(file.Meta.Description),
 			Auth:        requestAuth(file.Authentication, &out),
 		}
-		// The base supplies defaults for its own collection even when no environment is selected.
-		for _, variable := range base {
-			if variable.Kind != domain.VariableSecret {
-				collection.Variables = append(collection.Variables, variable)
-			}
-		}
-		collection.Variables = renumber(collection.Variables)
+		// The base supplies defaults for its own collection even when no environment is selected; its
+		// secrets already travel with the base environment.
+		collection.Variables, _ = plainVariables(base)
 		readYAMLLevel(file.Collection, &collection, &out)
 		if len(collection.Items) > 0 || len(collection.Children) > 0 {
 			out.Collections = []domain.Collection{collection}
@@ -123,14 +119,9 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 				Position:    int64(index),
 				Auth:        requestAuth(item.Auth, out),
 			}
-			for _, variable := range yamlVariables(item.Environment, item.ConfidentialKeys) {
-				if variable.Kind == domain.VariableSecret {
-					out.LeftOut(domain.CodeSkippedSecretValue, 1)
-					continue
-				}
-				folder.Variables = append(folder.Variables, variable)
-			}
-			folder.Variables = renumber(folder.Variables)
+			var secrets int
+			folder.Variables, secrets = plainVariables(yamlVariables(item.Environment, item.ConfidentialKeys))
+			out.LeftOut(domain.CodeSkippedSecretValue, secrets)
 			readYAMLLevel(item.Children, &folder, out)
 			into.Children = append(into.Children, folder)
 		case item.Method != "" || strings.HasPrefix(item.Meta.ID, "req_"):
@@ -139,6 +130,14 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 			into.Items = append(into.Items, node)
 		}
 	}
+}
+
+// plainVariables drops secret values, which only environments hold, and counts what it dropped.
+func plainVariables(variables []domain.Variable) ([]domain.Variable, int) {
+	plain := slices.DeleteFunc(slices.Clone(variables), func(variable domain.Variable) bool {
+		return variable.Kind == domain.VariableSecret
+	})
+	return renumber(plain), len(variables) - len(plain)
 }
 
 func yamlVariables(data map[string]any, confidential []string) []domain.Variable {

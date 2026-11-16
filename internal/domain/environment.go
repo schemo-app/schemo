@@ -52,6 +52,16 @@ type EnvState struct {
 	ActiveID string `json:"activeId,omitempty"`
 }
 
+// Find is the environment with the id; false when there is none.
+func (s EnvState) Find(id string) (Environment, bool) {
+	for _, environment := range s.Environments {
+		if environment.ID == id {
+			return environment, true
+		}
+	}
+	return Environment{}, false
+}
+
 // EnvScope names where a variable lives: one environment, or the globals that always apply.
 type EnvScope struct {
 	// Environment is the environment's id; empty means the globals scope.

@@ -1,8 +1,11 @@
 import { nextTick, watch } from 'vue'
 import type { TreeRow as Row } from '../lib/treeRows'
 import { trailOf } from '../lib/collectionTree'
-import type { useCollectionsStore } from '../stores/collections'
+import { useCollectionsStore } from '../stores/collections'
 import { useEventListener } from '@vueuse/core'
+import { useCommands } from './useCommands'
+import { usePlatform } from './usePlatform'
+import { isRemoveEvent, isRenameEvent } from '../lib/treeKeys'
 
 // Walking the tree without the mouse: the arrows and the keys that open and close, with the row
 // brought on screen — opening every collection above it on the way. `walkable` includes closed ones.
@@ -138,14 +141,53 @@ function neighbour(list: string[], at: number, step: number): number {
   return next < 0 || next >= list.length ? -1 : next
 }
 
-/** Checks whether the event originated from an active text input element. */
+/** Checks whether the event originated from an editable field, which keeps its own keys. */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el?.tagName) return false
-  return el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
 }
 
 /** Checks whether an overlay component (dialog, menu, popover) is currently open over the list. */
 function isCovered(): boolean {
   return !!document.querySelector('[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"]')
+}
+
+/** Shortcuts for the row selected in the collections panel. */
+export function useCollectionKeys(): void {
+  const collections = useCollectionsStore()
+  const { matches, offered } = useCommands()
+  const { isMac } = usePlatform()
+
+  function onKeydown(e: KeyboardEvent) {
+    if (!collections.inCollections || isTyping(e.target)) return
+    if (!collections.selectedId) return
+
+    if (matches('newRequest', e)) {
+      e.preventDefault()
+      if (!e.repeat) collections.pendingCreate = collections.selectedLevel
+      return
+    }
+    if (matches('duplicate', e)) {
+      e.preventDefault()
+      if (!e.repeat) void collections.duplicate(collections.selectedId)
+      return
+    }
+    if (offered('run') && matches('run', e)) {
+      e.preventDefault()
+      if (!e.repeat) void collections.run(collections.runNodeId, collections.levelName)
+      return
+    }
+    if (isRenameEvent(e)) {
+      e.preventDefault()
+      if (!e.repeat) collections.pendingRename = collections.selectedId
+      return
+    }
+    if (isRemoveEvent(e, isMac.value)) {
+      e.preventDefault()
+      if (!e.repeat) collections.pendingRemove = collections.selectedId
+    }
+  }
+
+  useEventListener(window, 'keydown', onKeydown)
 }

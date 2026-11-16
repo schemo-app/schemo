@@ -23,13 +23,11 @@ const pointedAt = (problem: Problem): string =>
 /** Whether the problem says where in the request the fault is. */
 const isAboutRequest = (problem: Problem): boolean => !!problem.where && !!problem.field
 
-
 const { node, diagnosis, host } = defineProps<{
   node: NodeView
   diagnosis: Diagnosis | null
   host: RequestSource
 }>()
-
 
 const complaint = computed(() => {
   const inside = (path: string) =>

@@ -3,7 +3,7 @@ package har
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -49,35 +49,17 @@ func Read(source io.Reader) (domain.Document, error) {
 }
 
 func readObject(decoder *json.Decoder, field func(string) error) error {
-	start, err := decoder.Token()
-	if err != nil || start == nil {
-		return err
-	}
-	if start != json.Delim('{') {
-		return errors.New("expected a JSON object")
-	}
-	for decoder.More() {
+	return readContainer(decoder, '{', func() error {
 		key, err := decoder.Token()
 		if err != nil {
 			return err
 		}
-		if err := field(key.(string)); err != nil {
-			return err
-		}
-	}
-	_, err = decoder.Token()
-	return err
+		return field(key.(string))
+	})
 }
 
 func readEntries(decoder *json.Decoder, collection *domain.Collection, doc *domain.Document) error {
-	start, err := decoder.Token()
-	if err != nil || start == nil {
-		return err
-	}
-	if start != json.Delim('[') {
-		return errors.New("expected an array of HAR entries")
-	}
-	for decoder.More() {
+	return readContainer(decoder, '[', func() error {
 		var one struct {
 			Request request `json:"request"`
 		}
@@ -85,6 +67,24 @@ func readEntries(decoder *json.Decoder, collection *domain.Collection, doc *doma
 			return err
 		}
 		collection.Items = append(collection.Items, requestNode(one.Request, doc))
+		return nil
+	})
+}
+
+// readContainer walks one object or array token by token, so a large log is never held whole. A
+// null stands for an empty container.
+func readContainer(decoder *json.Decoder, open json.Delim, each func() error) error {
+	start, err := decoder.Token()
+	if err != nil || start == nil {
+		return err
+	}
+	if start != open {
+		return fmt.Errorf("expected %q", open)
+	}
+	for decoder.More() {
+		if err := each(); err != nil {
+			return err
+		}
 	}
 	_, err = decoder.Token()
 	return err

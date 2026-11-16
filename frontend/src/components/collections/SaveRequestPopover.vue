@@ -10,7 +10,6 @@ import { useToast } from '../../composables/useToast'
 import { t } from '../../i18n'
 import { collectionPlaces } from '../../lib/collectionPlaces'
 
-
 const { url, defaultName, draftId } = defineProps<{
   url: string
   defaultName: string

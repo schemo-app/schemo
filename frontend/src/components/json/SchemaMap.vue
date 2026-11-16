@@ -8,7 +8,6 @@ import { allResources, resourceKey, resourceLabel } from '../../lib/jsonapi'
 import { buildTypeInfos, capitalizeType } from '../../lib/jsonSchema'
 import { t } from '../../i18n'
 
-
 // The map has no row of its own: the answer's tab row searches it and copies it out, so the query
 // comes in from there and the export goes out to it.
 const {
@@ -87,7 +86,6 @@ function applyHighlight(k: string | null | undefined) {
 
 watch(() => highlightKey, applyHighlight)
 onMounted(() => applyHighlight(highlightKey))
-
 
 const EXPORT_FORMATS = [
   { id: 'mermaid', label: 'Mermaid (erDiagram)' },

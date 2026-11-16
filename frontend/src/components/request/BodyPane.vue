@@ -22,7 +22,6 @@ const { source } = defineProps<{ source: RequestSource }>()
 
 const { indent, insert } = useIndent()
 
-
 const KINDS: { kind: BodyKind; label: MessageKey; type: string }[] = [
   { kind: BodyKind.BodyJSON, label: 'request.body.kinds.json', type: 'application/json' },
   { kind: BodyKind.BodyXML, label: 'request.body.kinds.xml', type: 'application/xml' },

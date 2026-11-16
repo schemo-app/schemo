@@ -521,10 +521,10 @@ test('an empty local publication list does not show the empty state while the se
   })
   const root = mount(context, components.PublicationsPage)
   await settle()
-  assert.equal(withClass(root, 'empty-card'), undefined)
+  assert.equal(rendered(root, 'PageIntro'), undefined)
   refresh.resolve()
   await settle()
-  assert.ok(withClass(root, 'empty-card'))
+  assert.ok(rendered(root, 'PageIntro'))
 })
 
 test('closing an inactive tab does not activate it on pointerdown', (context) => {

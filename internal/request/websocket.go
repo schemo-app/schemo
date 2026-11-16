@@ -73,10 +73,7 @@ func (e *Engine) webSocket(ctx context.Context, spec Spec, policy transportPolic
 	defer conn.CloseNow()
 	conn.SetReadLimit(e.cfg.MaxBodyBytes)
 
-	stream := spec.Stream
-	if stream == nil {
-		stream = &Stream{limit: e.cfg.MaxBodyBytes}
-	}
+	stream := e.liveStream(spec)
 	stream.connect(response, func(call context.Context, message domain.SavedMessage, masked string) error {
 		kind, payload, err := webSocketPayload(message)
 		if err != nil {

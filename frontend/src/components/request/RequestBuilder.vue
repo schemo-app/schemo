@@ -29,7 +29,8 @@ import type { RequestSource } from '../../lib/requestSource'
 import { missingPlace } from '../../lib/missingPlace'
 import { useEnvironmentsStore } from '../../stores/environments'
 import { useRequestEnvironment } from '../../composables/useRequestEnvironment'
-// Shell prompt prefixes (PowerShell, bash, zsh) and sudo wrapper
+
+// Shell prompt prefixes (PowerShell, bash, zsh) and a sudo wrapper.
 const PROMPT = /^(?:PS[^>\n]*>|>|\$|❯)\s+/
 const SUDO = /^sudo\s+/
 
@@ -47,14 +48,9 @@ function looksLikeCommand(text: string): boolean {
   return COMMAND.test(rest)
 }
 
-
-// The pane draws the tab that is on screen, and the tab hands it its source: what is being composed
-// is the strip's answer, not a store's.
 const { source, expanded = false } = defineProps<{ source: PaneSource; expanded?: boolean }>()
 
 const { matches } = useCommands()
-
-
 const toast = useToast()
 
 const methodLabel = computed(() => requestLabel(source))
@@ -183,7 +179,6 @@ function useWholeWidth(target: MaybeRefOrGetter<HTMLElement | null | undefined>,
 
 function useMissingVars(source: RequestSource) {
   const environments = useEnvironmentsStore()
-  const toast = useToast()
 
   const open = ref(false)
   const missing = computed(() => source.missing)

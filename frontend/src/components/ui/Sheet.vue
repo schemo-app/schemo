@@ -43,7 +43,6 @@ function onOpenChange(value: boolean) {
   if (!value) emit('close')
 }
 
-
 // reka-ui wants a missing description said explicitly.
 const describedBy = computed(() => (sub ? {} : { 'aria-describedby': undefined }))
 </script>

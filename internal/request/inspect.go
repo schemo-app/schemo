@@ -15,12 +15,8 @@ import (
 	"sync"
 )
 
-const (
-	// kept is how many documents are held at once.
-	kept = 8
-	// largest is the biggest body read, in bytes.
-	largest = 8 << 20
-)
+// kept is how many documents are held at once.
+const kept = 8
 
 type Inspector struct {
 	tree  Tree
@@ -38,7 +34,7 @@ func NewInspector(tree Tree, scope domain.Scope) *Inspector {
 // Open reads a body and returns its handle. A body that is not a document (or is too large) gets
 // no handle and no error.
 func (s *Inspector) Open(text, contentType string) (domain.Opened, error) {
-	if len(text) > largest {
+	if len(text) > domain.MaxBodyBytes {
 		return domain.Opened{}, nil
 	}
 	sum := sha256.Sum256([]byte(contentType + "\x00" + text))

@@ -40,7 +40,7 @@ func (e *Engine) eventStream(
 			return true
 		}
 		connected()
-		e.readEvents(ctx, spec.Stream, resp.Body, result, start)
+		e.readEvents(ctx, e.liveStream(spec), resp.Body, result, start)
 		return true
 	})
 }
@@ -48,9 +48,6 @@ func (e *Engine) eventStream(
 func (e *Engine) readEvents(
 	ctx context.Context, stream *Stream, body io.Reader, response *domain.Response, started time.Time,
 ) {
-	if stream == nil {
-		stream = &Stream{limit: e.cfg.MaxBodyBytes}
-	}
 	response.ContentType = eventStreamMediaType
 	stream.connect(response, nil)
 	err := parseEvents(body, e.cfg.MaxBodyBytes, stream.append)

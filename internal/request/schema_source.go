@@ -71,7 +71,7 @@ func schemaFileName(folder, path string) string {
 
 // A folder picked by mistake, a home directory say, is refused instead of read for minutes.
 const maxSchemaFiles = 1000
-const maxSchemaInputBytes = 4 * defaultMaxBodyBytes
+const maxSchemaInputBytes = 4 * domain.MaxBodyBytes
 
 type schemaReader struct {
 	mu    sync.Mutex
@@ -101,7 +101,7 @@ func (s *schemaReader) Read(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) > defaultMaxBodyBytes || s.bytes+len(data) > maxSchemaInputBytes {
+	if len(data) > domain.MaxBodyBytes || s.bytes+len(data) > maxSchemaInputBytes {
 		return nil, fmt.Errorf("schema input exceeds the size limit at %q", filepath.Base(path))
 	}
 	s.read[path] = data

@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -35,6 +35,17 @@ type Stream struct {
 }
 
 const maxStreamMessages = 1000
+
+var errDisconnected = errors.New("WebSocket is disconnected")
+
+// liveStream is the transcript the history service shares, or a private one when the engine runs
+// without it.
+func (e *Engine) liveStream(spec Spec) *Stream {
+	if spec.Stream != nil {
+		return spec.Stream
+	}
+	return &Stream{limit: e.cfg.MaxBodyBytes}
+}
 
 func (s *Stream) connect(response *domain.Response, writer func(context.Context, domain.SavedMessage, string) error) {
 	s.mu.Lock()
@@ -119,7 +130,7 @@ func (s *Stream) send(ctx context.Context, message domain.SavedMessage, masked s
 	writer := s.writer
 	s.mu.Unlock()
 	if writer == nil {
-		return fmt.Errorf("WebSocket is disconnected")
+		return errDisconnected
 	}
 	return writer(ctx, message, masked)
 }
@@ -141,7 +152,7 @@ func (s *History) Live(ctx context.Context, id string, after int) *StreamSnapsho
 func (s *History) sendMessage(ctx context.Context, id string, message domain.SavedMessage) error {
 	active := s.findAttempt(id)
 	if active == nil || active.stream == nil || active.message == nil {
-		return fmt.Errorf("WebSocket is disconnected")
+		return errDisconnected
 	}
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {

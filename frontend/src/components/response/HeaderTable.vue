@@ -15,7 +15,6 @@ const { headers, cookies = [], query = '' } = defineProps<{
   query?: string
 }>()
 
-
 const shown = computed(() => headers.filter((one) => matchesQuery(query, one.name, one.value)))
 
 defineExpose({ matches: computed(() => shown.value.length) })

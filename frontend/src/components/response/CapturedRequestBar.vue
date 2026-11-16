@@ -15,7 +15,6 @@ const { record, canOpen = false } = defineProps<{ record: RecordView; canOpen?: 
 
 const emit = defineEmits<{ openInRequest: [] }>()
 
-
 // The host and the path of the address, without the query: the query is what the Params button
 // beside it is for, and an address spelled twice reads as two different addresses.
 function hostPath(url: string): string {

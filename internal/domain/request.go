@@ -405,6 +405,10 @@ func (c Capture) Valid() bool {
 	return false
 }
 
+// MaxBodyBytes caps a response, a request body, an imported document and a file read whole. The
+// limit is one because a request, its answer and the file it came from are the same size of problem.
+const MaxBodyBytes = 8 << 20
+
 // LoopbackHeaderTimeout bounds how long the app's loopback servers wait for request headers, so a
 // stalled local client cannot hold a connection open.
 const LoopbackHeaderTimeout = 10 * time.Second

@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -9,13 +10,10 @@ import (
 	"strconv"
 
 	"schemo/internal/domain"
+	"schemo/internal/platform"
 )
 
-// DefaultMaxBytes is what a document is read under when nothing says otherwise, the same ceiling as
-// a body and a response: a few megabytes is a document, a hundred is a mistake.
-const DefaultMaxBytes int64 = 8 << 20
-
-// Fetcher reads URLs. Zero MaxBytes means the default.
+// Fetcher reads URLs. Zero MaxBytes means domain.MaxBodyBytes.
 type Fetcher struct {
 	client   *http.Client
 	MaxBytes int64
@@ -24,7 +22,7 @@ type Fetcher struct {
 // NewFetcher is a fetcher over the engine's client, which is what makes everything the user configured
 // about how this app reaches the network apply to a URL imported here too.
 func NewFetcher(client *http.Client) *Fetcher {
-	return &Fetcher{client: client, MaxBytes: DefaultMaxBytes}
+	return &Fetcher{client: client}
 }
 
 // Fetch reads a URL whole. Every failure before the document arrives is one refusal naming the address.
@@ -47,21 +45,15 @@ func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, error) {
 		return nil, fail("HTTP " + strconv.Itoa(response.StatusCode))
 	}
 
-	limit := f.MaxBytes
-	if limit <= 0 {
-		limit = DefaultMaxBytes
-	}
-	// The extra byte past the limit tells "ends exactly at the limit" apart from "was cut there",
-	// the way the file reader does it: a truncated document is a document nobody can trust.
+	limit := cmp.Or(f.MaxBytes, domain.MaxBodyBytes)
+	// One byte past the limit tells "ends exactly at the limit" from "was cut": a truncated document
+	// is refused, not imported.
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
 		return nil, fail(err.Error())
 	}
 	if int64(len(data)) > limit {
-		return nil, domain.Refuse(domain.CodeFileTooLarge, domain.ErrNotAllowed, domain.Args{
-			"path":  address,
-			"limit": strconv.Itoa(int(limit >> 20)),
-		})
+		return nil, platform.TooLarge(address, limit)
 	}
 	return data, nil
 }

@@ -32,9 +32,8 @@ type EngineConfig struct {
 }
 
 const (
-	defaultTimeout      = 60 * time.Second
-	defaultMaxBodyBytes = 8 << 20
-	dialTimeout         = 30 * time.Second
+	defaultTimeout = 60 * time.Second
+	dialTimeout    = 30 * time.Second
 )
 
 func dialing(
@@ -122,7 +121,7 @@ func (c EngineConfig) withDefaults() EngineConfig {
 		c.Timeout = defaultTimeout
 	}
 	if c.MaxBodyBytes <= 0 {
-		c.MaxBodyBytes = defaultMaxBodyBytes
+		c.MaxBodyBytes = domain.MaxBodyBytes
 	}
 	if c.Requests == (domain.Requests{}) {
 		c.Requests = domain.DefaultRequests()

@@ -30,7 +30,6 @@ const emit = defineEmits<{
   (e: 'remove'): void
 }>()
 
-
 const pane = defineModel<'body' | 'headers'>('pane', { required: true })
 const rpcStatus = computed(() => protocolOf(protocol).status === 'grpc')
 const statusValue = computed(() => rpcStatus.value ? example.status ?? '' : example.status || '')

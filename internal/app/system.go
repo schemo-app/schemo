@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 
 	"schemo/internal/desktop"
 	"schemo/internal/domain"
@@ -123,9 +122,5 @@ func (s *System) RetryInit() (desktop.StartupStatus, error) {
 // OpenDataFolder shows the user where the database lives, which is the one useful action left
 // when it cannot be opened.
 func (s *System) OpenDataFolder() error {
-	app := s.host.App()
-	if app == nil {
-		return errors.New("the application is not ready yet")
-	}
-	return app.Env.OpenFileManager(string(s.dataDir), false)
+	return s.host.RevealFolder(string(s.dataDir))
 }

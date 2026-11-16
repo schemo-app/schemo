@@ -39,7 +39,7 @@ func mustState(t *testing.T, s *Environments) domain.EnvState {
 
 func envOf(t *testing.T, s *Environments, id string) domain.Environment {
 	t.Helper()
-	env, ok := findEnvironment(mustState(t, s), id)
+	env, ok := mustState(t, s).Find(id)
 	if !ok {
 		t.Fatalf("environment %s is gone", id)
 	}

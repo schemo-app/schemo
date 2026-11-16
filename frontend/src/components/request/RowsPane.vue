@@ -27,7 +27,6 @@ const { source, kind, toolbar = null } = defineProps<{
 
 const emit = defineEmits<{ openAuth: [] }>()
 
-
 const rowKind = computed(() => (kind === 'params' ? RowKind.RowParams : RowKind.RowHeaders))
 const rows = computed(() => (kind === 'params' ? source.params : source.headers))
 

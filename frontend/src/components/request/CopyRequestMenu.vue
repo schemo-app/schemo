@@ -14,7 +14,6 @@ import { type MessageKey, t } from '../../i18n'
 // It sits beside the address because what is copied is the request being composed, not an answer.
 const { source } = defineProps<{ source: RequestSource }>()
 
-
 // Wire formats, not words: cURL is called cURL in every language.
 const FORMATS: { id: Format; label: string }[] = [
   { id: Format.FormatCurl, label: 'cURL' },

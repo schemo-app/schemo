@@ -2,6 +2,7 @@
 package insomnia
 
 import (
+	"cmp"
 	"encoding/json"
 	"maps"
 	"regexp"
@@ -14,6 +15,9 @@ import (
 
 // baseEnvironment is the environment Insomnia always applies, beside whichever one is selected.
 const baseEnvironment = "Base Environment"
+
+// untitledCollection names a workspace that has no name of its own.
+const untitledCollection = "Insomnia"
 
 // Import detects the export version from the document, independent of its filename.
 func Import(data []byte) (domain.Document, error) {
@@ -41,17 +45,14 @@ func importV4(file export) (domain.Document, error) {
 	if len(top) == 0 {
 		// An export of a single folder or request with no workspace around it still holds requests,
 		// and refusing it would be refusing what it clearly is.
-		top = []resource{{ID: "", Type: "workspace", Name: "Insomnia"}}
+		top = []resource{{ID: "", Type: "workspace"}}
 	}
 	for _, workspace := range top {
 		collection := domain.Collection{
-			Name:        strings.TrimSpace(workspace.Name),
+			Name:        cmp.Or(strings.TrimSpace(workspace.Name), untitledCollection),
 			Description: strings.TrimSpace(workspace.Description),
 			Auth:        requestAuth(workspace.Auth, &out),
 			Variables:   variablesOf(workspace.Environment),
-		}
-		if collection.Name == "" {
-			collection.Name = "Insomnia"
 		}
 		read.level(workspace.ID, &collection, &out)
 		read.environments(workspace.ID, &out)

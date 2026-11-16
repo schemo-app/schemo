@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import Icon from '../ui/Icon.vue'
 import Spinner from '../ui/Spinner.vue'
+import PageIntro from '../ui/PageIntro.vue'
 import PublicationFields from './PublicationFields.vue'
 import PublicationOptions from './PublicationOptions.vue'
 import PublicationPassword from './PublicationPassword.vue'
@@ -168,13 +169,7 @@ async function update() {
     </div>
 
     <div v-else-if="live.length === 0" class="pubs-empty">
-      <div class="empty-card">
-        <span class="empty-tile"><Icon name="Radio" :size="24" :stroke-width="1.5" /></span>
-        <div class="empty-text">
-          <span class="empty-title">{{ t('publications.emptyTitle') }}</span>
-          <span class="empty-hint">{{ t('publications.emptyHint') }}</span>
-        </div>
-      </div>
+      <PageIntro icon="Radio" :title="t('publications.emptyTitle')" :text="t('publications.emptyHint')" />
     </div>
 
     <div v-else class="pubs-body">
@@ -348,38 +343,6 @@ async function update() {
 .pubs-empty {
   @apply flex-1 min-h-0 overflow-auto;
   padding: 2rem 1.5rem;
-}
-
-.empty-card {
-  @apply flex items-start;
-  max-width: 50rem;
-  gap: 1rem;
-}
-
-.empty-tile {
-  @apply flex items-center justify-center flex-none text-text-secondary;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
-  background: var(--chip);
-}
-
-.empty-text {
-  @apply flex flex-col min-w-0;
-  gap: 0.1875rem;
-}
-
-.empty-title {
-  font-size: var(--text-20);
-  font-weight: 600;
-  letter-spacing: -0.015em;
-}
-
-.empty-hint {
-  @apply text-text-secondary;
-  font-size: var(--text-14);
-  line-height: 1.5;
-  text-wrap: pretty;
 }
 
 .pubs-body {

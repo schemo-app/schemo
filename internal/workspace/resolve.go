@@ -189,14 +189,10 @@ func variableLookup(state domain.EnvState, revealSecrets bool, above []domain.Va
 	}
 
 	active := map[string]domain.Variable{}
-	for _, env := range state.Environments {
-		if env.ID != envID {
-			continue
-		}
-		for _, v := range env.Vars {
-			if v.Enabled && v.Name != "" {
-				active[v.Name] = v
-			}
+	env, _ := state.Find(envID)
+	for _, v := range env.Vars {
+		if v.Enabled && v.Name != "" {
+			active[v.Name] = v
 		}
 	}
 

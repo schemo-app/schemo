@@ -248,6 +248,16 @@ type HeaderPair struct {
 	Value string `json:"value"`
 }
 
+// HeaderValue is the first value of a header, matched without regard to case; "" when it is absent.
+func HeaderValue(headers []HeaderPair, name string) string {
+	for _, header := range headers {
+		if strings.EqualFold(header.Name, name) {
+			return header.Value
+		}
+	}
+	return ""
+}
+
 func PairsFromMap(headers map[string]string) []HeaderPair {
 	out := make([]HeaderPair, 0, len(headers))
 	for name, value := range headers {

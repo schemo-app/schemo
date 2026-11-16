@@ -118,7 +118,6 @@ function toggleSecret(v: Variable) {
   void environments.updateVar(envId.value, v.id, { kind: next })
 }
 
-
 defineExpose({ cancelTop })
 </script>
 

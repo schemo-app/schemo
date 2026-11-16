@@ -2,6 +2,8 @@ package request
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"time"
 
 	"schemo/internal/domain"
@@ -31,7 +33,7 @@ func (s *History) startAttempt(ctx context.Context, workspace string, in SendInp
 		cancel: cancel, done: make(chan struct{}), message: in.message,
 	}
 	if in.Protocol.Live() {
-		active.stream = &Stream{limit: defaultMaxBodyBytes}
+		active.stream = &Stream{limit: domain.MaxBodyBytes}
 	}
 	s.attempts[active.id] = active
 	return ctx, active, nil
@@ -58,11 +60,7 @@ func (s *History) activeAttempts() []*attempt {
 }
 
 func (s *History) attemptSnapshot() []*attempt {
-	active := make([]*attempt, 0, len(s.attempts))
-	for _, one := range s.attempts {
-		active = append(active, one)
-	}
-	return active
+	return slices.Collect(maps.Values(s.attempts))
 }
 
 // StopAttempts stops admission, cancels requests and waits for their records to finish writing.

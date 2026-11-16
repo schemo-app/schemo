@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import TwoPaneSheet from '../ui/TwoPaneSheet.vue'
+import EmptyState from '../ui/EmptyState.vue'
 import CookieDangerSheet from './CookieDangerSheet.vue'
 import CookieDetailPane from './CookieDetailPane.vue'
 import CookieForm from './CookieForm.vue'
@@ -41,10 +42,7 @@ function cancelTop(): boolean {
         @cancel="cookies.cancelEdit()"
       />
 
-      <div v-else-if="jarEmpty" class="empty">
-        <span class="empty-title">{{ t('cookies.emptyJar') }}</span>
-        <span class="empty-hint">{{ t('cookies.emptyHint') }}</span>
-      </div>
+      <EmptyState v-else-if="jarEmpty" :title="t('cookies.emptyJar')" :text="t('cookies.emptyHint')" />
 
       <CookieDetailPane v-else @danger="confirming = true" />
     </template>
@@ -54,21 +52,3 @@ function cancelTop(): boolean {
     </template>
   </TwoPaneSheet>
 </template>
-
-<style scoped>
-@reference "../../style.css";
-
-.empty {
-  @apply flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center;
-}
-
-.empty-title {
-  @apply text-13 font-semibold;
-}
-
-.empty-hint {
-  @apply text-12 text-text-tertiary;
-  max-width: 23.75rem;
-  line-height: 1.5;
-}
-</style>

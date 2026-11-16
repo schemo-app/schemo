@@ -3,19 +3,20 @@ import type { RecordView } from '../lib/requestRecord'
 import { tryParseJson } from '../lib/json'
 import { buildJsonTree, isContainer, type JsonNode } from '../lib/jsonTree'
 import { isJsonApi } from '../lib/jsonapi'
-import { viewerLanguage } from '../lib/viewerLanguage'
+import { viewerLanguage, type ViewerLanguage } from '../lib/viewerLanguage'
 import { RecordSource } from '../../bindings/schemo/internal/domain'
 import { useRecordsStore } from '../stores/records'
 import { useCookiesStore } from '../stores/cookies'
 import { setViewState, viewState, type PaneSource } from '../stores/content'
 import { t } from '../i18n'
-import { runOrToast } from '../lib/calls'
+import { callOrToast, runOrToast } from '../lib/calls'
+import { formatResponse, responseParser } from '../lib/responseFormat'
+import { useIndent } from './useIndent'
 import { touchedJar } from '../lib/responseCookies'
 import { History } from '../../bindings/schemo/internal/request'
 import { useCopyFeedback } from './useCopyFeedback'
 import type { BodyView, ResponseTab } from '../lib/responseView'
 import { protocolOf } from '../lib/protocol'
-
 
 // The record, read: how its body is understood, which readings that leaves, where a person can go
 // from it. `canNavigate` is false in a collection card — one response, no history, no command line.
@@ -173,6 +174,50 @@ export function useResponseView(
 }
 
 // Reverts the jar and clears the record's claim, so the tab redraws what the record now says.
+// The raw reader's "format" toggle: a pretty-printed copy of the body, dropped when the body changes.
+export function useBodyFormatting(opts: {
+  record: () => RecordView
+  raw: () => boolean
+  language: () => ViewerLanguage
+}) {
+  const { indent } = useIndent()
+  const parser = computed(() => responseParser(opts.record().contentType, opts.language()))
+  const canFormat = computed(() => opts.raw() && !!parser.value && !!opts.record().responseBody.trim())
+  const formattedBody = ref<string | null>(null)
+  const formatting = ref(false)
+  // Answers to an older toggle are dropped once the body or the toggle has moved on.
+  let request = 0
+  const displayedBody = computed(() =>
+    opts.raw() ? formattedBody.value ?? opts.record().responseBody : opts.record().responseBody
+  )
+
+  async function toggle() {
+    const selectedParser = parser.value
+    if (!selectedParser || formatting.value) return
+    if (formattedBody.value !== null) {
+      formattedBody.value = null
+      return
+    }
+    const asked = ++request
+    formatting.value = true
+    const text = await callOrToast(
+      formatResponse(opts.record().responseBody, selectedParser, indent.value),
+      'response.raw.formatFailed'
+    )
+    if (asked !== request) return
+    formatting.value = false
+    if (text !== undefined) formattedBody.value = text
+  }
+
+  function reset() {
+    request++
+    formattedBody.value = null
+    formatting.value = false
+  }
+
+  return { canFormat, formattedBody, formatting, displayedBody, toggle, reset }
+}
+
 export function useCookieUndo(record: () => RecordView) {
   const records = useRecordsStore()
   const undoing = ref(false)

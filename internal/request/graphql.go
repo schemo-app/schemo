@@ -42,7 +42,7 @@ type GraphQLField struct {
 // DescribeGraphQLSchema lists the operations of definitions a request keeps, without reading its
 // sources.
 func (s *Drafts) DescribeGraphQLSchema(descriptors string) (GraphQLSchema, error) {
-	if len(descriptors) > defaultMaxBodyBytes {
+	if len(descriptors) > domain.MaxBodyBytes {
 		return GraphQLSchema{}, errGraphQLSchemaTooLarge
 	}
 	var definitions graphQLDefinitions
@@ -106,7 +106,7 @@ func (s *Drafts) LoadGraphQLSchema(ctx context.Context, draft domain.Draft, sour
 	if err != nil {
 		return GraphQLSchema{}, err
 	}
-	if len(encoded) > defaultMaxBodyBytes {
+	if len(encoded) > domain.MaxBodyBytes {
 		return GraphQLSchema{}, errGraphQLSchemaTooLarge
 	}
 	schema := merged.schema()

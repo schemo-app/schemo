@@ -16,6 +16,7 @@ import CaptureFiltersSheet from './CaptureFiltersSheet.vue'
 import TabFavicon from './TabFavicon.vue'
 import Icon from '../ui/Icon.vue'
 import Spinner from '../ui/Spinner.vue'
+import PageIntro from '../ui/PageIntro.vue'
 import Button from '../ui/Button.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
@@ -124,13 +125,7 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
         </span>
       </header>
       <div class="cap-intro">
-        <div class="intro-top">
-          <span class="intro-tile"><Icon name="Puzzle" :size="24" :stroke-width="1.5" /></span>
-          <span class="intro-text">
-            <span class="intro-title">{{ t('capture.introTitle') }}</span>
-            <span class="intro-note">{{ t('capture.introNote') }}</span>
-          </span>
-        </div>
+        <PageIntro icon="Puzzle" :title="t('capture.introTitle')" :text="t('capture.introNote')" />
 
         <div class="intro-steps">
           <div v-for="(step, i) in introSteps" :key="step.title" class="intro-step">
@@ -648,40 +643,6 @@ const onScroll = (event: Event) => loadIfNearEnd(event.currentTarget as HTMLElem
 .cap-intro {
   @apply flex-1 min-h-0 overflow-auto;
   padding: 2rem 1.5rem;
-}
-
-.intro-top {
-  @apply flex items-start;
-  max-width: 67.5rem;
-  gap: 1rem;
-}
-
-.intro-tile {
-  @apply flex items-center justify-center flex-none;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
-  background: var(--chip);
-  color: var(--text-secondary);
-}
-
-.intro-text {
-  @apply flex flex-col flex-1 min-w-0;
-  max-width: 38.75rem;
-  gap: 0.1875rem;
-}
-
-.intro-title {
-  @apply font-semibold;
-  font-size: var(--text-20);
-  letter-spacing: -0.015em;
-}
-
-.intro-note {
-  color: var(--text-secondary);
-  font-size: var(--text-14);
-  line-height: 1.5;
-  text-wrap: pretty;
 }
 
 .intro-steps {

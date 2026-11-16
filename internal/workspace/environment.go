@@ -58,7 +58,7 @@ func (s *Environments) Save(ctx context.Context, env domain.Environment) error {
 	if err != nil {
 		return err
 	}
-	held, ok := findEnvironment(state, env.ID)
+	held, ok := state.Find(env.ID)
 	if !ok {
 		return environmentNotFound(env.ID)
 	}
@@ -109,7 +109,7 @@ func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (stri
 	}
 	base := domain.Environment{}
 	if draft.StartFrom != "" {
-		found, ok := findEnvironment(state, draft.StartFrom)
+		found, ok := state.Find(draft.StartFrom)
 		if !ok {
 			return "", environmentNotFound(draft.StartFrom)
 		}
@@ -158,7 +158,7 @@ func (s *Environments) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := findEnvironment(state, id); !ok {
+	if _, ok := state.Find(id); !ok {
 		return environmentNotFound(id)
 	}
 	if err := s.store.DeleteEnvironment(ctx, workspace, id); err != nil {
@@ -176,7 +176,7 @@ func (s *Environments) Activate(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := findEnvironment(state, id); id != "" && !ok {
+	if _, ok := state.Find(id); id != "" && !ok {
 		return environmentNotFound(id)
 	}
 	return s.store.SetActiveEnvironment(ctx, workspace, id)
@@ -261,7 +261,7 @@ func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name
 	var vars []domain.Variable
 	switch scope {
 	case domain.ScopeEnvironment:
-		env, ok := findEnvironment(state, state.ActiveID)
+		env, ok := state.Find(state.ActiveID)
 		if !ok {
 			return "", false, nil
 		}
@@ -313,7 +313,7 @@ func (s *Environments) write(ctx context.Context, scope domain.VarScope, name, v
 	where := domain.EnvScope{}
 	switch scope {
 	case domain.ScopeEnvironment:
-		if _, ok := findEnvironment(state, state.ActiveID); !ok {
+		if _, ok := state.Find(state.ActiveID); !ok {
 			return domain.Refuse(domain.CodeNoEnvironment, domain.ErrNotAllowed, nil)
 		}
 		where.Environment = state.ActiveID
@@ -349,7 +349,7 @@ func (s *Environments) saveScope(ctx context.Context, workspace string, state do
 	if scope.Environment == "" {
 		return s.store.SaveScope(ctx, workspace, nil, scope, vars)
 	}
-	if _, ok := findEnvironment(state, scope.Environment); !ok {
+	if _, ok := state.Find(scope.Environment); !ok {
 		return environmentNotFound(scope.Environment)
 	}
 	return s.store.SaveScope(ctx, workspace, nil, scope, vars)
@@ -372,11 +372,11 @@ func (s *Environments) writable(ctx context.Context, scope domain.EnvScope) (str
 	if err != nil {
 		return "", domain.EnvState{}, err
 	}
-	if env, ok := findEnvironment(state, scope.Environment); ok && env.Readonly {
+	if env, ok := state.Find(scope.Environment); ok && env.Readonly {
 		return "", domain.EnvState{}, domain.Refuse(domain.CodeEnvironmentReadOnly, domain.ErrNotAllowed, nil)
 	}
 	if scope.Environment != "" {
-		if _, ok := findEnvironment(state, scope.Environment); !ok {
+		if _, ok := state.Find(scope.Environment); !ok {
 			return "", domain.EnvState{}, environmentNotFound(scope.Environment)
 		}
 	}
@@ -491,7 +491,7 @@ func scopeVariables(state domain.EnvState, scope domain.EnvScope) []domain.Varia
 	if scope.Environment == "" {
 		return state.Globals
 	}
-	env, _ := findEnvironment(state, scope.Environment)
+	env, _ := state.Find(scope.Environment)
 	return env.Vars
 }
 
@@ -504,15 +504,6 @@ func nextPosition[T any](items []T, position func(T) int) int {
 		}
 	}
 	return out
-}
-
-func findEnvironment(state domain.EnvState, id string) (domain.Environment, bool) {
-	for _, env := range state.Environments {
-		if env.ID == id {
-			return env, true
-		}
-	}
-	return domain.Environment{}, false
 }
 
 func nameTaken(all []domain.Environment, except, name string) bool {
@@ -533,12 +524,8 @@ func (s *Environments) ActiveName(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, one := range state.Environments {
-		if one.ID == state.ActiveID {
-			return one.Name, nil
-		}
-	}
-	return "", nil
+	active, _ := state.Find(state.ActiveID)
+	return active.Name, nil
 }
 
 // ImportState imports an environment and answers with the whole list.

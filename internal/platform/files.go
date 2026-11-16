@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"cmp"
 	"errors"
 	"io"
 	"io/fs"
@@ -10,26 +11,19 @@ import (
 	"schemo/internal/domain"
 )
 
-// FileReader reads a file whole, up to a limit. Zero means the default.
+// FileReader reads a file whole, up to a limit. Zero means domain.MaxBodyBytes.
 type FileReader struct {
 	MaxBytes int64
 }
 
-// DefaultMaxBytes is what a body is capped at when nothing says otherwise. It is the same ceiling
-// the engine reads a response under, because a request and its answer are the same size of problem.
-const DefaultMaxBytes int64 = 8 << 20
-
 func NewFileReader() *FileReader {
-	return &FileReader{MaxBytes: DefaultMaxBytes}
+	return &FileReader{}
 }
 
 // Read refuses a file over the limit rather than truncating it; one extra byte tells "exactly at the
 // limit" from "cut".
 func (r *FileReader) Read(path string) ([]byte, error) {
-	limit := r.MaxBytes
-	if limit <= 0 {
-		limit = DefaultMaxBytes
-	}
+	limit := cmp.Or(r.MaxBytes, domain.MaxBodyBytes)
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -42,13 +36,18 @@ func (r *FileReader) Read(path string) ([]byte, error) {
 		return nil, ReadError(path, err)
 	}
 	if int64(len(data)) > limit {
-		// The limit is named in the unit its sentence names, so the catalogue never has to say "bytes".
-		return nil, domain.Refuse(domain.CodeFileTooLarge, domain.ErrNotAllowed, domain.Args{
-			"path":  path,
-			"limit": strconv.Itoa(int(limit >> 20)),
-		})
+		return nil, TooLarge(path, limit)
 	}
 	return data, nil
+}
+
+// TooLarge refuses a file or document over limit. The limit is given in MiB, the unit the message
+// names.
+func TooLarge(path string, limit int64) error {
+	return domain.Refuse(domain.CodeFileTooLarge, domain.ErrNotAllowed, domain.Args{
+		"path":  path,
+		"limit": strconv.Itoa(int(limit >> 20)),
+	})
 }
 
 // ReadError describes a failure reading a local file or directory.

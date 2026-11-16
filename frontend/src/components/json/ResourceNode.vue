@@ -25,7 +25,6 @@ const emit = defineEmits<{
 
 const open = ref(false)
 
-
 // The Transition mounts only after the first open: hundreds of collapsed nodes mount twice as fast
 // without one each.
 const everOpened = ref(false)

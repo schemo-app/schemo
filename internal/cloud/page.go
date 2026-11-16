@@ -307,7 +307,7 @@ func (p *page) parameters(node domain.CollectionNode) ([]snapshotv1.Parameter, e
 			Type:        "string",
 			Required:    held.where == "path",
 			Description: p.cut(name, held.row.Description, maxTextRunes),
-			Example:     clipExample(name, example, &p.report),
+			Example:     p.clipped(name, example, maxExampleRunes),
 		})
 	}
 	return out, nil
@@ -341,7 +341,7 @@ func (p *page) body(owner string, node domain.CollectionNode) (*snapshotv1.Body,
 		}
 		return &snapshotv1.Body{
 			Fields:  fields,
-			Example: clipExample(owner, maskText(text, p.hidden), &p.report),
+			Example: p.clipped(owner, maskText(text, p.hidden), maxExampleRunes),
 		}, nil
 	}
 }
@@ -381,7 +381,7 @@ func (p *page) formBody(owner string, node domain.CollectionNode) (*snapshotv1.B
 	}
 	return &snapshotv1.Body{
 		Fields:  fields,
-		Example: clipExample(owner, strings.Join(pairs, "&"), &p.report),
+		Example: p.clipped(owner, strings.Join(pairs, "&"), maxExampleRunes),
 	}, nil
 }
 
@@ -406,7 +406,7 @@ func (p *page) responses(owner string, node domain.CollectionNode) ([]snapshotv1
 		out = append(out, snapshotv1.Response{
 			Status: int64(example.Status),
 			Name:   shown,
-			Body:   clipExample(owner, maskText(example.Body, p.hidden), &p.report),
+			Body:   p.clipped(owner, maskText(example.Body, p.hidden), maxExampleRunes),
 		})
 	}
 	return out, nil
@@ -443,32 +443,23 @@ func (p *page) variables(tree domain.Collection) ([]snapshotv1.Variable, []Hidde
 	return out, hidden, nil
 }
 
-// cut holds a text to what a page takes, noting whose it was when it has to be shortened.
+// cut holds prose to what a page takes and masks hidden values in it.
 func (p *page) cut(owner, text string, most int) string {
+	return maskText(p.clipped(owner, text, most), p.hidden)
+}
+
+// clipped shortens text to most runes, noting whose it was when it had to be shortened.
+func (p *page) clipped(owner, text string, most int) string {
 	clipped, was := clip(text, most)
 	if was {
 		p.note(domain.CodeTextTooLong, owner, domain.Args{"max": strconv.Itoa(most)})
 	}
-	return maskText(clipped, p.hidden)
+	return clipped
 }
 
 // note records one piece of a collection the page could not carry as it is.
 func (p *page) note(code domain.Code, name string, args domain.Args) {
 	p.report.Problems = append(p.report.Problems, Problem{Code: code, Name: name, Args: args})
-}
-
-// clipExample is cut for a value shown as an example, which is a body rather than prose and is
-// measured by its own ceiling.
-func clipExample(owner, value string, report *Report) string {
-	clipped, was := clip(value, maxExampleRunes)
-	if was {
-		report.Problems = append(report.Problems, Problem{
-			Code: domain.CodeTextTooLong,
-			Name: owner,
-			Args: domain.Args{"max": strconv.Itoa(maxExampleRunes)},
-		})
-	}
-	return clipped
 }
 
 // fieldsOf lists a body's fields from its example text, the only form a body is kept in.
@@ -529,19 +520,11 @@ func variablesOf(level domain.Collection, into []domain.Variable) []domain.Varia
 // active is the environment a page's base address is read from: the one the person chose, or the
 // one the app is working in.
 func active(state domain.EnvState, chosen string) domain.Environment {
-	if chosen != "" {
-		for _, environment := range state.Environments {
-			if environment.ID == chosen {
-				return environment
-			}
-		}
+	if environment, ok := state.Find(chosen); ok && chosen != "" {
+		return environment
 	}
-	for _, environment := range state.Environments {
-		if environment.ID == state.ActiveID {
-			return environment
-		}
-	}
-	return domain.Environment{}
+	environment, _ := state.Find(state.ActiveID)
+	return environment
 }
 
 // environmentNamed finds the page's environment by name (ids are per device); empty when unknown.

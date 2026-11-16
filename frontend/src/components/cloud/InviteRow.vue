@@ -15,7 +15,6 @@ defineEmits<{ (e: 'enter'): void; (e: 'drop'): void }>()
 const email = defineModel<string>('email', { required: true })
 const roleId = defineModel<string>('roleId', { required: true })
 
-
 const options = computed(() => [
   { value: '', label: t('workspaces.roleDefault') },
   ...roles.map((role) => ({ value: role.id, label: roleLabel(t, te, role.name) })),

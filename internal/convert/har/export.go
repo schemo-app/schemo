@@ -144,14 +144,14 @@ func requestOf(record domain.Record, body string) request {
 	out := request{
 		Method:      record.Method,
 		URL:         record.URL,
-		Cookies:     cookiesOf(headerOf(record.RequestHeaders, "Cookie")),
+		Cookies:     cookiesOf(domain.HeaderValue(record.RequestHeaders, "Cookie")),
 		Headers:     pairsOf(record.RequestHeaders),
 		QueryString: queryOf(record.URL),
 		BodySize:    record.RequestBytes,
 	}
 
 	if body != "" {
-		if contentType := headerOf(record.RequestHeaders, "Content-Type"); contentType != "" {
+		if contentType := domain.HeaderValue(record.RequestHeaders, "Content-Type"); contentType != "" {
 			out.PostData = &postData{MimeType: contentType, Text: body}
 		} else {
 			out.PostData = &postData{MimeType: domain.MediaText, Text: body}
@@ -220,7 +220,7 @@ func redirectOf(record domain.Record) string {
 	if record.Status < 300 || record.Status >= 400 {
 		return ""
 	}
-	return headerOf(record.ResponseHeaders, "Location")
+	return domain.HeaderValue(record.ResponseHeaders, "Location")
 }
 
 func pairsOf(headers []domain.HeaderPair) []headerPair {
@@ -263,13 +263,4 @@ func queryOf(raw string) []nameValue {
 		out = append(out, nameValue{Name: decoded.Name, Value: decoded.Value})
 	}
 	return out
-}
-
-func headerOf(headers []domain.HeaderPair, name string) string {
-	for _, header := range headers {
-		if strings.EqualFold(header.Name, name) {
-			return header.Value
-		}
-	}
-	return ""
 }

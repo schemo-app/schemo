@@ -499,13 +499,12 @@ func (t appTools) editEnvironment(ctx context.Context, workspace, id string, edi
 	if err != nil {
 		return err
 	}
-	for _, env := range state.Environments {
-		if env.ID == id {
-			edit(&env)
-			return environments.Save(ctx, env)
-		}
+	env, ok := state.Find(id)
+	if !ok {
+		return domain.ErrNotFound
 	}
-	return domain.ErrNotFound
+	edit(&env)
+	return environments.Save(ctx, env)
 }
 
 func withoutVariable(vars []domain.Variable, id string) ([]domain.Variable, bool) {
@@ -562,14 +561,7 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 			if err != nil {
 				return err
 			}
-			found := false
-			for _, env := range state.Environments {
-				if env.ID == *patch.Environment {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if _, ok := state.Find(*patch.Environment); !ok {
 				return domain.ErrNotFound
 			}
 		}

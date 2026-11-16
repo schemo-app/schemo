@@ -31,9 +31,9 @@ import ScriptsTab from './ScriptsTab.vue'
 import type { PaneSource } from '../../stores/content'
 import { t } from '../../i18n'
 import { useCommands } from '../../composables/useCommands'
-import { useIndent } from '../../composables/useIndent'
 import { useInspection } from '../../composables/useInspection'
 import {
+  useBodyFormatting,
   useCookieUndo,
   useResponseCopy,
   useResponseSearch,
@@ -48,7 +48,6 @@ import { allResources, resourceMatchesQuery } from '../../lib/jsonapi'
 import { prettyJson, prettyJsonText } from '../../lib/json'
 import { tabBadge, type BodyView } from '../../lib/responseView'
 import { callOrToast } from '../../lib/calls'
-import { formatResponse, responseParser } from '../../lib/responseFormat'
 
 const RawViewer = defineAsyncComponent(() => import('./RawViewer.vue'))
 
@@ -111,35 +110,18 @@ const {
   () => pane
 )
 
-const { indent } = useIndent()
-const parser = computed(() => responseParser(record.contentType, language.value))
-const canFormat = computed(() =>
-  activeTab.value === 'body' && reader.value === 'raw' && !!parser.value && !!record.responseBody.trim()
-)
-const formattedBody = ref<string | null>(null)
-const formatting = ref(false)
-let formatRequest = 0
-const displayedBody = computed(() =>
-  reader.value === 'raw' ? formattedBody.value ?? record.responseBody : record.responseBody
-)
-
-async function toggleFormatting() {
-  const selectedParser = parser.value
-  if (!selectedParser || formatting.value) return
-  if (formattedBody.value !== null) {
-    formattedBody.value = null
-    return
-  }
-  const request = ++formatRequest
-  formatting.value = true
-  const text = await callOrToast(
-    formatResponse(record.responseBody, selectedParser, indent.value),
-    'response.raw.formatFailed'
-  )
-  if (request !== formatRequest) return
-  formatting.value = false
-  if (text !== undefined) formattedBody.value = text
-}
+const {
+  canFormat,
+  formattedBody,
+  formatting,
+  displayedBody,
+  toggle: toggleFormatting,
+  reset: resetFormatting,
+} = useBodyFormatting({
+  record: () => record,
+  raw: () => activeTab.value === 'body' && reader.value === 'raw',
+  language: () => language.value,
+})
 
 const { runs: scriptRuns, isLoading: runsLoading } = useScriptRuns(() => record.id)
 
@@ -162,9 +144,7 @@ const node = computed(() => {
 
 // The view stays on the same reading when the response changes. Its selection belongs to the old body.
 watch([() => record.id, () => record.responseBody, () => record.contentType], () => {
-  formatRequest++
-  formattedBody.value = null
-  formatting.value = false
+  resetFormatting()
   highlightKey.value = null
   inspection.reset()
   selectPath('$')

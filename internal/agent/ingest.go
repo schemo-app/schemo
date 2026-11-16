@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"log"
-	"strings"
 
 	"schemo/internal/desktop"
 	"schemo/internal/domain"
@@ -71,7 +70,7 @@ func (c capture) Captured(req CapturedRequest) {
 		URL:             req.URL,
 		Status:          req.Status,
 		StatusText:      req.StatusText,
-		ContentType:     headerValue(responseHeaders, "Content-Type"),
+		ContentType:     domain.HeaderValue(responseHeaders, "Content-Type"),
 		RequestHeaders:  domain.PairsFromMap(req.RequestHeaders),
 		ResponseHeaders: responseHeaders,
 		RequestBody:     req.RequestBody,
@@ -104,15 +103,4 @@ func (c capture) FocusRequested(req FocusRequest) {
 	if req.Tab > 0 {
 		c.host.OpenTab(req.Tab)
 	}
-}
-
-// headerValue reads one name out of headers, ignoring case: the extension reports the names the
-// browser used, which are lower-case.
-func headerValue(headers []domain.HeaderPair, name string) string {
-	for _, h := range headers {
-		if strings.EqualFold(h.Name, name) {
-			return h.Value
-		}
-	}
-	return ""
 }

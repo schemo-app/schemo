@@ -1,140 +1,118 @@
 package desktop
 
-// The windows that are not the main one, and their geometry.
-
 import (
+	"net/url"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"schemo/internal/domain"
 )
 
-// Window pages. Each is also a Vite entry (frontend/vite.config.ts); a test keeps the lists in sync.
+// Window pages; each is also a Vite entry in frontend/vite.config.ts.
 const (
 	pageAbout    = "/about.html"
 	pageUpdate   = "/update.html"
 	pageSettings = "/settings.html"
 )
 
-func (h *Host) ShowAbout() {
+// page is a secondary window: opaque, one instance, framed like the main window.
+type page struct {
+	name                string
+	path                string
+	width, height       int
+	minWidth, minHeight int
+	fixed               bool
+	// darkGround matches the page's background so the frame does not flash before the first paint.
+	darkGround application.RGBA
+}
+
+// showPage focuses the named window when it is open and returns it as existing; otherwise it opens
+// the window and returns it as created.
+func (h *Host) showPage(spec page, params url.Values) (existing application.Window, created *application.WebviewWindow) {
 	app := h.App()
 	if app == nil {
-		return
+		return nil, nil
 	}
-
-	if w, ok := h.windowByName(windowAbout); ok {
-		bringToFront(w)
-		return
+	if window, ok := app.Window.GetByName(spec.name); ok {
+		bringToFront(window)
+		return window, nil
 	}
-
+	minWidth, minHeight := spec.minWidth, spec.minHeight
+	if spec.fixed {
+		minWidth, minHeight = spec.width, spec.height
+	}
 	theme := h.heldTheme()
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:      windowAbout,
-		Title:     h.windowTitle(),
-		Width:     aboutWidth,
-		Height:    aboutHeight(),
-		MinWidth:  aboutWidth,
-		MinHeight: aboutHeight(),
-		// This flag disables resizing; v3 inverted it from v2's Resizable.
-		DisableResize: true,
-		Frameless:     UseCustomTitlebar(),
-		// The page's own ground — `--bg-panel` — so the window does not sit in another colour while it
-		// arrives: it is drawn before the page is, and nothing in it can be reached by a stylesheet.
-		BackgroundColour: h.groundColour(38, 38, 42),
-		URL:              pageAbout + h.windowQuery(false),
+	ground := application.NewRGB(255, 255, 255)
+	if windowTheme(theme) == application.Dark {
+		ground = spec.darkGround
+	}
+	return nil, app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             spec.name,
+		Title:            h.windowTitle(),
+		Width:            spec.width,
+		Height:           spec.height,
+		MinWidth:         minWidth,
+		MinHeight:        minHeight,
+		DisableResize:    spec.fixed,
+		Frameless:        UseCustomTitlebar(),
+		BackgroundColour: ground,
+		URL:              spec.path + encodeQuery(params),
 		Mac: application.MacWindow{
 			TitleBar:   application.MacTitleBarHiddenInset,
 			Appearance: macWindowAppearance(theme),
 		},
 		Windows: application.WindowsWindow{Theme: windowTheme(theme)},
 	})
+}
+
+func (h *Host) ShowAbout() {
+	// The custom title bar takes room the inset macOS bar overlays.
+	height := 415
+	if UseCustomTitlebar() {
+		height = 439
+	}
+	h.showPage(page{
+		name: windowAbout, path: pageAbout,
+		width: 336, height: height, fixed: true,
+		darkGround: application.NewRGB(38, 38, 42),
+	}, h.windowParams(false))
 }
 
 func (h *Host) ShowUpdate() {
-	app := h.App()
-	if app == nil {
-		return
-	}
-	if w, ok := h.windowByName(windowUpdate); ok {
-		bringToFront(w)
-		return
-	}
-
-	theme := h.heldTheme()
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             windowUpdate,
-		Title:            h.windowTitle(),
-		Width:            updateWidth,
-		Height:           updateHeight,
-		MinWidth:         updateWidth,
-		MinHeight:        updateHeight,
-		DisableResize:    true,
-		Frameless:        UseCustomTitlebar(),
-		BackgroundColour: h.groundColour(38, 38, 42),
-		URL:              pageUpdate + h.windowQuery(false),
-		Mac: application.MacWindow{
-			TitleBar:   application.MacTitleBarHiddenInset,
-			Appearance: macWindowAppearance(theme),
-		},
-		Windows: application.WindowsWindow{Theme: windowTheme(theme)},
-	})
+	h.showPage(page{
+		name: windowUpdate, path: pageUpdate,
+		width: 560, height: 488, fixed: true,
+		darkGround: application.NewRGB(38, 38, 42),
+	}, h.windowParams(false))
 }
 
-// CloseMainWindow closes the main window; on macOS the app goes with it, which is what the last
-// window closing has always meant here.
+// ShowSettings opens the settings window on a category; an empty one keeps the current page.
+func (h *Host) ShowSettings(category string) {
+	params := h.windowParams(false)
+	if category != "" {
+		params.Set("tab", category)
+	}
+	existing, created := h.showPage(page{
+		name: windowSettings, path: pageSettings,
+		width: 1160, height: 760,
+		minWidth: 820, minHeight: 560,
+		darkGround: application.NewRGB(28, 28, 30),
+	}, params)
+	if created != nil {
+		hideToolbarInFullscreen(created)
+	} else if existing != nil && category != "" {
+		existing.EmitEvent(EventSettingsTab, category)
+	}
+}
+
+// CloseMainWindow closes the main window; on macOS the app quits with it.
 func (h *Host) CloseMainWindow() {
 	if win := h.MainWindow(); win != nil {
 		win.Close()
 	}
 }
 
-func (h *Host) windowByName(name string) (application.Window, bool) {
-	app := h.App()
-	if app == nil {
-		return nil, false
-	}
-	return app.Window.GetByName(name)
-}
-
-func (h *Host) ShowSettings(category string) {
-	app := h.App()
-	if app == nil {
-		return
-	}
-	if w, ok := h.windowByName(windowSettings); ok {
-		bringToFront(w)
-		if category != "" {
-			w.EmitEvent(EventSettingsTab, category)
-		}
-		return
-	}
-
-	params := h.windowParams(false)
-	if category != "" {
-		params.Set("tab", category)
-	}
-
-	theme := h.heldTheme()
-	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             windowSettings,
-		Title:            h.windowTitle(),
-		Width:            settingsWidth,
-		Height:           settingsHeight,
-		MinWidth:         settingsMinWidth,
-		MinHeight:        settingsMinHeight,
-		Frameless:        UseCustomTitlebar(),
-		BackgroundColour: h.groundColour(28, 28, 30),
-		URL:              pageSettings + encodeQuery(params),
-		Mac: application.MacWindow{
-			TitleBar:   application.MacTitleBarHiddenInset,
-			Appearance: macWindowAppearance(theme),
-		},
-		Windows: application.WindowsWindow{Theme: windowTheme(theme)},
-	})
-	hideToolbarInFullscreen(settingsWin)
-}
-
-// heldTheme is the theme the app is drawing itself in: the stored choice, or the system's when the
-// choice follows it — the same answer windowTheme gives to a window about to be made.
+// heldTheme is the stored theme choice, or "system" when none was stored yet.
 func (h *Host) heldTheme() domain.Theme {
 	theme, _ := h.theme.Load().(string)
 	if theme == "" {
@@ -143,25 +121,9 @@ func (h *Host) heldTheme() domain.Theme {
 	return domain.Theme(theme)
 }
 
-// groundColour is the window background before the page paints, spelled here because the frame is
-// out of the stylesheet's reach.
-func (h *Host) groundColour(darkR, darkG, darkB uint8) application.RGBA {
-	if windowTheme(h.heldTheme()) == application.Dark {
-		return application.NewRGB(darkR, darkG, darkB)
-	}
-	return application.NewRGB(255, 255, 255)
-}
-
 func UseCustomTitlebar() bool {
 	return application.System.IsPlatform(application.PlatformWindows) ||
 		application.System.IsPlatform(application.PlatformLinux)
-}
-
-func aboutHeight() int {
-	if UseCustomTitlebar() {
-		return aboutHeightBarred
-	}
-	return aboutHeightInset
 }
 
 func bringToFront(w application.Window) {

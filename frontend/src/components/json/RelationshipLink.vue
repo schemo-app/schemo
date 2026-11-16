@@ -23,7 +23,6 @@ const emit = defineEmits<{
   (e: 'inspect'): void
 }>()
 
-
 const targets = computed(() => relIdentifiers(rel))
 
 function labelFor(type: string, id: string): string {

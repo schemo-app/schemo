@@ -8,16 +8,33 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// The file and browser dialogs. Every one of them is answered with "nothing" when the person
-// closes it: a cancelled dialog is not a failure the window has to explain.
+// Every dialog answers "" when the person closes it: a cancelled dialog is not a failure.
+
+var errNotRunning = errors.New("the application is not running yet")
+
+func (h *Host) running() (*application.App, error) {
+	if app := h.App(); app != nil {
+		return app, nil
+	}
+	return nil, errNotRunning
+}
 
 // OpenURL opens the system browser, which sign-in pages need for a real address bar and cookies.
 func (h *Host) OpenURL(rawURL string) error {
-	app := h.App()
-	if app == nil {
-		return errors.New("the window does not exist yet")
+	app, err := h.running()
+	if err != nil {
+		return err
 	}
 	return app.Browser.OpenURL(rawURL)
+}
+
+// RevealFolder shows a folder in the system file manager.
+func (h *Host) RevealFolder(path string) error {
+	app, err := h.running()
+	if err != nil {
+		return err
+	}
+	return app.Env.OpenFileManager(path, false)
 }
 
 // SafeFileName replaces characters a filesystem refuses with a dash and adds the extension. An
@@ -42,9 +59,9 @@ func (h *Host) OpenFile(title string, filters ...application.FileFilter) (string
 
 // OpenPath opens Wails' system chooser. macOS can accept a folder in the file chooser.
 func (h *Host) OpenPath(title string, allowFolder bool, filters ...application.FileFilter) (string, error) {
-	app := h.App()
-	if app == nil {
-		return "", errors.New("the window does not exist yet")
+	app, err := h.running()
+	if err != nil {
+		return "", err
 	}
 	dialog := app.Dialog.OpenFile().SetTitle(title)
 	// On Windows and Linux, enabling directories switches the Wails chooser to folder-only mode.
@@ -65,9 +82,9 @@ func (h *Host) OpenPath(title string, allowFolder bool, filters ...application.F
 
 // OpenFolder returns the chosen folder, or nothing when the dialog was closed.
 func (h *Host) OpenFolder(title string) (string, error) {
-	app := h.App()
-	if app == nil {
-		return "", errors.New("the window does not exist yet")
+	app, err := h.running()
+	if err != nil {
+		return "", err
 	}
 	path, err := app.Dialog.OpenFile().SetTitle(title).CanChooseDirectories(true).CanChooseFiles(false).
 		PromptForSingleSelection()
@@ -89,9 +106,9 @@ func (h *Host) SaveFile(
 	suggestedName string,
 	filters ...application.FileFilter,
 ) (string, error) {
-	app := h.App()
-	if app == nil {
-		return "", errors.New("the window does not exist yet")
+	app, err := h.running()
+	if err != nil {
+		return "", err
 	}
 	path, err := app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
 		Title:   title,

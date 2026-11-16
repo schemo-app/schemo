@@ -234,14 +234,14 @@ func rpcDescriptors(encoded string) (*rpcResolver, error) {
 	if encoded == "" {
 		return nil, nil
 	}
-	if len(encoded) > base64.StdEncoding.EncodedLen(defaultMaxBodyBytes) {
+	if len(encoded) > base64.StdEncoding.EncodedLen(domain.MaxBodyBytes) {
 		return nil, errRPCDescriptorsTooLarge
 	}
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, fmt.Errorf("decoding gRPC descriptors: %w", err)
 	}
-	if len(data) > defaultMaxBodyBytes {
+	if len(data) > domain.MaxBodyBytes {
 		return nil, errRPCDescriptorsTooLarge
 	}
 	var set descriptorpb.FileDescriptorSet
@@ -268,7 +268,7 @@ func encodeRPCDescriptors(files []protoreflect.FileDescriptor) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(data) > defaultMaxBodyBytes {
+	if len(data) > domain.MaxBodyBytes {
 		return "", errRPCDescriptorsTooLarge
 	}
 	return base64.StdEncoding.EncodeToString(data), nil

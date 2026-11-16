@@ -5,7 +5,6 @@ import { t } from '../../i18n'
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'choose'): void }>()
 
-
 const rows = computed(() => [
   {
     label: t('environments.importOverwrite'),

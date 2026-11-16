@@ -9,7 +9,6 @@ import { t } from '../../i18n'
 const { doc, url } = defineProps<{ doc: JsonApiDocument; url: string }>()
 defineEmits<{ follow: [url: string] }>()
 
-
 const pagination = computed(() => {
   const links = doc.links ?? {}
   return { first: linkHref(links.first), prev: linkHref(links.prev), next: linkHref(links.next), last: linkHref(links.last) }
