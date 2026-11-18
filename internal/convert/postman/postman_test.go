@@ -742,31 +742,17 @@ func TestImportReadsDescriptionsWrittenBothWays(t *testing.T) {
 	}
 }
 
-// A collection variable here cannot be secret — a collection leaves the app when it is exported —
-// so a value the file marks secret arrives as its name with nothing in it, and the count of what
-// was left behind travels with the document.
-func TestImportLeavesASecretCollectionValueEmpty(t *testing.T) {
+func TestImportIdentifiesASecretCollectionVariable(t *testing.T) {
 	doc, err := Import(fixture(t, "collection_events.json"))
 	if err != nil {
-		t.Fatalf("Read: %v", err)
+		t.Fatal(err)
 	}
-	var found bool
 	for _, variable := range doc.Collections[0].Variables {
-		if variable.Name != "token" {
-			continue
-		}
-		found = true
-		if variable.Value != "" {
-			t.Errorf("token = %q, want the value left behind", variable.Value)
+		if variable.Name == "token" && variable.Kind == domain.VariableSecret && variable.Value == "s3cret" {
+			return
 		}
 	}
-	if !found {
-		t.Fatalf("variables = %+v, want the secret's name kept", doc.Collections[0].Variables)
-	}
-	if len(doc.Skipped) != 1 || doc.Skipped[0].Code != domain.CodeSkippedSecretValue ||
-		doc.Skipped[0].Count != 1 {
-		t.Errorf("skipped = %+v, want one secret value counted", doc.Skipped)
-	}
+	t.Fatal("the collection variable must retain its secret classification for storage")
 }
 
 // An environment file is the other thing Postman exports: it holds no requests and its values are

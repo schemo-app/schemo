@@ -5,10 +5,12 @@ import { vVarPeek } from '../../lib/varPeek'
 import { parseTokens, tokenSegments } from '../../lib/vars'
 import { isNumberText } from '../../lib/format'
 
-const { value, variant = 'plain' } = defineProps<{
+const { value, variant = 'plain', envId, readonly = false } = defineProps<{
   value: string
   placeholder?: string
   variant?: 'plain' | 'cell'
+  envId?: string
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'change', value: string): void }>()
@@ -27,11 +29,12 @@ function syncScroll(e: Event) {
 <template>
   <div class="row-cell" :class="variant">
     <input
-      v-var-peek
+      v-var-peek="envId"
       :value
       class="row-input mono"
       :class="[valueClass, { 'row-input-veiled': hasTokens }]"
       :placeholder
+      :readonly
       spellcheck="false"
       @input="emit('change', ($event.target as HTMLInputElement).value); syncScroll($event)"
       @scroll="syncScroll"
@@ -43,7 +46,7 @@ function syncScroll(e: Event) {
       aria-hidden="true"
     >
       <template v-for="(seg, si) in segments" :key="si">
-        <VarToken v-if="seg.tokenName" :name="seg.tokenName" :text="seg.text" />
+        <VarToken v-if="seg.tokenName" :name="seg.tokenName" :text="seg.text" :env-id="envId" />
         <span v-else>{{ seg.text }}</span>
       </template>
     </span>
@@ -67,11 +70,6 @@ function syncScroll(e: Event) {
   background: var(--bg-inset);
 }
 
-.row-input.row-input-veiled {
-  color: transparent;
-  caret-color: var(--text);
-}
-
 .row-display {
   @apply absolute inset-0 flex items-center overflow-hidden pointer-events-none;
   white-space: pre;
@@ -83,6 +81,11 @@ function syncScroll(e: Event) {
 
 .row-input.num {
   color: var(--tok-num);
+}
+
+.row-input.row-input-veiled {
+  color: transparent;
+  caret-color: var(--text);
 }
 
 .row-cell.cell {

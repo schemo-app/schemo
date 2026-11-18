@@ -9,10 +9,11 @@ import { textOf, t } from '../../i18n'
 import { parseTokens } from '../../lib/vars'
 import type { Auth, Field, Scheme } from '../../../bindings/schemo/internal/domain'
 
-const { scheme, auth } = defineProps<{
+const { scheme, auth, envId } = defineProps<{
   scheme: Scheme | null
   auth: Auth
   scale?: 'compact' | 'roomy' | 'rows'
+  envId?: string
 }>()
 
 const emit = defineEmits<{
@@ -94,7 +95,7 @@ function onInput(field: Field, event: Event) {
 
       <div v-else-if="field.kind === 'textarea'" class="covered" :class="{ mono: field.mono }">
         <textarea
-          v-var-peek
+          v-var-peek="envId"
           :value="valueOf(field)"
           :placeholder="placeholderOf(field)"
           :class="{ veiled: covered(valueOf(field)) }"
@@ -104,7 +105,7 @@ function onInput(field: Field, event: Event) {
           @blur="emit('commit')"
           @keydown.enter.meta.prevent="emit('commit')"
         />
-        <VarHighlight v-if="covered(valueOf(field))" :value="valueOf(field)" multiline />
+        <VarHighlight v-if="covered(valueOf(field))" :value="valueOf(field)" :env-id="envId" multiline />
       </div>
 
       <span v-else-if="field.kind === 'select' && scale === 'rows'" class="choice">
@@ -127,7 +128,7 @@ function onInput(field: Field, event: Event) {
 
       <div v-else class="covered" :class="{ mono: field.mono }">
         <input
-          v-var-peek
+          v-var-peek="envId"
           :type="field.kind === 'number' ? 'number' : 'text'"
           :value="valueOf(field)"
           :placeholder="placeholderOf(field)"
@@ -138,7 +139,7 @@ function onInput(field: Field, event: Event) {
           @blur="emit('commit')"
           @keydown.enter.prevent="emit('commit')"
         />
-        <VarHighlight v-if="covered(valueOf(field))" :value="valueOf(field)" />
+        <VarHighlight v-if="covered(valueOf(field))" :value="valueOf(field)" :env-id="envId" />
       </div>
 
       <span v-if="field.hint" class="hint">{{ textOf(field.hint) }}</span>

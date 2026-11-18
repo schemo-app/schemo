@@ -313,6 +313,8 @@ type ResolvedRequest struct {
 	Node      CollectionNode `json:"node"`
 	Auth      *Auth          `json:"auth,omitempty"`
 	Variables []Variable     `json:"variables,omitempty"`
+	// EnvironmentID belongs to the collection. A request can still have its own override.
+	EnvironmentID string `json:"environmentId,omitempty"`
 }
 
 type HTTPVersion string

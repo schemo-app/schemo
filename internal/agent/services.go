@@ -561,7 +561,7 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 			if err != nil {
 				return err
 			}
-			if _, ok := state.Find(*patch.Environment); !ok {
+			if env, ok := state.Find(*patch.Environment); !ok || env.CollectionID != "" {
 				return domain.ErrNotFound
 			}
 		}

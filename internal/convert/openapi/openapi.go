@@ -5,6 +5,7 @@ package openapi
 import (
 	"encoding/json"
 	"maps"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -25,6 +26,11 @@ var holeServer = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9+.\-]*://)?(?:<<[^<>]
 // Import reads a document as one collection. A file that is neither version is refused rather than
 // guessed at.
 func Import(data []byte) (domain.Document, error) {
+	return ImportFrom(data, nil, nil)
+}
+
+// ImportFrom resolves relative servers against the document URL or the origin supplied in preview.
+func ImportFrom(data []byte, source, origin *url.URL) (domain.Document, error) {
 	tree, err := decode(data)
 	if err != nil {
 		return domain.Document{}, err
@@ -49,6 +55,8 @@ func Import(data []byte) (domain.Document, error) {
 		doc2:      doc.Swagger == "2.0",
 		out:       &out,
 		variables: map[string]domain.Variable{},
+		source:    source,
+		origin:    origin,
 	}
 	collection := read.collection()
 	if len(collection.Items) == 0 && len(collection.Children) == 0 {
@@ -112,8 +120,9 @@ type info struct {
 }
 
 type server struct {
-	URL       string            `json:"url,omitempty"`
-	Variables map[string]srvVar `json:"variables,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Variables   map[string]srvVar `json:"variables,omitempty"`
 }
 
 type srvVar struct {
@@ -159,6 +168,7 @@ type pathMap map[string]pathItem
 
 type pathItem struct {
 	Ref        string
+	Servers    []server
 	Parameters []parameter
 	Operations map[string]operation
 }
@@ -181,7 +191,11 @@ func (p *pathItem) UnmarshalJSON(data []byte) error {
 			if err := json.Unmarshal(value, &p.Parameters); err != nil {
 				return err
 			}
-		case "summary", "description", "servers":
+		case "servers":
+			if err := json.Unmarshal(value, &p.Servers); err != nil {
+				return err
+			}
+		case "summary", "description":
 		default:
 			var op operation
 			if err := json.Unmarshal(value, &op); err != nil {
@@ -204,6 +218,7 @@ type operation struct {
 	Responses   map[string]response `json:"responses,omitempty"`
 	Security    []requirement       `json:"security,omitempty"`
 	Consumes    []string            `json:"consumes,omitempty"`
+	Servers     []server            `json:"servers,omitempty"`
 }
 
 type parameter struct {

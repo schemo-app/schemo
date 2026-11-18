@@ -11,10 +11,11 @@ import (
 	"schemo/internal/lens"
 )
 
-// applyCaptures runs a level's capture rules on the response and reports them, or reports nothing
+// capture runs a level's capture rules on the response and reports them, or reports nothing
 // when none is on. A rule that finds nothing fails alone; the rest still run.
-func (s *Scripts) applyCaptures(
+func (s *Scripts) capture(
 	ctx context.Context,
+	workspace string,
 	at domain.ScriptPass,
 	level Level,
 ) (domain.ScriptRun, bool) {
@@ -27,6 +28,7 @@ func (s *Scripts) applyCaptures(
 		OK: true, Logs: []domain.ScriptLog{}, Tests: []domain.TestResult{},
 	}
 	ran := false
+	variables := scriptVariables{ctx: ctx, owner: s, store: s.vars(workspace, at.EnvironmentID), run: at.Run}
 	for _, rule := range level.Scripts.Captures {
 		if rule.Off {
 			continue
@@ -36,7 +38,7 @@ func (s *Scripts) applyCaptures(
 		result := domain.TestResult{Name: describe(rule), Passed: true}
 		value, err := extract(at.Response, rule)
 		if err == nil {
-			err = s.keep(ctx, at, rule, value)
+			err = variables.capture(rule, value)
 		}
 		if err != nil {
 			result.Passed, result.Error = false, err.Error()
@@ -57,18 +59,12 @@ func (s *Scripts) applyCaptures(
 	return report, true
 }
 
-// keep stores a captured value; secrets go through Capture, which the script store lacks.
-func (s *Scripts) keep(
-	ctx context.Context,
-	at domain.ScriptPass,
-	rule domain.Capture,
-	value string,
-) error {
+func (v scriptVariables) capture(rule domain.Capture, value string) error {
 	if rule.Scope != domain.ScopeRun && rule.Secret {
-		err := s.vars.Capture(ctx, rule.Scope, rule.Name, value, true)
-		return s.keptForTheRun(at.Run, rule.Name, value, err)
+		err := v.store.Capture(v.ctx, rule.Scope, rule.Name, value, true)
+		return v.owner.keptForTheRun(v.run, rule.Name, value, err)
 	}
-	return scriptVariables{ctx: ctx, owner: s, run: at.Run}.Set(rule.Scope, rule.Name, value)
+	return v.Set(rule.Scope, rule.Name, value)
 }
 
 // describe names a rule in a report.

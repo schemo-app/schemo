@@ -4,11 +4,14 @@ package convert
 
 import (
 	"context"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"schemo/internal/cloud"
+	"schemo/internal/convert/openapi"
 	"schemo/internal/desktop"
 	"schemo/internal/domain"
 	"schemo/internal/platform"
@@ -40,6 +43,12 @@ type stagedRead struct {
 	token    string
 	document domain.Document
 	at       time.Time
+	openAPI  *openAPISource
+}
+
+type openAPISource struct {
+	bytes []byte
+	url   *url.URL
 }
 
 func NewTransfer(
@@ -79,9 +88,12 @@ func (s *Transfer) previewUrl(ctx context.Context, format Format, url string) (P
 		}
 		address = held
 	}
-	data, err := s.remote.Fetch(ctx, address)
+	data, finalURL, err := s.remote.Fetch(ctx, address)
 	if err != nil {
 		return Preview{}, err
+	}
+	if format == FormatOpenAPI {
+		return s.stageOpenAPI(data, finalURL)
 	}
 	return s.stagePreview(format, data)
 }
@@ -89,90 +101,176 @@ func (s *Transfer) previewUrl(ctx context.Context, format Format, url string) (P
 // stagePreview puts what was read where Apply will find it and answers the counters the dialog
 // shows.
 func (s *Transfer) stagePreview(format Format, data []byte) (Preview, error) {
+	if format == FormatOpenAPI {
+		return s.stageOpenAPI(data, nil)
+	}
 	document, err := s.read(format, data)
 	if err != nil {
 		return Preview{}, err
 	}
-	return s.stage(document, len(data)), nil
+	return s.stage(document, len(data), nil), nil
 }
 
-func (s *Transfer) stage(document domain.Document, size int) Preview {
+func (s *Transfer) stageOpenAPI(data []byte, address *url.URL) (Preview, error) {
+	document, err := openapi.ImportFrom(data, address, nil)
+	if err != nil {
+		return Preview{}, err
+	}
+	var source *openAPISource
+	if document.NeedsServer {
+		source = &openAPISource{bytes: data, url: address}
+	}
+	return s.stage(document, len(data), source), nil
+}
+
+func (s *Transfer) stage(document domain.Document, size int, source *openAPISource) Preview {
 	token := s.ids()
 	s.mu.Lock()
-	s.staged = &stagedRead{token: token, document: document, at: time.Now()}
+	s.staged = &stagedRead{token: token, document: document, at: time.Now(), openAPI: source}
 	s.mu.Unlock()
 
 	requests, folders := countDocument(document)
+	var names []string
+	if len(document.Environments) > 0 {
+		for _, collection := range document.Collections {
+			names = append(names, collection.Name)
+		}
+	}
 	return Preview{
-		Token:        token,
-		Name:         nameOfFirst(document),
-		Size:         size,
-		Collections:  len(document.Collections),
-		Requests:     requests,
-		Folders:      folders,
-		Environments: len(document.Environments),
-		Skipped:      document.Skipped,
+		Token:             token,
+		Name:              nameOfFirst(document),
+		Size:              size,
+		Collections:       len(document.Collections),
+		Requests:          requests,
+		Folders:           folders,
+		Environments:      len(document.Environments) + countEnvironments(document.Collections),
+		Skipped:           document.Skipped,
+		LooseEnvironments: len(document.Environments),
+		CollectionNames:   names,
+		NeedsServer:       document.NeedsServer,
 	}
 }
 
-// Apply writes what a preview read under a level and returns the updated tree and environments. The
-// name fills in when the document has none; the token is single-use.
+// ImportOptions specifies the origin a local specification needs and the destination for separate environments.
+type ImportOptions struct {
+	ServerOrigin          string `json:"serverOrigin,omitempty"`
+	EnvironmentTarget     string `json:"environmentTarget,omitempty"`
+	EnvironmentCollection int    `json:"environmentCollection,omitempty"`
+}
+
+// Apply writes what a preview read under a level. A valid token is consumed once a write begins.
 func (s *Transfer) Apply(
-	ctx context.Context,
-	token string,
-	parentID string,
-	name string,
+	ctx context.Context, token, parentID, name string, options ImportOptions,
 ) (Summary, error) {
-	document, err := s.claimStaged(token)
+	document, environmentOwner, err := s.prepareImport(token, parentID, options)
 	if err != nil {
 		return Summary{}, err
 	}
-
 	for index := range document.Collections {
 		if strings.TrimSpace(document.Collections[index].Name) == "" {
 			document.Collections[index].Name = name
 		}
 	}
-
-	summary := Summary{Collections: len(document.Collections)}
-	if len(document.Collections) > 0 {
-		tree, err := s.collections.Import(ctx, document.Collections, parentID)
-		if err != nil {
-			return Summary{}, err
-		}
-		summary.Tree = tree
-		requests, _ := countDocument(domain.Document{Collections: document.Collections})
-		summary.Requests = requests
-	}
-	for _, draft := range document.Environments {
-		state, err := s.environments.ImportState(ctx, draft)
-		if err != nil {
-			return Summary{}, err
-		}
-		summary.EnvState = &state
-		summary.Environments++
-	}
-	if len(document.Collections) > 0 && len(document.Collections[0].Name) > 0 {
-		summary.Name = document.Collections[0].Name
+	requests, _ := countDocument(document)
+	summary := Summary{
+		Collections: len(document.Collections), Requests: requests,
+		Environments: len(document.Environments) + countEnvironments(document.Collections),
 	}
 	if summary.Collections == 0 && summary.Environments == 0 {
 		return Summary{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
+	if summary.Collections > 0 {
+		summary.Name = document.Collections[0].Name
+	}
+	summary.Tree, err = s.collections.ImportDocument(ctx, document, parentID, environmentOwner)
+	if err != nil {
+		return Summary{}, err
+	}
+	if summary.Environments > 0 {
+		state, err := s.environments.State(ctx)
+		if err != nil {
+			return Summary{}, err
+		}
+		summary.EnvState = &state
+	}
 	return summary, nil
 }
 
-// claimStaged is the document a token names, once: a second Apply with the same token is a window
-// that lost track, and answering it twice would write the file twice.
-func (s *Transfer) claimStaged(token string) (domain.Document, error) {
+func (s *Transfer) prepareImport(token, parentID string, options ImportOptions) (domain.Document, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	read := s.staged
 	if read == nil || read.token != token || time.Since(read.at) > pendingTTL {
-		return domain.Document{}, domain.Refuse(domain.CodeImportExpired, domain.ErrNotFound, nil)
+		return domain.Document{}, "", domain.Refuse(domain.CodeImportExpired, domain.ErrNotFound, nil)
+	}
+	document := read.document
+	if read.openAPI != nil {
+		origin, err := serverOrigin(options.ServerOrigin)
+		if err != nil {
+			return domain.Document{}, "", err
+		}
+		document, err = openapi.ImportFrom(read.openAPI.bytes, read.openAPI.url, origin)
+		if err != nil {
+			return domain.Document{}, "", err
+		}
+		if document.NeedsServer {
+			return domain.Document{}, "", domain.Refuse(domain.CodeImportServer, domain.ErrNotAllowed, nil)
+		}
+	}
+	document.Collections = slices.Clone(document.Collections)
+	environmentOwner, err := placeEnvironments(&document, parentID, options)
+	if err != nil {
+		return domain.Document{}, "", err
 	}
 	s.staged = nil
-	return read.document, nil
+	return document, environmentOwner, nil
+}
+
+func serverOrigin(raw string) (*url.URL, error) {
+	origin, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (origin.Scheme != "http" && origin.Scheme != "https") ||
+		origin.Hostname() == "" || origin.User != nil || origin.RawQuery != "" || origin.ForceQuery ||
+		origin.Fragment != "" || (origin.Path != "" && origin.Path != "/") {
+		return nil, domain.Refuse(domain.CodeImportServer, domain.ErrNotAllowed, nil)
+	}
+	origin.Path = "/"
+	return origin, nil
+}
+
+func placeEnvironments(document *domain.Document, parentID string, options ImportOptions) (string, error) {
+	if len(document.Environments) == 0 {
+		return "", nil
+	}
+	target := options.EnvironmentTarget
+	if target == "" {
+		switch {
+		case len(document.Collections) > 0:
+			target = "skip"
+		case parentID != "":
+			target = "collection"
+		default:
+			target = "workspace"
+		}
+	}
+	switch target {
+	case "workspace":
+		return "", nil
+	case "skip":
+		document.Environments = nil
+		return "", nil
+	case "collection":
+		if len(document.Collections) == 0 && parentID != "" {
+			return parentID, nil
+		}
+		if i := options.EnvironmentCollection; i >= 0 && i < len(document.Collections) {
+			collection := &document.Collections[i]
+			collection.Environments = append(slices.Clone(collection.Environments), document.Environments...)
+			document.Environments = nil
+			return "", nil
+		}
+	}
+	return "", domain.Refuse(domain.CodeImportDestination, domain.ErrNotAllowed, nil)
 }
 
 // nameOfFirst is what the document calls its first collection, or its first environment where it
@@ -244,12 +342,21 @@ func (s *Transfer) ImportFromWorkspace(
 		return Summary{}, err
 	}
 	requests, _ := countDocument(domain.Document{Collections: collections})
-	return Summary{
-		Tree:        tree,
-		Name:        collections[0].Name,
-		Collections: len(collections),
-		Requests:    requests,
-	}, nil
+	summary := Summary{
+		Tree:         tree,
+		Name:         collections[0].Name,
+		Collections:  len(collections),
+		Requests:     requests,
+		Environments: countEnvironments(collections),
+	}
+	if summary.Environments > 0 {
+		state, err := s.environments.State(ctx)
+		if err != nil {
+			return Summary{}, err
+		}
+		summary.EnvState = &state
+	}
+	return summary, nil
 }
 
 // Curl writes a level's requests as curl commands, each under a `#` name line that the paste reads
@@ -313,13 +420,16 @@ type Preview struct {
 	Name string `json:"name,omitempty"`
 	// File is the name the source is drawn under — the file, the dropped file, the URL — for the
 	// card the dialog shows. Empty for a paste.
-	File         string        `json:"file,omitempty"`
-	Size         int           `json:"size"`
-	Collections  int           `json:"collections"`
-	Requests     int           `json:"requests"`
-	Folders      int           `json:"folders"`
-	Environments int           `json:"environments"`
-	Skipped      []domain.Skip `json:"skipped,omitempty"`
+	File              string        `json:"file,omitempty"`
+	Size              int           `json:"size"`
+	Collections       int           `json:"collections"`
+	Requests          int           `json:"requests"`
+	Folders           int           `json:"folders"`
+	Environments      int           `json:"environments"`
+	Skipped           []domain.Skip `json:"skipped,omitempty"`
+	LooseEnvironments int           `json:"looseEnvironments,omitempty"`
+	CollectionNames   []string      `json:"collectionNames,omitempty"`
+	NeedsServer       bool          `json:"needsServer,omitempty"`
 }
 
 // Summary is what an import wrote, for the tree to draw and the toast to count.
@@ -371,6 +481,8 @@ type Collections interface {
 		collections []domain.Collection,
 		parentID string,
 	) ([]domain.Collection, error)
+	// ImportDocument also writes separate environments to the chosen owner in the same transaction.
+	ImportDocument(ctx context.Context, document domain.Document, parentID, environmentOwner string) ([]domain.Collection, error)
 	// Full is a collection — or one request, when the id names one — read whole: what an export
 	// writes down.
 	Full(ctx context.Context, id string) (domain.Collection, error)
@@ -385,14 +497,8 @@ type Collections interface {
 
 // Environments is the environment list as importing one and exporting the values reads it.
 type Environments interface {
-	// Import writes one environment a document described, variables and all, and answers with the
-	// list to draw.
-	ImportState(ctx context.Context, draft domain.EnvironmentDraft) (domain.EnvState, error)
 	// State is the whole list, with secret values withheld.
 	State(ctx context.Context) (domain.EnvState, error)
-	// Reveal is the one way a secret's value leaves the database — here, into a file the person
-	// asked to carry it.
-	Reveal(ctx context.Context, variableID string) (string, error)
 }
 
 // Workspaces is the workspaces of the app, as the source that copies from another one lists them.
@@ -408,7 +514,7 @@ type Files interface {
 
 // Remote reads a document from a URL — a specification or a collection somebody published.
 type Remote interface {
-	Fetch(ctx context.Context, url string) ([]byte, error)
+	Fetch(ctx context.Context, url string) ([]byte, *url.URL, error)
 }
 
 // Commands is Drafts' reading and writing of commands: a command is a request in

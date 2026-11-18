@@ -6,6 +6,8 @@ package workspace
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"schemo/internal/domain"
 	"schemo/internal/platform"
@@ -66,8 +68,13 @@ func (s *Collections) duplicateCollection(
 		return err
 	}
 
-	copied, err := s.copyCollection(ctx, collection, collection.ParentID, position,
-		clip(collection.Name+suffix))
+	state, err := s.store.EnvState(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	collection.Name = clip(collection.Name + suffix)
+	collection.Position = position
+	copied, err := s.copyCollection(ctx, workspace, collection, draftsByCollection(state))
 	if err != nil {
 		return err
 	}
@@ -78,18 +85,24 @@ func (s *Collections) duplicateCollection(
 // content from the store rather than the given row.
 func (s *Collections) copyCollection(
 	ctx context.Context,
+	workspace string,
 	row domain.Collection,
-	parentID string,
-	position int64,
-	name string,
-) ([]pendingLevel, error) {
+	environments map[string][]domain.EnvironmentDraft,
+) ([]domain.Collection, error) {
+	scripts, err := s.store.Scripts(ctx, workspace, row.ID)
+	if err != nil {
+		return nil, err
+	}
 	copied := domain.Collection{
-		ID:          s.ids(),
-		Name:        name,
-		Description: row.Description,
-		ParentID:    parentID,
-		Position:    position,
-		Auth:        row.Auth,
+		ID:              s.ids(),
+		Name:            row.Name,
+		Description:     row.Description,
+		ParentID:        row.ParentID,
+		Position:        row.Position,
+		Auth:            row.Auth,
+		Scripts:         scripts,
+		Environments:    environments[row.ID],
+		EnvironmentRoot: row.EnvironmentRoot,
 		// The variables are the copy's own, for the reason the rows are: a variable is addressed by its
 		// id, and one id naming a variable in two collections is one variable in two places.
 		Variables: copyVariables(s.ids, row.Variables),
@@ -105,11 +118,10 @@ func (s *Collections) copyCollection(
 		copied.Items = append(copied.Items, child)
 	}
 
-	// The copy is a second level, so what the original ran around its requests goes with it — read at
-	// the end, because SaveScripts writes to the row the copy does not have yet.
-	out := []pendingLevel{{collection: copied, from: row.ID}}
+	out := []domain.Collection{copied}
 	for _, child := range row.Children {
-		nested, err := s.copyCollection(ctx, child, copied.ID, child.Position, child.Name)
+		child.ParentID = copied.ID
+		nested, err := s.copyCollection(ctx, workspace, child, environments)
 		if err != nil {
 			return nil, err
 		}
@@ -191,53 +203,47 @@ func copyVariables(ids platform.IDGen, variables []domain.Variable) []domain.Var
 	return minted(ids, variables, func(v *domain.Variable) *string { return &v.ID })
 }
 
-// pendingLevel is a level to write, with its scripts beside it, since SaveScripts needs the row to exist.
-type pendingLevel struct {
-	collection domain.Collection
-	from       string
-	scripts    *domain.Scripts
-}
-
-// saveTree writes built levels parents first: a row's parent has to exist before it does. The list
-// comes pre-order, so the order it is given in is the order it writes in.
 func (s *Collections) saveTree(
 	ctx context.Context,
 	workspace string,
-	pending []pendingLevel,
+	levels []domain.Collection,
+	environments ...domain.Environment,
 ) error {
-	for _, level := range pending {
-		if err := s.store.SaveCollection(ctx, workspace, level.collection); err != nil {
+	for _, level := range levels {
+		owned, err := prepareEnvironments(s.ids, level.ID, level.Environments, nil)
+		if err != nil {
 			return err
 		}
-		if err := s.saveScripts(ctx, workspace, level); err != nil {
-			return err
-		}
-		for _, node := range level.collection.Items {
-			if err := s.store.SaveNode(ctx, node); err != nil {
-				return err
-			}
-		}
+		environments = append(environments, owned...)
 	}
-	return nil
+	return s.store.SaveCollectionTree(ctx, workspace, levels, environments)
 }
 
-func (s *Collections) saveScripts(
-	ctx context.Context,
-	workspace string,
-	level pendingLevel,
-) error {
-	if level.scripts != nil {
-		return s.store.SaveScripts(ctx, workspace, level.collection.ID, level.scripts)
+func prepareEnvironments(
+	ids platform.IDGen, owner string, drafts []domain.EnvironmentDraft, siblings []domain.Environment,
+) ([]domain.Environment, error) {
+	base := -1
+	if owner != "" && !slices.ContainsFunc(siblings, func(env domain.Environment) bool { return env.Base }) {
+		base = slices.IndexFunc(drafts, func(env domain.EnvironmentDraft) bool { return env.Base && !env.Folder })
 	}
-	if level.from == "" {
-		return nil
+	position := nextPosition(siblings, func(env domain.Environment) int { return env.Position })
+	out := make([]domain.Environment, 0, len(drafts))
+	names := slices.Clone(siblings)
+	for i, draft := range drafts {
+		name := strings.TrimSpace(draft.Name)
+		if name == "" {
+			return nil, domain.Refuse(domain.CodeNameEmpty, domain.ErrNotAllowed, nil)
+		}
+		if runes := []rune(name); len(runes) > maxEnvironmentName {
+			name = string(runes[:maxEnvironmentName])
+		}
+		env := domain.Environment{
+			ID: ids(), CollectionID: owner, Name: freeName(name, names), Color: draft.Color,
+			Base: i == base, Folder: draft.Folder, Position: position + i,
+			Vars: importedVariables(ids, draft.Variables),
+		}
+		out = append(out, env)
+		names = append(names, env)
 	}
-	scripts, err := s.store.Scripts(ctx, workspace, level.from)
-	if err != nil {
-		return err
-	}
-	if scripts == nil {
-		return nil
-	}
-	return s.store.SaveScripts(ctx, workspace, level.collection.ID, scripts)
+	return out, nil
 }

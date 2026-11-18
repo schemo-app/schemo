@@ -23,7 +23,7 @@ const (
 type Scripts struct {
 	engine Runner
 	store  *db.Store
-	vars   Variables
+	vars   func(workspace, environment string) Variables
 	scope  domain.Scope
 	ids    platform.IDGen
 
@@ -36,7 +36,7 @@ type Scripts struct {
 func NewScripts(
 	engine Runner,
 	store *db.Store,
-	vars Variables,
+	vars func(workspace, environment string) Variables,
 	scope domain.Scope,
 	ids platform.IDGen,
 ) *Scripts {
@@ -105,7 +105,7 @@ func (s *Scripts) Before(
 		if source == "" {
 			continue
 		}
-		report := s.script(ctx, *pass, level, domain.ScriptPre, source)
+		report := s.script(ctx, workspace, *pass, level, domain.ScriptPre, source)
 		pass.Ran = append(pass.Ran, report)
 		// Only a pre-request script can call a request off; one that does it after the answer came
 		// back is too late to matter, and saying so would be a lie about what happened.
@@ -131,7 +131,7 @@ func (s *Scripts) After(ctx context.Context, workspace string, pass domain.Scrip
 	}
 	for _, level := range chain {
 		// Captures are in place before the level's own code, which may read them.
-		if report, ok := s.applyCaptures(ctx, pass, level); ok {
+		if report, ok := s.capture(ctx, workspace, pass, level); ok {
 			if err := s.store.SaveScriptRun(ctx, workspace, report); err != nil {
 				return
 			}
@@ -141,7 +141,7 @@ func (s *Scripts) After(ctx context.Context, workspace string, pass domain.Scrip
 			continue
 		}
 		if err := s.store.SaveScriptRun(ctx, workspace,
-			s.script(ctx, pass, level, domain.ScriptPost, source)); err != nil {
+			s.script(ctx, workspace, pass, level, domain.ScriptPost, source)); err != nil {
 			return
 		}
 	}
@@ -169,18 +169,41 @@ func scriptSource(level Level, scope domain.ScriptScope) string {
 // — is stamped here: the sandbox knows none of it, and the tab draws all of it.
 func (s *Scripts) script(
 	ctx context.Context,
+	workspace string,
 	at domain.ScriptPass,
 	level Level,
 	scope domain.ScriptScope,
 	source string,
 ) domain.ScriptRun {
+	store := s.vars(workspace, at.EnvironmentID)
 	report := s.engine.Run(domain.ScriptInput{
 		Scope:     scope,
 		Source:    source,
 		Request:   at.Request,
 		Response:  at.Response,
-		Variables: scriptVariables{ctx: ctx, owner: s, run: at.Run},
+		Variables: scriptVariables{ctx: ctx, owner: s, store: store, run: at.Run, above: at.Inherited},
 	})
+	texts := []string{report.Error}
+	for _, log := range report.Logs {
+		texts = append(texts, log.Message)
+	}
+	for _, test := range report.Tests {
+		texts = append(texts, test.Name, test.Error)
+	}
+	masked, err := store.MaskTexts(ctx, at.Inherited, texts, at.EnvironmentID)
+	if err != nil {
+		report.OK, report.Error = false, err.Error()
+		report.Logs, report.Tests = nil, nil
+	} else {
+		report.Error = masked[0]
+		for i := range report.Logs {
+			report.Logs[i].Message = masked[1+i]
+		}
+		for i := range report.Tests {
+			at := 1 + len(report.Logs) + 2*i
+			report.Tests[i].Name, report.Tests[i].Error = masked[at], masked[at+1]
+		}
+	}
 	report.ID = s.ids()
 	report.RecordID = at.RecordID
 	report.NodeID = level.NodeID
@@ -199,10 +222,12 @@ type Runner interface {
 
 // Variables is the stored scopes a script reads and writes: the active environment and the globals.
 type Variables interface {
+	RequestVariable(ctx context.Context, above []domain.Variable, name string) (string, bool, error)
 	Variable(ctx context.Context, scope domain.VarScope, name string) (string, bool, error)
 	SetVariable(ctx context.Context, scope domain.VarScope, name string, value string) error
 	// Capture is SetVariable that can also hide the value.
 	Capture(
 		ctx context.Context, scope domain.VarScope, name string, value string, secret bool,
 	) error
+	MaskTexts(ctx context.Context, above []domain.Variable, texts []string, envID string) ([]string, error)
 }

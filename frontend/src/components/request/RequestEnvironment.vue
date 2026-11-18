@@ -1,182 +1,97 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import {
+  DropdownMenuItem, DropdownMenuItemIndicator, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuTrigger,
+} from 'reka-ui'
+import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import Icon from '../ui/Icon.vue'
-import PopoverContent from '../ui/PopoverContent.vue'
-import { PopoverRoot as Popover, PopoverTrigger } from 'reka-ui'
-import { useEnvironmentsStore } from '../../stores/environments'
-import { useCommands } from '../../composables/useCommands'
 import { useRequestEnvironment } from '../../composables/useRequestEnvironment'
 import { dotOf } from '../../lib/environmentPalette'
 import type { RequestSource } from '../../lib/requestSource'
 import { t } from '../../i18n'
 
-// A request that follows the window shows only the icon; a pinned one shows its environment's name.
 const { source } = defineProps<{ source: RequestSource }>()
 
-const environments = useEnvironmentsStore()
-const { hint } = useCommands()
-
-const { pinned, label, options, choose } = useRequestEnvironment(source)
-
-const open = ref(false)
-const color = computed(() => dotOf(options.value.find(option => option.value === source.environmentId)?.color ?? ''))
-
-// What the button says when there is no name on it, and what it says behind the name when there is.
-const title = computed(() =>
-  pinned.value
-    ? t('request.envPinnedTitle', { name: label.value })
-    : t('request.envFollowTitle', { name: label.value })
-)
-
-function pick(id: string) {
-  open.value = false
-  choose(id)
-}
-
-// Editing is not one of the choices — it is another window — so the popover closes behind it.
-function editVariables() {
-  open.value = false
-  environments.openSheet()
-}
-
-const editHint = computed(() => hint('environments'))
+const { pinned, selection, active, hasPreviousSelection, label, variants, choose } = useRequestEnvironment(source)
+const neutral = 'var(--text-tertiary)'
+const color = computed(() => active.value && selection.value !== 'base' ? dotOf(active.value.color ?? '') : neutral)
+const title = computed(() => t(pinned.value || hasPreviousSelection.value ? 'request.envPinnedTitle' : 'request.envCollectionTitle', {
+  name: label.value,
+}))
+const choices = computed(() => [
+  { id: 'base', name: t('request.envBase'), dot: neutral },
+  ...variants.value.map(env => ({ id: env.id, name: env.name, dot: dotOf(env.color ?? '') })),
+])
 </script>
 
 <template>
-  <Popover v-model:open="open">
-    <!-- A trigger rather than an anchor: the button is what opens the panel, and reka exempts its own
-         trigger from the outside-press that would otherwise close it under the finger. -->
-    <div class="bar-env" :class="{ open, pinned }" :style="{ '--env-color': color }">
-      <PopoverTrigger as-child>
-        <button
-          type="button"
-          class="bar-env-trigger"
-          :title
-          :aria-label="title"
-        >
-          <span v-if="pinned" class="bar-env-dot"></span>
-          <Icon v-else name="Database" :size="14" :stroke-width="1.9" />
-          <span v-if="pinned" class="bar-env-name">{{ label }}</span>
-        </button>
-      </PopoverTrigger>
-      <button v-if="pinned" type="button" class="bar-env-reset" :title="t('request.envReset')" :aria-label="t('request.envReset')" @click="pick('')">
-        <Icon name="X" :size="10" :stroke-width="2.6" />
+  <DropdownMenuRoot v-if="pinned || hasPreviousSelection || variants.length">
+    <DropdownMenuTrigger as-child>
+      <button type="button" class="bar-env bar-env-trigger" :title :aria-label="title">
+        <span class="env-row-dot" :style="{ background: color }"></span>
+        <span class="bar-env-name">{{ label }}</span>
+        <Icon name="ChevronDown" :size="10" :stroke-width="2.4" class="bar-env-caret" />
       </button>
-    </div>
-    <PopoverContent class="bar-env-pop" align="end" :side-offset="6">
-      <div class="env-head">{{ t('request.envFor') }}</div>
-      <div class="env-options">
-        <button
-          v-for="option in options"
-          :key="option.value"
-          type="button"
+    </DropdownMenuTrigger>
+    <DropdownMenuContent class="request-env-menu" align="end" :side-offset="8">
+      <DropdownMenuRadioGroup v-if="!pinned && (!hasPreviousSelection || variants.length)" class="env-options" :model-value="selection">
+        <DropdownMenuRadioItem
+          v-for="option in choices"
+          :key="option.id"
+          :value="option.id"
           class="env-row"
-          :class="{ active: option.value === source.environmentId }"
-          @click="pick(option.value)"
+          @select="choose(option.id)"
         >
-          <span class="env-row-mark">
-            <span v-if="option.color" class="env-row-dot" :style="{ background: dotOf(option.color) }"></span>
-          </span>
-          <span class="env-row-name cap-line">{{ option.name }}</span>
-          <Icon v-if="option.readonly" name="Lock" :size="12" class="env-row-lock" />
-          <span class="env-row-count">{{ option.vars }}</span>
-          <span class="env-row-check">
-            <Icon
-              v-if="option.value === source.environmentId"
-              name="Check"
-              :size="12"
-              :stroke-width="2.6"
-            />
-          </span>
-        </button>
-      </div>
-
-      <div class="env-divider"></div>
-
-      <button type="button" class="env-row env-row-action" @click="editVariables">
-        <span class="env-row-mark"><Icon name="AlignLeft" :size="14" :stroke-width="1.8" /></span>
-        <span class="env-row-name cap-line">{{ t('environments.editVariables') }}</span>
-        <span v-if="editHint" class="env-row-hint">{{ editHint }}</span>
-      </button>
-    </PopoverContent>
-  </Popover>
+          <span class="env-row-dot" :style="{ background: option.dot }"></span>
+          <span class="env-row-name">{{ option.name }}</span>
+          <DropdownMenuItemIndicator class="env-row-check">
+            <Icon name="Check" :size="12" :stroke-width="2.6" />
+          </DropdownMenuItemIndicator>
+        </DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
+      <DropdownMenuSeparator v-if="!pinned && hasPreviousSelection && variants.length" class="env-divider" />
+      <DropdownMenuItem v-if="pinned || hasPreviousSelection" class="env-row" @select="choose('')">
+        <span class="env-row-name">{{ t(pinned ? 'request.envReset' : 'request.envDefault') }}</span>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenuRoot>
+  <span v-else-if="selection" class="bar-env" :title>
+    <span class="env-row-dot" :style="{ background: color }"></span>
+    <span class="bar-env-name">{{ label }}</span>
+  </span>
 </template>
 
 <style scoped>
 @reference "../../style.css";
 
 .bar-env {
-  @apply flex flex-none items-center;
+  @apply inline-flex flex-none items-center text-text-secondary;
+  gap: 0.4375rem;
   height: 1.625rem;
-  margin-left: 0.75rem;
   margin-right: 0.375rem;
+  padding: 0 0.4375rem 0 0.5625rem;
   border-radius: 0.375rem;
+  font-size: var(--text-12);
+  font-weight: 500;
   --wails-draggable: no-drag;
 }
 
-.bar-env.pinned {
-  padding: 0 0.25rem 0 0;
-  background: color-mix(in srgb, var(--env-color) 16%, transparent);
-}
-
-.bar-env.pinned:hover,
-.bar-env.pinned.open {
-  background: color-mix(in srgb, var(--env-color) 22%, transparent);
-}
-
 .bar-env-trigger {
-  @apply inline-flex items-center justify-center border-0 cursor-default text-text-tertiary;
-  width: 1.75rem;
-  height: 1.625rem;
-  padding: 0;
-  border-radius: 0.375rem;
-  background: transparent;
-  font: inherit;
-  font-size: var(--text-12);
-  font-weight: 500;
-  line-height: normal;
+  @apply border-0 cursor-pointer bg-transparent text-text;
 }
 
-.bar-env:not(.pinned):hover,
-.bar-env.open:not(.pinned) {
+.bar-env-trigger:hover,
+.bar-env-trigger[data-state='open'] {
   background: var(--bg-hover);
 }
 
-.bar-env:not(.pinned):hover .bar-env-trigger,
-.bar-env.open:not(.pinned) .bar-env-trigger {
-  color: var(--text-secondary);
-}
-
-.pinned .bar-env-trigger {
-  width: auto;
-  gap: 0.4375rem;
-  padding: 0 0.4375rem 0 0.5625rem;
-  color: var(--text);
-}
-
-.bar-env-dot {
-  @apply flex-none rounded-full;
-  width: 0.4375rem;
-  height: 0.4375rem;
-  background: var(--env-color);
-}
-
-.bar-env-reset {
-  @apply inline-flex flex-none items-center justify-center border-0 text-text-secondary cursor-default;
-  width: 1.125rem;
-  height: 1.125rem;
-  padding: 0;
-  border-radius: 0.25rem;
-  background: transparent;
-}
-
-.bar-env-reset:hover {
-  background: var(--bg-hover);
-  color: var(--text);
+.bar-env-caret {
+  @apply flex-none text-text-tertiary;
 }
 
 .bar-env-name {
   @apply truncate;
-  max-width: 8.125rem;
+  max-width: min(8.125rem, 18vw);
 }
 </style>

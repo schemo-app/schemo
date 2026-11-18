@@ -1,6 +1,7 @@
 package request
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"schemo/internal/convert/command"
@@ -56,11 +57,12 @@ func NewDrafts(d DraftDeps) *Drafts {
 // Preview is what a draft implies without sending: unresolved names, added rows, the token state and
 // what "Inherit" resolves to.
 type Preview struct {
-	Missing   []string              `json:"missing"`
-	Projected []domain.ProjectedRow `json:"projected"`
-	Auto      []domain.ProjectedRow `json:"auto"`
-	Token     *domain.AuthToken     `json:"token,omitempty"`
-	Inherited *domain.Auth          `json:"inherited,omitempty"`
+	Missing   []string                     `json:"missing"`
+	Variables map[string]domain.Resolution `json:"variables"`
+	Projected []domain.ProjectedRow        `json:"projected"`
+	Auto      []domain.ProjectedRow        `json:"auto"`
+	Token     *domain.AuthToken            `json:"token,omitempty"`
+	Inherited *domain.Auth                 `json:"inherited,omitempty"`
 }
 
 // Paste is a pasted text read as a command: what the reading came to and, when it was one, the
@@ -235,11 +237,12 @@ func (s *Drafts) SaveAsNewCollection(
 // answers nothing: the draft is still usable, and only the inherited rows are missing.
 func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 	above := s.above(ctx, d.ID)
-	cookie, err := s.jarCookies(ctx, d)
+	d.EnvironmentID = cmp.Or(d.EnvironmentID, above.EnvironmentID)
+	cookie, err := s.jarCookies(ctx, d, above.Variables)
 	if err != nil {
 		return Preview{}, err
 	}
-	missing, err := s.vars.Missing(ctx, above.Variables,
+	missing, variables, err := s.vars.InspectTexts(ctx, above.Variables,
 		partsOf(d, above.Auth, cookie).texts(), d.EnvironmentID)
 	if err != nil {
 		return Preview{}, err
@@ -254,6 +257,7 @@ func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 	}
 	return Preview{
 		Missing:   domain.OrEmpty(missing),
+		Variables: variables,
 		Projected: projected,
 		Auto:      auto,
 		Token:     s.held(ctx, d, above),
@@ -269,6 +273,7 @@ func (s *Drafts) Send(ctx context.Context, d domain.Draft) (string, error) {
 		return "", err
 	}
 	above := s.above(ctx, d.ID)
+	d.EnvironmentID = cmp.Or(d.EnvironmentID, above.EnvironmentID)
 	prepared, err := s.prepare(ctx, workspace, d, above.Auth, above.Variables)
 	if err != nil {
 		return "", err
@@ -303,7 +308,8 @@ func (s *Drafts) SendSeed(ctx context.Context, seed Seed) (string, error) {
 // token and opens no file: what it could not write is named instead.
 func (s *Drafts) CopyAs(ctx context.Context, d domain.Draft, format command.Format) (Copy, error) {
 	above := s.above(ctx, d.ID)
-	cookie, err := s.jarCookies(ctx, d)
+	d.EnvironmentID = cmp.Or(d.EnvironmentID, above.EnvironmentID)
+	cookie, err := s.jarCookies(ctx, d, above.Variables)
 	if err != nil {
 		return Copy{}, err
 	}
@@ -345,7 +351,7 @@ func (s *Drafts) liveAuth(ctx context.Context, d domain.Draft, above workspace.A
 	if err != nil {
 		return domain.Auth{}, err
 	}
-	resolve, err := s.vars.Resolver(ctx, workspace, above.Variables, d.EnvironmentID)
+	resolve, err := s.vars.Resolver(ctx, workspace, above.Variables, cmp.Or(d.EnvironmentID, above.EnvironmentID))
 	if err != nil {
 		return domain.Auth{}, err
 	}
@@ -478,6 +484,7 @@ type FileSource interface {
 
 type VariableSource interface {
 	Resolver(ctx context.Context, workspace string, above []domain.Variable, envID string) (func(string) (string, string), error)
+	InspectTexts(ctx context.Context, above []domain.Variable, texts []string, envID string) ([]string, map[string]domain.Resolution, error)
 	Missing(
 		ctx context.Context,
 		above []domain.Variable,

@@ -122,6 +122,11 @@ func (f fakeVars) Missing(
 	return out, nil
 }
 
+func (f fakeVars) InspectTexts(ctx context.Context, above []domain.Variable, texts []string, envID string) ([]string, map[string]domain.Resolution, error) {
+	missing, err := f.Missing(ctx, above, texts, envID)
+	return missing, nil, err
+}
+
 func (f fakeVars) SubstituteTexts(
 	_ context.Context,
 	above []domain.Variable,
@@ -494,7 +499,7 @@ func (l *line) setAuth(t *testing.T, auth domain.Auth) {
 // copyAs is a copy of the draft in hand, with what the levels above answer handed in.
 func (l *line) copyAs(inherits *domain.Auth, above []domain.Variable, format command.Format) (Copy, error) {
 	ctx := context.Background()
-	cookie, err := l.jarCookies(ctx, l.d)
+	cookie, err := l.jarCookies(ctx, l.d, nil)
 	if err != nil {
 		return Copy{}, err
 	}

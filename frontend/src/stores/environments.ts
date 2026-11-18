@@ -10,6 +10,7 @@ import { markStep } from '../composables/useGettingStarted'
 import { callOrToast } from '../lib/calls'
 import { useWorkspaceSnapshot } from '../composables/useWorkspaceSnapshot'
 import { useChangedEvent } from '../composables/useWailsEvent'
+import { useCollectionsStore } from './collections'
 
 function scopeOf(envId: string | null): EnvScope {
   return envId === null ? {} : { environment: envId }
@@ -25,6 +26,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   const sheetOpen = ref(false)
   const sheetFocus = ref<{ envId: string | null; varName: string } | null>(null)
   const editedEnvId = ref<string | null>(null)
+  const collectionFocus = ref<{ collectionId: string; envId: string; varName: string } | null>(null)
   // Making an environment is the sheet's own screen, and the environment menu asks for it from
   // outside: the request rides here and the sheet answers it, the way the tree's does on its store.
   const pendingCreate = ref(false)
@@ -34,6 +36,10 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   const environments = computed<Env[]>(() =>
     (envState.value?.environments ?? []).map((environment) => ({ ...environment, vars: environment.vars ?? [] }))
   )
+  const collectionEnvironments = computed<Env[]>(() =>
+    (envState.value?.collectionEnvironments ?? []).map((environment) => ({ ...environment, vars: environment.vars ?? [] }))
+  )
+  const allEnvironments = computed(() => [...environments.value, ...collectionEnvironments.value])
   const globals = computed(() => envState.value?.globals ?? [])
   const activeId = computed(() => envState.value?.activeId || null)
   const activeEnvironment = computed(
@@ -71,19 +77,21 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   /** Shows an edit at once and saves the scope it belongs to whole. */
   function saveScope(envId: string | null, vars: Variable[], env?: Env): Promise<EnvState> {
     const state = envState.value
+    const current = env ?? allEnvironments.value.find((one) => one.id === envId)
     if (state) {
-      envState.value = envId === null
-        ? { ...state, globals: vars }
-        : { ...state, environments: (state.environments ?? []).map((one) => one.id === envId ? { ...(env ?? one), vars } : one) }
+      if (envId === null) envState.value = { ...state, globals: vars }
+      else if (current) {
+        const list = current.collectionId ? 'collectionEnvironments' : 'environments'
+        envState.value = { ...state, [list]: (state[list] ?? []).map((one) => one.id === envId ? { ...current, vars } : one) }
+      }
     }
     if (envId === null) return write(Environments.SaveGlobals(vars))
-    const current = env ?? environments.value.find((one) => one.id === envId)
     if (!current) return reload()
     return write(Environments.Save({ ...current, vars }))
   }
 
   function saveEnv(id: string, change: Partial<Env>): Promise<EnvState> {
-    const current = environments.value.find((one) => one.id === id)
+    const current = allEnvironments.value.find((one) => one.id === id)
     if (!current) return reload()
     const next = { ...current, ...change }
     return saveScope(id, next.vars, next)
@@ -98,6 +106,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     snapshot.reset()
     forgetSecrets()
     editedEnvId.value = null
+    collectionFocus.value = null
     sheetFocus.value = null
   }
 
@@ -111,8 +120,12 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   // Switching to an environment is the step the checklist watches; standing on none of them is not.
   async function setActive(id: string | null) {
     const answer = await write(Environments.Activate(id ?? ''))
-    if (id) markStep('env')
+    if (id && answer.activeId === id) markStep('env')
     return answer
+  }
+
+  function selectCollection(collectionId: string, id: string) {
+    return write(Environments.SelectCollection(collectionId, id))
   }
 
   async function createEnv(draft: EnvironmentInput): Promise<string> {
@@ -120,8 +133,6 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     const id = await Environments.Create(draft)
     await write(Promise.resolve())
     signal.throwIfAborted()
-    editedEnvId.value = id
-    sheetFocus.value = null
     return id
   }
 
@@ -131,7 +142,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
 
   // A revealed value outlives nothing: once its variable is gone, so is the value.
   function forgetRevealed() {
-    const live = new Set([...environments.value.flatMap(environment => environment.vars), ...globals.value].map(variable => variable.id))
+    const live = new Set([...allEnvironments.value.flatMap(environment => environment.vars), ...globals.value].map(variable => variable.id))
     for (const key of Object.keys(revealed.value)) {
       if (!live.has(key)) delete revealed.value[key]
     }
@@ -221,7 +232,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   function checkSecret(varId: string, signal: AbortSignal) {
     signal.throwIfAborted()
     if (!globals.value.some(variable => variable.id === varId)
-      && !environments.value.some(env => env.vars.some(variable => variable.id === varId))) {
+      && !allEnvironments.value.some(env => env.vars.some(variable => variable.id === varId))) {
       throw new CancelError()
     }
   }
@@ -241,27 +252,36 @@ export const useEnvironmentsStore = defineStore('environments', () => {
 
   // A name resolves in the named (or active) environment first, then in the globals.
   function resolveVariable(name: string, envId?: string): VarResolution | null {
-    const env = envId ? (environments.value.find((environment) => environment.id === envId) ?? null) : activeEnvironment.value
-    const own = env?.vars.find((variable) => variable.name === name && variable.enabled)
-    if (own) return { value: effectiveValue(own), source: 'env', kind: own.kind }
+    const env = envId ? allEnvironments.value.find((environment) => environment.id === envId) : activeEnvironment.value
+    const owns = (variable: Variable) => variable.name === name && variable.enabled
+    for (const scope of [env, baseOf(env)]) {
+      const own = scope?.vars.find(owns)
+      if (own) return { value: effectiveValue(own), source: 'env', kind: own.kind, envId: scope?.id }
+    }
     const global = globals.value.find((variable) => variable.name === name && variable.enabled)
     if (global) return { value: effectiveValue(global), source: 'global', kind: global.kind }
     return null
   }
 
-  function rowsFor(envId: string | null): {
-    own: Variable[]
-    inherited: (Variable & { overridden: boolean })[]
-  } {
+  function rowsFor(envId: string | null) {
     const own = varsOf(envId)
-    if (envId === null) return { own, inherited: [] }
-    const ownNames = new Set(own.map((variable) => variable.name))
-    return { own, inherited: globals.value.map((variable) => ({ ...variable, overridden: ownNames.has(variable.name) })) }
+    if (envId === null) return { own, inherited: [], base: null }
+    const env = allEnvironments.value.find((one) => one.id === envId)
+    const base = baseOf(env)
+    const ownNames = new Set(own.filter((variable) => variable.enabled).map((variable) => variable.name))
+    const inherited = (env?.collectionId ? base?.vars ?? [] : globals.value)
+      .map((variable) => ({ ...variable, overridden: ownNames.has(variable.name) }))
+    return { own, inherited, base: base ?? null }
+  }
+
+  function baseOf(env: Env | null | undefined) {
+    if (!env?.collectionId || env.base) return undefined
+    return collectionEnvironments.value.find((one) => one.collectionId === env.collectionId && one.base)
   }
 
   function varsOf(envId: string | null): Variable[] {
     if (envId === null) return globals.value
-    return environments.value.find((environment) => environment.id === envId)?.vars ?? []
+    return allEnvironments.value.find((environment) => environment.id === envId)?.vars ?? []
   }
 
   function editEnv(id: string | null) {
@@ -269,6 +289,19 @@ export const useEnvironmentsStore = defineStore('environments', () => {
   }
 
   function openSheet(focus: { envId: string | null; varName: string } | null = null) {
+    const scoped = collectionEnvironments.value.find(env => env.id === focus?.envId)
+    if (scoped?.collectionId && focus) {
+      const { collectionId, id: envId } = scoped
+      const collections = useCollectionsStore()
+      const signal = snapshot.signal()
+      void collections.select(collectionId, true).then(() => {
+        if (signal.aborted || collections.selectedId !== collectionId) return
+        if (sheetOpen.value) closeSheet()
+        collectionFocus.value = { collectionId, envId, varName: focus.varName }
+        collections.pendingSection = 'vars'
+      })
+      return
+    }
     sheetFocus.value = focus
     editedEnvId.value = focus ? focus.envId : activeId.value
     pendingCreate.value = false
@@ -303,6 +336,8 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     pendingCreate,
     revealed,
     environments,
+    collectionEnvironments,
+    collectionFocus,
     globals,
     activeId,
     activeEnvironment,
@@ -310,6 +345,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     reset,
     ensureDefaults,
     setActive,
+    selectCollection,
     createEnv,
     removeEnv,
     renameEnv,
@@ -333,6 +369,7 @@ export const useEnvironmentsStore = defineStore('environments', () => {
     openSheet,
     openSheetCreating,
     closeSheet,
+    forgetSecrets,
     takeFocus,
   }
 })

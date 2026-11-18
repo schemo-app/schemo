@@ -1,164 +1,273 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import {
+  DropdownMenuItem, DropdownMenuItemIndicator, DropdownMenuPortal, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuRoot, DropdownMenuSub, DropdownMenuSubContent,
+  DropdownMenuSubTrigger, DropdownMenuTrigger,
+} from 'reka-ui'
+import CollectionVariableRows from './CollectionVariableRows.vue'
+import VariablesTable from '../environments/VariablesTable.vue'
+import Button from '../ui/Button.vue'
 import Icon from '../ui/Icon.vue'
-import TokenField from '../ui/TokenField.vue'
-import IconButton from '../ui/IconButton.vue'
-import Checkbox from '../ui/Checkbox.vue'
+import ConfirmSheet from '../ui/ConfirmSheet.vue'
+import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { useEnvironmentsStore } from '../../stores/environments'
-import { findCollection } from '../../lib/collectionTree'
-import { SECRET_MASK } from '../../lib/layout'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { useSheetNotice } from '../../composables/useSheetNotice'
+import { useColorLabels } from '../../composables/useColorLabels'
+import { DEFAULT_ENVIRONMENT_COLOR, dotOf, ENVIRONMENT_COLORS } from '../../lib/environmentPalette'
+import { environmentOwnerOf, trailOf } from '../../lib/collectionTree'
+import { Environments } from '../../../bindings/schemo/internal/workspace'
 import { t } from '../../i18n'
-import { VariableKind, type Variable } from '../../../bindings/schemo/internal/domain'
 
-// What the collection keeps between its requests, and what the environment says about the same name
-// — a value the environment overrides is shown beside the one written here.
 const collections = useCollectionsStore()
 const environments = useEnvironmentsStore()
+const workspaces = useWorkspacesStore()
+const { notice, clearNotice, withNotice } = useSheetNotice()
+const colorLabels = useColorLabels('environments', ENVIRONMENT_COLORS)
 
-type EditorRow = { key: number; variable: Variable }
+const trail = computed(() => trailOf(collections.tree, collections.collectionId))
+const level = computed(() => trail.value?.collection)
+const owner = computed(() => environmentOwnerOf(trail.value, environments.envState?.collectionActive))
+const canCreate = computed(() => workspaces.canWrite && !!level.value && owner.value?.id === level.value.id)
+const owned = computed(() => environments.collectionEnvironments.filter(env => env.collectionId === level.value?.id))
+const base = computed(() => owned.value.find(env => env.base && !env.folder))
+const choices = computed(() => owned.value.filter(env => !env.base || env.folder))
+const scope = ref('')
+const focusName = ref('')
+const selected = computed(() => scope.value ? choices.value.find(env => env.id === scope.value) : base.value)
+const locked = computed(() => !!selected.value?.readonly || !workspaces.canWrite)
 
-// The level the page is about: the same answer the header names and the tree highlights by.
-const level = computed(() => findCollection(collections.tree, collections.collectionId))
-
-const rows = ref<EditorRow[]>([])
-let nextKey = 1
-
-function fromStore(): EditorRow[] {
-  return (level.value?.variables ?? []).map((variable) => ({
-    key: nextKey++,
-    variable: { ...variable },
-  }))
+function editScope(id: string) {
+  if (scope.value !== id) environments.forgetSecrets()
+  scope.value = id
+  focusName.value = ''
+  clearNotice()
 }
 
-watch(
-  () => level.value?.variables,
-  () => {
-    rows.value = fromStore()
-  },
-  { immediate: true, deep: true }
-)
-
-const envName = computed(() => environments.activeEnvironment?.name ?? '')
-
-/** What the environment holds under the same name, if anything: the value that would go out. */
-const envByName = computed(() => {
-  const map = new Map<string, Variable>()
-  for (const variable of environments.activeEnvironment?.vars ?? []) {
-    if (variable.enabled === false) continue
-    map.set(variable.name, variable)
-  }
-  return map
+watch(() => level.value?.id, () => {
+  environments.forgetSecrets()
+  editScope('')
+}, { flush: 'sync' })
+watch(choices, list => {
+  if (scope.value && !list.some(env => env.id === scope.value)) editScope('')
+})
+watch(() => environments.collectionFocus, focus => {
+  if (!focus || focus.collectionId !== level.value?.id) return
+  editScope(focus.envId === base.value?.id ? '' : focus.envId)
+  focusName.value = focus.varName
+  environments.collectionFocus = null
+}, { immediate: true })
+onBeforeUnmount(() => {
+  environments.forgetSecrets()
+  clearNotice()
 })
 
-function currentOf(row: EditorRow): { text: string; overridden: boolean } {
-  const fromEnv = envByName.value.get(row.variable.name)
-  if (fromEnv) return { text: shown(fromEnv), overridden: true }
-  return { text: shown(row.variable), overridden: false }
+function labelOf(env: NonNullable<typeof selected.value>) {
+  return env.folder ? t('collections.folderSecrets') : env.name
 }
 
-function shown(variable: Variable): string {
-  if (variable.value) return variable.value
-  return variable.hasValue ? SECRET_MASK : ''
+const pickerLabel = computed(() => selected.value && !selected.value.base ? labelOf(selected.value) : t('request.envBase'))
+const showPicker = computed(() => choices.value.length || canCreate.value)
+
+const nameMode = ref<'new' | 'copy' | 'rename' | null>(null)
+const nameInput = useTemplateRef<HTMLInputElement>('nameInput')
+const name = ref('')
+const saving = ref(false)
+
+function nameEnvironment(mode: NonNullable<typeof nameMode.value>) {
+  nameMode.value = mode
+  name.value = mode === 'rename' ? selected.value?.name ?? '' : ''
+  clearNotice()
+  void nextTick(() => nameInput.value?.focus())
 }
 
-function isSecret(variable: Variable): boolean {
-  return variable.kind === VariableKind.VariableSecret
+function cancelName() {
+  if (saving.value) return
+  nameMode.value = null
+  clearNotice()
 }
 
-async function commit() {
-  if (!level.value) return
-  await collections.saveVariables(
-    level.value.id,
-    rows.value.map((row) => row.variable)
-  )
+async function saveName() {
+  const mode = nameMode.value
+  const current = selected.value
+  const collectionId = level.value?.id
+  if (!mode || !collectionId || saving.value || !name.value.trim()) return
+  if (mode !== 'new' && !current) return
+  if (mode === 'rename' && (current?.base || current?.folder)) return
+
+  saving.value = true
+  try {
+    const saved = await withNotice(async () => {
+      if (mode === 'rename') {
+        if (current) await environments.renameEnv(current.id, name.value)
+        return
+      }
+      const id = await environments.createEnv({
+        collectionId,
+        name: name.value,
+        color: mode === 'copy' ? current?.color : DEFAULT_ENVIRONMENT_COLOR,
+        startFrom: mode === 'copy' ? current?.id : undefined,
+      })
+      editScope(id)
+    })
+    if (saved) nameMode.value = null
+  } finally {
+    saving.value = false
+  }
 }
 
-function patch(row: EditorRow, change: Partial<Variable>) {
-  rows.value = rows.value.map((it) =>
-    it.key === row.key ? { ...it, variable: { ...it.variable, ...change } } : it
-  )
+function toggleAccess() {
+  const env = selected.value
+  if (env) void withNotice(() => environments.setEnvReadonly(env.id, !env.readonly))
 }
 
-function toggle(row: EditorRow) {
-  patch(row, { enabled: !row.variable.enabled })
-  void commit()
+function setColor(color: string) {
+  const env = selected.value
+  if (env) void withNotice(() => environments.setEnvColor(env.id, color))
 }
 
-function remove(row: EditorRow) {
-  rows.value = rows.value.filter((it) => it.key !== row.key)
-  void commit()
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
+
+async function importVariables(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  const env = selected.value
+  input.value = ''
+  if (!file || !env || locked.value) return
+
+  await withNotice(async () => {
+    const entries = await Environments.ParseDotenv(await file.text())
+    if (selected.value?.id !== env.id || locked.value) return
+    await environments.importDotenv(env.id, entries ?? [])
+  })
 }
 
-function addVariable() {
-  rows.value = [
-    ...rows.value,
-    {
-      key: nextKey++,
-      variable: {
-        id: '',
-        name: '',
-        value: '',
-        kind: VariableKind.VariableText,
-        enabled: true,
-        position: rows.value.length + 1,
-        hasValue: false,
-      },
-    },
-  ]
+const deleting = ref<string | null>(null)
+
+async function deleteEnvironment() {
+  const id = deleting.value
+  deleting.value = null
+  if (id && selected.value?.id === id) await withNotice(() => environments.removeEnv(id))
 }
 </script>
 
 <template>
-  <div class="vars">
-    <!-- A collection with no variables of its own is the button alone, the way an environment's
-         empty set is: a table nobody has filled yet says nothing with its headings. -->
-    <div v-if="rows.length" class="head">
-      <span></span>
-      <span>{{ t('collections.varName') }}</span>
-      <span>{{ t('collections.inCollection') }}</span>
-      <span>{{ envName ? t('collections.varsCurrent', { env: envName }) : t('collections.varsCurrentBare') }}</span>
-      <span></span>
+  <div v-if="level" class="vars">
+    <div class="vars-toolbar">
+      <form v-if="nameMode" class="name-form" @submit.prevent="saveName">
+        <input
+          ref="nameInput"
+          v-model="name"
+          class="kv-input"
+          maxlength="40"
+          :aria-label="t('environments.nameLabel')"
+          :placeholder="t('environments.nameLabel')"
+          @keydown.esc.prevent="cancelName"
+        />
+        <Button variant="primary" size="md" :disabled="saving || !name.trim()" type="submit">
+          {{ t(nameMode === 'rename' ? 'common.save' : 'environments.createAction') }}
+        </Button>
+        <Button variant="quiet" :disabled="saving" @click="cancelName">
+          {{ t('common.cancel') }}
+        </Button>
+      </form>
+
+      <template v-else>
+        <DropdownMenuRoot v-if="showPicker">
+          <DropdownMenuTrigger as-child>
+            <Button variant="quiet" class="vars-action" :aria-label="t('collections.editingEnvironment', { name: pickerLabel })">
+              {{ pickerLabel }}
+              <Icon name="ChevronDown" :size="12" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" class="vars-scope-menu">
+            <DropdownMenuRadioGroup :model-value="scope">
+              <DropdownMenuRadioItem class="menu-item" value="" @select="editScope('')">
+                <span class="menu-dot"></span>
+                <span class="menu-label">{{ t('request.envBase') }}</span>
+                <DropdownMenuItemIndicator><Icon name="Check" :size="12" /></DropdownMenuItemIndicator>
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem
+                v-for="env in choices"
+                :key="env.id"
+                :value="env.id"
+                class="menu-item"
+                @select="editScope(env.id)"
+              >
+                <span class="menu-dot" :style="{ background: dotOf(env.color ?? '') }"></span>
+                <span class="menu-label">{{ labelOf(env) }}</span>
+                <DropdownMenuItemIndicator><Icon name="Check" :size="12" /></DropdownMenuItemIndicator>
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuItem v-if="canCreate" class="menu-item" @select="nameEnvironment('new')">
+              <Icon name="Plus" :size="14" />
+              {{ t('environments.newMenu') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuRoot>
+        <span v-else class="vars-label">{{ pickerLabel }}</span>
+
+        <DropdownMenuRoot v-if="selected && workspaces.canWrite">
+          <DropdownMenuTrigger as-child>
+            <Button variant="quiet" class="vars-action" :title="t('common.options')" :aria-label="t('common.options')">
+              <Icon name="Ellipsis" :size="16" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem v-if="!selected.base && !selected.folder" class="menu-item" @select="nameEnvironment('rename')">
+              {{ t('collections.rename') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="canCreate && !selected.folder" class="menu-item" @select="nameEnvironment('copy')">
+              {{ t('collections.duplicate') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem class="menu-item" @select="toggleAccess">
+              {{ t(selected.readonly ? 'environments.accessEditable' : 'environments.accessReadonly') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="!locked" class="menu-item" @select="fileInput?.click()">
+              {{ t('environments.importEnv') }}
+            </DropdownMenuItem>
+            <DropdownMenuSub v-if="!selected.folder">
+              <DropdownMenuSubTrigger class="menu-item">
+                <span class="menu-label">{{ t('environments.colorLabel') }}</span>
+                <Icon name="ChevronRight" :size="12" />
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent class="menu">
+                  <DropdownMenuItem v-for="color in ENVIRONMENT_COLORS" :key="color" class="menu-item" @select="setColor(color)">
+                    <span class="menu-dot" :style="{ background: dotOf(color) }"></span>
+                    {{ colorLabels[color] }}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+            <DropdownMenuItem class="menu-item danger" @select="deleting = selected.id">
+              {{ t('environments.dangerDelete') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuRoot>
+      </template>
     </div>
 
-    <div v-for="row in rows" :key="row.key" class="row" :class="{ off: row.variable.enabled === false }">
-      <Checkbox
-        :model-value="row.variable.enabled !== false"
-        @update:model-value="toggle(row)"
-      />
+    <input ref="fileInput" type="file" accept=".env,text/plain" hidden @change="importVariables" />
 
-      <input
-        :value="row.variable.name"
-        class="kv-input name"
-        spellcheck="false"
-        @input="patch(row, { name: ($event.target as HTMLInputElement).value })"
-        @blur="commit"
-      />
-      <TokenField
-        variant="cell"
-        :value="row.variable.value ?? ''"
-        @change="patch(row, { value: $event })"
-        @focusout="commit"
-      />
-      <span class="cur-cell">
-        <span class="cur" :class="{ over: currentOf(row).overridden }">{{ currentOf(row).text }}</span>
-      </span>
-      <span class="tail">
-        <Icon v-if="isSecret(row.variable)" name="Lock" :size="14" :stroke-width="1.8" class="lock" />
-        <IconButton variant="danger" size="md" class="drop" :hint="t('common.delete')" @click="remove(row)">
-          <Icon name="X" :size="14" :stroke-width="2.2" />
-        </IconButton>
-      </span>
-    </div>
+    <VariablesTable v-if="selected" :key="selected.id" :environment-id="selected.id" :focus-name="focusName" :locked>
+      <template v-if="selected.base && level.variables?.length" #before-rows>
+        <CollectionVariableRows :key="level.id" :level embedded />
+      </template>
+    </VariablesTable>
+    <CollectionVariableRows v-else :key="level.id" :level />
+    <p v-if="notice && !selected" class="notice">{{ notice }}</p>
 
-    <button type="button" class="add" @click="addVariable">
-      <Icon name="Plus" :size="14" :stroke-width="2.2" />
-      <span class="cap-line">{{ t('collections.addVariable') }}</span>
-    </button>
-
-    <p class="foot">
-      {{ t('collections.varsFoot') }}
-    </p>
+    <ConfirmSheet
+      v-if="deleting && selected?.id === deleting"
+      :title="t('environments.dangerDelete')"
+      :sub="t('environments.deleteSheetSubPlain')"
+      :action="t('common.delete')"
+      @close="deleting = null"
+      @confirm="deleteEnvironment"
+    />
   </div>
 </template>
 
@@ -167,97 +276,80 @@ function addVariable() {
 
 .vars {
   @apply flex flex-col flex-1 min-h-0 overflow-y-auto;
+  --collection-variable-gutter: 0.625rem;
+  --collection-variable-label-inset: 0.5rem;
+  --collection-variable-control-column: 1.625rem;
+  --collection-variable-columns: var(--collection-variable-control-column) minmax(0, 0.8fr) minmax(0, 1.4fr) repeat(3, 1.75rem);
   padding: 1rem 1.5rem;
 }
 
-.head,
-.row {
-  display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
-  align-items: center;
-  padding: 0 0.625rem;
-}
-
-.head {
-  height: 1.875rem;
-  font-size: var(--text-12);
-  color: var(--text-tertiary);
-  border-bottom: 1px solid var(--border);
-}
-
-.head > span {
-  padding: 0 0.5rem;
-}
-
-.row {
-  height: 2.5rem;
-  border-bottom: 1px solid var(--line2);
-  font-family: var(--mono);
-  font-size: var(--text-13);
-}
-
-.row.off {
-  opacity: 0.45;
-}
-
-.name {
-  color: var(--accent);
-}
-
-.cur-cell {
-  @apply min-w-0 truncate;
-  padding: 0 1rem 0 0.5rem;
-}
-
-.cur {
-  color: var(--text-secondary);
-}
-
-.cur.over {
-  padding: 0.125rem 0.3125rem;
-  border-radius: 0.3125rem;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.tail {
-  @apply flex items-center justify-end;
-  color: var(--text-tertiary);
-}
-
-.lock {
-  @apply flex-none;
-}
-
-.row :deep(.drop) {
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.row:hover :deep(.drop) {
-  opacity: 1;
-}
-
-.add {
-  @apply flex items-center gap-1.5 self-start cursor-pointer border-0 bg-transparent text-accent;
-  margin-top: 0.75rem;
-  padding: 0 0.625rem;
-  height: 1.875rem;
-  border-radius: 0.3125rem;
+.vars :deep(.collection-variable-add) {
+  @apply inline-grid items-center border-0 bg-transparent text-left text-accent cursor-pointer;
+  grid-template-columns: var(--collection-variable-control-column) auto;
+  height: 2rem;
+  margin-top: 0.25rem;
+  padding: 0 var(--collection-variable-gutter);
+  border-radius: 0.375rem;
   font-family: inherit;
   font-size: var(--text-13);
   font-weight: 500;
 }
 
-.add:hover {
+.vars :deep(.collection-variable-add span) {
+  padding-inline-start: var(--collection-variable-label-inset);
+}
+
+.vars :deep(.collection-variable-add:hover:not(:disabled)) {
   background: var(--accent-soft);
 }
 
-.foot {
-  @apply text-text-secondary;
-  margin-top: 0.875rem;
-  padding: 0 0.625rem;
-  max-width: 42.5rem;
-  line-height: 1.55;
+.vars :deep(.collection-variable-add:disabled) {
+  @apply opacity-50 cursor-default;
+}
+
+.vars-toolbar {
+  @apply flex flex-none items-center justify-between gap-2;
+  min-height: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.vars-label {
+  @apply text-13 font-semibold text-text-secondary;
+  padding-left: 0.5rem;
+}
+
+.vars-toolbar .vars-action {
+  gap: 0.375rem;
+  height: 1.75rem;
+  font-size: var(--text-13);
+}
+
+.menu-dot {
+  @apply flex-none rounded-full;
+  width: 0.4375rem;
+  height: 0.4375rem;
+}
+
+.menu-label {
+  @apply flex-1 min-w-0 truncate;
+}
+
+.vars-scope-menu {
+  max-width: 18rem;
+  max-height: min(20rem, var(--reka-dropdown-menu-content-available-height, 100vh));
+  overflow-y: auto;
+}
+
+.name-form {
+  @apply flex items-center gap-2;
+}
+
+.name-form input {
+  width: min(14rem, 35vw);
+}
+
+.notice {
+  @apply text-12 text-red;
+  padding: 0.5rem;
 }
 </style>

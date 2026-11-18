@@ -93,7 +93,9 @@ func Assemble(cfg Config) (*Services, error) {
 	settings := workspace.NewSettings(store, notifier, engine, reader, host.PickRootCertificate)
 	environments := workspace.NewEnvironments(store, store, ids)
 	cookies := request.NewCookies(store, store, ids)
-	scripts := script.NewScripts(sandbox, store, environments, store, ids)
+	scripts := script.NewScripts(sandbox, store, func(workspace, environment string) script.Variables {
+		return environments.InEnvironment(workspace, environment)
+	}, store, ids)
 	sync := cloud.NewSync(store, client, account, store, notifier, ids)
 	// The mask needs the draft, and the draft sends through history: the mask gets it once it exists.
 	mask := &requestMask{environments: environments}

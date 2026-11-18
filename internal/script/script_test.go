@@ -121,6 +121,18 @@ func (f *fakeVariables) Variable(
 	return value, ok, nil
 }
 
+func (f *fakeVariables) MaskTexts(_ context.Context, _ []domain.Variable, texts []string, _ string) ([]string, error) {
+	return texts, nil
+}
+
+func (f *fakeVariables) RequestVariable(ctx context.Context, _ []domain.Variable, name string) (string, bool, error) {
+	value, ok, err := f.Variable(ctx, domain.ScopeEnvironment, name)
+	if err != nil || ok {
+		return value, ok, err
+	}
+	return f.Variable(ctx, domain.ScopeGlobals, name)
+}
+
 func (f *fakeVariables) SetVariable(
 	_ context.Context,
 	scope domain.VarScope,
@@ -182,7 +194,7 @@ func newScripts(t *testing.T) (*Scripts, *fakeEngine, *fixture, *fixture, *fakeV
 
 	engine := &fakeEngine{}
 	vars := newFakeVariables()
-	scripts := NewScripts(engine, store, vars, fakeScope{}, platform.NewIDGen())
+	scripts := NewScripts(engine, store, func(_, _ string) Variables { return vars }, fakeScope{}, platform.NewIDGen())
 	return scripts, engine, f, f, vars
 }
 

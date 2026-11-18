@@ -188,17 +188,15 @@ func TestImportReadsPathParametersAsTheRequestsRows(t *testing.T) {
 	}
 }
 
-// Environments come with their collections. Insomnia's base environment applies beside whichever
-// one is selected, and this app has no such second scope — so its values are also folded into every
-// environment that does not set them, and the base itself is written too.
 func TestImportReadsEnvironments(t *testing.T) {
 	doc := read(t, "export_v4.json")
-	if len(doc.Environments) != 2 {
-		t.Fatalf("environments = %+v, want the base and Dev", doc.Environments)
+	environments := only(t, doc).Environments
+	if len(doc.Environments) != 0 || len(environments) != 2 {
+		t.Fatalf("environments = %+v, want the base and Dev inside the collection", environments)
 	}
 
-	base := doc.Environments[0]
-	if base.Name != "Base Environment" {
+	base := environments[0]
+	if base.Name != "Base Environment" || !base.Base {
 		t.Fatalf("first = %q, want the base environment", base.Name)
 	}
 	url := variable(t, base.Variables, "base_url")
@@ -206,7 +204,7 @@ func TestImportReadsEnvironments(t *testing.T) {
 		t.Errorf("base_url = %+v, want the address", url)
 	}
 
-	dev := doc.Environments[1]
+	dev := environments[1]
 	if dev.Name != "Dev" {
 		t.Fatalf("second = %q, want Dev", dev.Name)
 	}
@@ -214,13 +212,33 @@ func TestImportReadsEnvironments(t *testing.T) {
 		token.Kind != domain.VariableSecret {
 		t.Errorf("dev_token = %+v, want the environment's own value", token)
 	}
-	inherited := variable(t, dev.Variables, "base_url")
-	if inherited.Value != "https://api.storefront.example/v1" {
-		t.Errorf("base_url = %+v, want the base's value folded in", inherited)
+	if len(dev.Variables) != 1 {
+		t.Errorf("Dev variables = %d, want only its override", len(dev.Variables))
 	}
 	// Insomnia does not mark a variable as a secret; the name is the only thing left to read.
-	if key := variable(t, dev.Variables, "api_key"); key.Kind != domain.VariableSecret {
+	if key := variable(t, base.Variables, "api_key"); key.Kind != domain.VariableSecret {
 		t.Errorf("api_key = %+v, want a secret by its name", key)
+	}
+}
+
+func TestImportKeepsStandaloneEnvironmentsAtWorkspaceLevel(t *testing.T) {
+	doc, err := Import([]byte(`type: environment.insomnia.rest/5.0
+name: Shared
+environments:
+  data: {host: https://api.example.com}
+  subEnvironments:
+    - name: Test
+      data: {path: /test}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Collections) != 0 || len(doc.Environments) != 2 {
+		t.Fatal("Import must keep standalone environments in the workspace")
+	}
+	test := doc.Environments[1]
+	if test.Name != "Test" || variable(t, test.Variables, "host").Value != "https://api.example.com" {
+		t.Fatal("Import must retain a standalone variant's inherited defaults")
 	}
 }
 

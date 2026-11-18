@@ -24,7 +24,7 @@ func TestFetchReadsTheDocument(t *testing.T) {
 		_, _ = w.Write([]byte(`{"openapi": "3.1.0"}`))
 	})
 
-	got, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), address)
+	got, _, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), address)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestFetchRefusesWhatItCannotRead(t *testing.T) {
 	missing := serve(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
-	if _, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), missing); domain.CodeOf(
+	if _, _, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), missing); domain.CodeOf(
 		err) != domain.CodeURLUnreachable {
 		t.Errorf("a 404 = %v, want urlUnreachable", err)
 	}
@@ -47,12 +47,12 @@ func TestFetchRefusesWhatItCannotRead(t *testing.T) {
 	dead := serve(t, func(http.ResponseWriter, *http.Request) {})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := NewFetcher(http.DefaultClient).Fetch(ctx, dead); domain.CodeOf(err) !=
+	if _, _, err := NewFetcher(http.DefaultClient).Fetch(ctx, dead); domain.CodeOf(err) !=
 		domain.CodeURLUnreachable {
 		t.Errorf("a canceled fetch = %v, want urlUnreachable", err)
 	}
 
-	if _, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), "not a url"); !errors.Is(
+	if _, _, err := NewFetcher(http.DefaultClient).Fetch(context.Background(), "not a url"); !errors.Is(
 		err, domain.ErrNotAllowed) {
 		t.Errorf("a malformed address = %v, want ErrNotAllowed", err)
 	}
@@ -67,7 +67,7 @@ func TestFetchRefusesADocumentTooLarge(t *testing.T) {
 	fetcher := NewFetcher(http.DefaultClient)
 	fetcher.MaxBytes = 16
 
-	if _, err := fetcher.Fetch(context.Background(), address); domain.CodeOf(err) !=
+	if _, _, err := fetcher.Fetch(context.Background(), address); domain.CodeOf(err) !=
 		domain.CodeFileTooLarge {
 		t.Errorf("Fetch = %v, want fileTooLarge", err)
 	}

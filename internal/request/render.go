@@ -430,21 +430,21 @@ func (p parts) putBack(resolved []string) parts {
 
 // jarCookies resolves the address (its host is usually a token) and reads the jar for it, as the
 // preview does.
-func (s *Drafts) jarCookies(ctx context.Context, d domain.Draft) (string, error) {
+func (s *Drafts) jarCookies(ctx context.Context, d domain.Draft, above []domain.Variable) (string, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return "", err
 	}
-	return s.cookiesIn(ctx, workspace, d)
+	return s.cookiesIn(ctx, workspace, d, above)
 }
 
-func (s *Drafts) cookiesIn(ctx context.Context, workspace string, d domain.Draft) (string, error) {
+func (s *Drafts) cookiesIn(ctx context.Context, workspace string, d domain.Draft, above []domain.Variable) (string, error) {
 	rules := protocols[d.Protocol]
 	if rules.metadata {
 		return "", nil
 	}
 	raw := collectParts(d, "").url
-	if resolve, err := s.vars.Resolver(ctx, workspace, nil, d.EnvironmentID); err == nil {
+	if resolve, err := s.vars.Resolver(ctx, workspace, above, d.EnvironmentID); err == nil {
 		raw, _ = resolve(raw)
 	}
 	return s.jar.CookieHeader(ctx, workspace, rules.httpURL(raw))

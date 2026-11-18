@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, useTemplateRef, toValue, watch, type MaybeRefOrGetter, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, useTemplateRef, toValue, watch, type MaybeRefOrGetter, ref } from 'vue'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import Icon from '../ui/Icon.vue'
 import Spinner from '../ui/Spinner.vue'
@@ -21,13 +21,12 @@ import { useRequestSave } from '../../composables/useRequestSave'
 import { useRequestSend } from '../../composables/useRequestSend'
 import { useCommands } from '../../composables/useCommands'
 import { registerUrlField, saveRequest } from '../../lib/intents'
-import { urlPieces, type UrlPiece } from '../../lib/vars'
+import { requestVariablePreview, urlPieces, type UrlPiece } from '../../lib/vars'
 import { Kind } from '../../../bindings/schemo/internal/convert/command'
 import { useToast } from '../../composables/useToast'
-import { textOf, t, describeFailure } from '../../i18n'
-import type { RequestSource } from '../../lib/requestSource'
-import { missingPlace } from '../../lib/missingPlace'
+import { textOf, t } from '../../i18n'
 import { useEnvironmentsStore } from '../../stores/environments'
+import { useCollectionsStore } from '../../stores/collections'
 import { useRequestEnvironment } from '../../composables/useRequestEnvironment'
 
 // Shell prompt prefixes (PowerShell, bash, zsh) and a sudo wrapper.
@@ -49,6 +48,8 @@ function looksLikeCommand(text: string): boolean {
 }
 
 const { source, expanded = false } = defineProps<{ source: PaneSource; expanded?: boolean }>()
+const { scopeId: requestEnvironmentId } = useRequestEnvironment(source)
+provide(requestVariablePreview, computed(() => source.variablePreview))
 
 const { matches } = useCommands()
 const toast = useToast()
@@ -60,15 +61,18 @@ const splitSend = computed(() => !!protocol.value.copyCommands)
 const hasOperations = computed(() => protocol.value.chips.includes('schema'))
 const placeholder = computed(() => t(protocol.value.address))
 
-const {
-  open: helpOpen,
-  missing,
-  marked,
-  rows: missingRows,
-  title: missingTitle,
-  mayAdd,
-  add,
-} = useMissingVars(source)
+const helpOpen = ref(false)
+const missing = computed(() => source.missing)
+const environments = useEnvironmentsStore()
+const collections = useCollectionsStore()
+
+watch(
+  () => [environments.envState, collections.tree, source.environmentId],
+  () => void source.refreshPreview()
+)
+watch(missing, names => {
+  if (!names.length) helpOpen.value = false
+})
 
 const { label: sendLabel, key: sendKey, disabled: sendDisabled, messaging, onSend } = useRequestSend(source)
 
@@ -177,52 +181,6 @@ function useWholeWidth(target: MaybeRefOrGetter<HTMLElement | null | undefined>,
   watch(redo, () => void nextTick(hold))
 }
 
-function useMissingVars(source: RequestSource) {
-  const environments = useEnvironmentsStore()
-
-  const open = ref(false)
-  const missing = computed(() => source.missing)
-  const marked = computed(() => missing.value.length > 0)
-  const rows = computed(() =>
-    missing.value.map((name) => ({
-      name,
-      label: `{{${name}}}`,
-      place: missingPlace(source, name, t),
-    }))
-  )
-
-  watch(
-    () => [environments.envState, source.environmentId],
-    () => void source.refreshPreview()
-  )
-
-  const { stale, scopeId, scopeReadonly } = useRequestEnvironment(source)
-
-  const title = computed(() => {
-    if (stale.value) return t('request.pinGone')
-    if (scopeId.value === null) return t('request.chooseEnvFirst')
-    if (scopeReadonly.value) return t('request.envReadOnly')
-    return undefined
-  })
-
-  const mayAdd = computed(() => scopeId.value !== null && !scopeReadonly.value && !stale.value)
-
-  function add(names: string[]) {
-    const envId = scopeId.value
-    if (envId === null) return
-    if (!scopeReadonly.value) {
-      for (const name of names) {
-        void environments.addVar(envId, { name }).catch((error) => {
-          toast.show(t('request.createFailed', { error: describeFailure(error) }), 'error')
-        })
-      }
-    }
-    open.value = false
-    environments.openSheet({ envId, varName: names[0] ?? '' })
-  }
-
-  return { open, missing, marked, rows, title, mayAdd, add }
-}
 </script>
 
 <template>
@@ -263,7 +221,7 @@ function useMissingVars(source: RequestSource) {
         <div class="url-text">
           <input
             ref="urlInputRef"
-            v-var-peek="source.environmentId"
+            v-var-peek="requestEnvironmentId ?? undefined"
             :value="source.url"
             class="url-input mono"
             :class="{ 'url-input-veiled': showUrlDisplay }"
@@ -287,57 +245,30 @@ function useMissingVars(source: RequestSource) {
                 v-if="piece.tokenName"
                 :name="piece.tokenName"
                 :text="piece.text"
-                :env-id="source.environmentId"
+                :env-id="requestEnvironmentId ?? undefined"
               />
               <span v-else :class="[piece.kind, { unfilled: isUnfilled(piece) }]">{{ piece.text }}</span>
             </template>
           </div>
         </div>
 
-        <Popover v-if="marked" v-model:open="helpOpen">
+        <Popover v-if="missing.length" v-model:open="helpOpen">
           <PopoverTrigger as-child>
             <button
               type="button"
               class="var-mark"
               :class="{ open: helpOpen }"
               :title="t('counts.variablesMissing', missing.length)"
+              :aria-label="t('counts.variablesMissing', missing.length)"
             >
               <Icon name="TriangleAlert" :size="14" :stroke-width="2" />
             </button>
           </PopoverTrigger>
-          <PopoverContent class="var-help" align="end" :side-offset="6">
-            <span class="var-help-head">{{ t('request.missingHeader', { n: missing.length }) }}</span>
-
-            <div v-for="one in missingRows" :key="one.name" class="var-help-row">
-              <span class="var-help-who">
-                <span class="var-help-name mono">{{ one.label }}</span>
-                <span v-if="one.place" class="var-help-where">{{ one.place }}</span>
-              </span>
-              <button
-                type="button"
-                class="var-help-add"
-                :disabled="!mayAdd"
-                :title="missingTitle"
-                @click="add([one.name])"
-              >
-                {{ t('request.createVar') }}
-              </button>
-            </div>
-
-            <span class="var-help-note">{{ t('request.missingNote') }}</span>
-
-            <template v-if="missing.length > 1">
-              <span class="var-help-line"></span>
-              <button
-                type="button"
-                class="var-help-all"
-                :disabled="!mayAdd"
-                :title="missingTitle"
-                @click="add(missingRows.map((one) => one.name))"
-              >
-                {{ t('request.createVarAll', { n: missing.length }) }}
-              </button>
-            </template>
+          <PopoverContent class="var-help" align="end" :side-offset="6" :aria-label="t('counts.variablesMissing', missing.length)">
+            <span class="var-help-head">{{ t('counts.variablesMissing', missing.length) }}</span>
+            <ul class="var-help-list">
+              <li v-for="name in missing" :key="name" class="var-help-name mono">{{ name }}</li>
+            </ul>
           </PopoverContent>
         </Popover>
         <div v-if="hasOperations" ref="methodSlot" class="operation-slot"></div>
@@ -398,7 +329,7 @@ function useMissingVars(source: RequestSource) {
       </div>
     </div>
 
-    <RequestPane :source="source" :expanded="expanded" :method-slot="methodSlot" />
+    <RequestPane :source="source" :expanded="expanded" :method-slot="methodSlot" :env-id="requestEnvironmentId ?? undefined" />
   </div>
 </template>
 

@@ -32,7 +32,7 @@ export function Capture(scope: domain$0.VarScope, name: string, value: string, s
 }
 
 /**
- * Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
+ * Create appends an environment. Workspace environments become active, while collections keep their selection.
  */
 export function Create(draft: $models.EnvironmentInput): $CancellablePromise<string> {
     return $Call.ByID(3007895376, draft);
@@ -90,6 +90,13 @@ export function Save(env: domain$0.Environment): $CancellablePromise<void> {
  */
 export function SaveGlobals(vars: domain$0.Variable[] | null): $CancellablePromise<void> {
     return $Call.ByID(3998373115, vars);
+}
+
+/**
+ * SelectCollection changes the environment used by the given collection. Empty restores its default.
+ */
+export function SelectCollection(collectionID: string, id: string): $CancellablePromise<void> {
+    return $Call.ByID(3887949920, collectionID, id);
 }
 
 /**

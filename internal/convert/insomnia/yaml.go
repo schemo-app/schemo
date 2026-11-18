@@ -66,38 +66,40 @@ func importV5(data []byte) (domain.Document, error) {
 	}
 
 	var out domain.Document
-	base := yamlVariables(file.Environments.Data, file.Environments.ConfidentialKeys)
-	if len(base) > 0 {
-		out.Environments = append(out.Environments, domain.EnvironmentDraft{
-			Name:      cmp.Or(strings.TrimSpace(file.Environments.Name), strings.TrimSpace(file.Name), baseEnvironment),
-			Color:     file.Environments.Color,
-			Variables: base,
-		})
+	base := domain.EnvironmentDraft{
+		Name:      cmp.Or(strings.TrimSpace(file.Environments.Name), baseEnvironment),
+		Color:     file.Environments.Color,
+		Base:      true,
+		Variables: yamlVariables(file.Environments.Data, file.Environments.ConfidentialKeys),
 	}
+	var named []domain.EnvironmentDraft
 	for _, environment := range file.Environments.SubEnvironments {
 		name := strings.TrimSpace(environment.Name)
 		if name == "" {
 			continue
 		}
-		own := yamlVariables(environment.Data, environment.ConfidentialKeys)
-		out.Environments = append(out.Environments, domain.EnvironmentDraft{
+		named = append(named, domain.EnvironmentDraft{
 			Name:      name,
 			Color:     environment.Color,
-			Variables: renumber(append(own, missing(base, own)...)),
+			Variables: yamlVariables(environment.Data, environment.ConfidentialKeys),
 		})
 	}
+	environments := withBase(base, named)
 
-	if len(file.Collection) > 0 {
-		collection := domain.Collection{
-			Name:        cmp.Or(strings.TrimSpace(file.Name), untitledCollection),
-			Description: strings.TrimSpace(file.Meta.Description),
-			Auth:        requestAuth(file.Authentication, &out),
+	if header.Type == "environment.insomnia.rest/5.0" {
+		if len(environments) > 0 && strings.TrimSpace(file.Environments.Name) == "" {
+			environments[0].Name = cmp.Or(strings.TrimSpace(file.Name), baseEnvironment)
 		}
-		// The base supplies defaults for its own collection even when no environment is selected; its
-		// secrets already travel with the base environment.
-		collection.Variables, _ = plainVariables(base)
+		out.Environments = standaloneEnvironments(environments)
+	} else {
+		collection := domain.Collection{
+			Name:         cmp.Or(strings.TrimSpace(file.Name), untitledCollection),
+			Description:  strings.TrimSpace(file.Meta.Description),
+			Auth:         requestAuth(file.Authentication, &out),
+			Environments: environments,
+		}
 		readYAMLLevel(file.Collection, &collection, &out)
-		if len(collection.Items) > 0 || len(collection.Children) > 0 {
+		if len(collection.Items) > 0 || len(collection.Children) > 0 || len(environments) > 0 {
 			out.Collections = []domain.Collection{collection}
 		}
 	}
@@ -119,9 +121,7 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 				Position:    int64(index),
 				Auth:        requestAuth(item.Auth, out),
 			}
-			var secrets int
-			folder.Variables, secrets = plainVariables(yamlVariables(item.Environment, item.ConfidentialKeys))
-			out.LeftOut(domain.CodeSkippedSecretValue, secrets)
+			folder.Variables = yamlVariables(item.Environment, item.ConfidentialKeys)
 			readYAMLLevel(item.Children, &folder, out)
 			into.Children = append(into.Children, folder)
 		case item.Method != "" || strings.HasPrefix(item.Meta.ID, "req_"):
@@ -130,14 +130,6 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 			into.Items = append(into.Items, node)
 		}
 	}
-}
-
-// plainVariables drops secret values, which only environments hold, and counts what it dropped.
-func plainVariables(variables []domain.Variable) ([]domain.Variable, int) {
-	plain := slices.DeleteFunc(slices.Clone(variables), func(variable domain.Variable) bool {
-		return variable.Kind == domain.VariableSecret
-	})
-	return renumber(plain), len(variables) - len(plain)
 }
 
 func yamlVariables(data map[string]any, confidential []string) []domain.Variable {

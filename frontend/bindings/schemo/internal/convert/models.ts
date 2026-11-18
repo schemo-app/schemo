@@ -6,6 +6,15 @@
 import * as domain$0 from "../domain/models.js";
 
 /**
+ * ImportOptions specifies the origin a local specification needs and the destination for separate environments.
+ */
+export interface ImportOptions {
+    "serverOrigin"?: string;
+    "environmentTarget"?: string;
+    "environmentCollection"?: number;
+}
+
+/**
  * Preview is what a source holds before anything is written, with the counts the dialog shows.
  */
 export interface Preview {
@@ -31,6 +40,9 @@ export interface Preview {
     "folders": number;
     "environments": number;
     "skipped"?: domain$0.Skip[] | null;
+    "looseEnvironments"?: number;
+    "collectionNames"?: string[] | null;
+    "needsServer"?: boolean;
 }
 
 /**

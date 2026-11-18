@@ -5,7 +5,7 @@ package convert
 
 import (
 	"context"
-	"encoding/json"
+	"net/url"
 	"slices"
 	"testing"
 
@@ -59,8 +59,10 @@ const postmanEnvironment = `{
 // fakeCollections stands in for the tree: it records what Import was handed and answers Full,
 // FullOf, TreeOf and Requests from what a test seeded.
 type fakeCollections struct {
-	imported []domain.Collection
-	parentID string
+	importedEnvironments []domain.EnvironmentDraft
+	environmentOwner     string
+	imported             []domain.Collection
+	parentID             string
 	// importedTree is the tree Import answers with, so a test sees what the summary carried back.
 	importedTree []domain.Collection
 	full         domain.Collection
@@ -74,6 +76,12 @@ func (f *fakeCollections) Import(_ context.Context, collections []domain.Collect
 	f.imported = collections
 	f.parentID = parentID
 	return f.importedTree, nil
+}
+
+func (f *fakeCollections) ImportDocument(ctx context.Context, document domain.Document, parentID, owner string) ([]domain.Collection, error) {
+	f.importedEnvironments = document.Environments
+	f.environmentOwner = owner
+	return f.Import(ctx, document.Collections, parentID)
 }
 
 func (f *fakeCollections) Full(_ context.Context, id string) (domain.Collection, error) {
@@ -136,9 +144,10 @@ type fakeRemote struct {
 	address string
 }
 
-func (f *fakeRemote) Fetch(_ context.Context, address string) ([]byte, error) {
+func (f *fakeRemote) Fetch(_ context.Context, address string) ([]byte, *url.URL, error) {
 	f.address = address
-	return f.content, nil
+	parsed, err := url.Parse(address)
+	return f.content, parsed, err
 }
 
 // fakeCommands reads a paste as the nodes a test seeded and writes a marker per request, so the
@@ -271,7 +280,7 @@ func TestApplyWritesWhatThePreviewRead(t *testing.T) {
 		t.Fatalf("PreviewFile: %v", err)
 	}
 
-	summary, err := h.transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := h.transfer.Apply(ctx, preview.Token, "", "", ImportOptions{})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -299,7 +308,7 @@ func TestApplyWritesWhatThePreviewRead(t *testing.T) {
 		t.Errorf("summary = %+v, want the counts of what was written", summary)
 	}
 
-	_, err = h.transfer.Apply(ctx, preview.Token, "", "")
+	_, err = h.transfer.Apply(ctx, preview.Token, "", "", ImportOptions{})
 	if domain.CodeOf(err) != domain.CodeImportExpired {
 		t.Errorf("second Apply = %v, want %v", err, domain.CodeImportExpired)
 	}
@@ -323,7 +332,7 @@ func TestApplyFillsTheNameTheDocumentLeftEmpty(t *testing.T) {
 		t.Fatalf("preview name = %q, want none from a paste of commands", preview.Name)
 	}
 
-	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL"); err != nil {
+	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL", ImportOptions{}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if len(h.collections.imported) != 1 ||
@@ -336,7 +345,7 @@ func TestApplyFillsTheNameTheDocumentLeftEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PreviewFile: %v", err)
 	}
-	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL"); err != nil {
+	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL", ImportOptions{}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if name := h.collections.imported[0].Name; name != "Ledger" {
@@ -363,7 +372,7 @@ func TestApplyImportsEnvironmentsWithoutActivating(t *testing.T) {
 		t.Fatalf("preview = %+v, want the one environment and no collection", preview)
 	}
 
-	summary, err := h.transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := h.transfer.Apply(ctx, preview.Token, "", "", ImportOptions{})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -372,10 +381,10 @@ func TestApplyImportsEnvironmentsWithoutActivating(t *testing.T) {
 		t.Errorf("imported %d collections, want an environment file to write none",
 			len(h.collections.imported))
 	}
-	if len(h.environments.drafts) != 1 {
-		t.Fatalf("imported %d environments, want the document's one", len(h.environments.drafts))
+	if len(h.collections.importedEnvironments) != 1 {
+		t.Fatalf("imported %d environments, want the document's one", len(h.collections.importedEnvironments))
 	}
-	draft := h.environments.drafts[0]
+	draft := h.collections.importedEnvironments[0]
 	if draft.Name != "Staging" {
 		t.Errorf("imported name = %q, want the file's own", draft.Name)
 	}
@@ -398,7 +407,7 @@ func TestApplyRefusesAnEmptyDocument(t *testing.T) {
 	h := newHarness()
 	ctx := context.Background()
 
-	if _, err := h.transfer.Apply(ctx, "never-issued", "", ""); domain.CodeOf(err) !=
+	if _, err := h.transfer.Apply(ctx, "never-issued", "", "", ImportOptions{}); domain.CodeOf(err) !=
 		domain.CodeImportExpired {
 		t.Errorf("unknown token = %v, want %v", err, domain.CodeImportExpired)
 	}
@@ -515,50 +524,28 @@ func TestImportFromWorkspaceCopiesTheCollectionsWhole(t *testing.T) {
 	}
 }
 
-// A secret's value is the one thing an export may read out of the database, and only when the
-// person asked for it: without the ask the file names the variable and carries no value.
-func TestExportAsksForSecretValuesOnlyWhenAsked(t *testing.T) {
+func TestSchemoExportOnlyCarriesOwnedEnvironments(t *testing.T) {
 	h := newHarness()
-	h.collections.full = domain.Collection{ID: "ledger", Name: "Ledger"}
-	h.environments.state = domain.EnvState{Environments: []domain.Environment{{
-		ID:   "staging",
-		Name: "Staging",
-		Vars: []domain.Variable{
-			{ID: "v1", Name: "baseUrl", Value: "https://st.example.com", Kind: domain.VariableText},
-			{ID: "v2", Name: "apiKey", Kind: domain.VariableSecret, HasValue: true},
-		},
-	}}}
-	h.environments.reveal = "revealed-key"
-	ctx := context.Background()
-
-	export, err := h.transfer.export(ctx, "ledger", FormatSchemo, false)
+	h.collections.full = domain.Collection{
+		ID: "ledger", Name: "Ledger",
+		Environments: []domain.EnvironmentDraft{{
+			Name: "Staging", Base: true,
+			Variables: []domain.Variable{{Name: "token", Value: "secret-value", Kind: domain.VariableSecret}},
+		}},
+	}
+	h.environments.state = domain.EnvState{Environments: []domain.Environment{{ID: "unrelated", Name: "Unrelated"}}}
+	export, err := h.transfer.export(t.Context(), "ledger", FormatSchemo)
 	if err != nil {
-		t.Fatalf("Export: %v", err)
+		t.Fatal(err)
 	}
-	if export.Name != "Ledger" || h.collections.fullID != "ledger" {
-		t.Errorf("export = %q for %q, want the collection Full was asked for",
-			export.Name, h.collections.fullID)
+	doc, err := schemofile.Read(export.Data)
+	if err != nil || len(doc.Environments) != 0 || len(doc.Collections) != 1 {
+		t.Fatalf("export must carry only the collection and its own environments: %v", err)
 	}
-	if len(h.environments.revealed) != 0 {
-		t.Errorf("revealed %v, want no value read without being asked", h.environments.revealed)
-	}
-	if got := exportedVariable(t, export.Data, "apiKey"); !got.found || !got.secret ||
-		got.value != "" {
-		t.Errorf("apiKey = %+v, want it named as a secret with no value", got)
-	}
-	if got := exportedVariable(t, export.Data, "baseUrl"); got.value != "https://st.example.com" {
-		t.Errorf("baseUrl = %+v, want a text value carried as it is", got)
-	}
-
-	export, err = h.transfer.export(ctx, "ledger", FormatSchemo, true)
-	if err != nil {
-		t.Fatalf("Export: %v", err)
-	}
-	if !slices.Equal(h.environments.revealed, []string{"v2"}) {
-		t.Errorf("revealed %v, want the secret the export asked for", h.environments.revealed)
-	}
-	if got := exportedVariable(t, export.Data, "apiKey"); got.value != "revealed-key" {
-		t.Errorf("apiKey = %+v, want the value the person asked to carry", got)
+	owned := doc.Collections[0].Environments
+	if len(owned) != 1 || owned[0].Name != "Staging" || len(owned[0].Variables) != 1 ||
+		owned[0].Variables[0].Kind != domain.VariableSecret || owned[0].Variables[0].Value != "" {
+		t.Fatal("export must carry the owned environment and withhold its secret values")
 	}
 }
 
@@ -574,11 +561,11 @@ func TestExportPreservesProtocolInSchemoAndRefusesLossyConverters(t *testing.T) 
 		}}}},
 	}
 	for _, format := range []Format{FormatPostman, FormatOpenAPI, FormatInsomnia} {
-		if _, err := h.transfer.export(t.Context(), "ledger", format, false); domain.CodeOf(err) != domain.CodeExportProtocol {
+		if _, err := h.transfer.export(t.Context(), "ledger", format); domain.CodeOf(err) != domain.CodeExportProtocol {
 			t.Fatalf("export as %s returned %v", format, err)
 		}
 	}
-	exported, err := h.transfer.export(t.Context(), "ledger", FormatSchemo, false)
+	exported, err := h.transfer.export(t.Context(), "ledger", FormatSchemo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +583,7 @@ func TestExportRefusesACommandFile(t *testing.T) {
 	h := newHarness()
 	h.collections.full = domain.Collection{ID: "ledger", Name: "Ledger"}
 
-	_, err := h.transfer.export(context.Background(), "ledger", FormatCurl, false)
+	_, err := h.transfer.export(context.Background(), "ledger", FormatCurl)
 	if domain.CodeOf(err) != domain.CodeUnknownFormat {
 		t.Errorf("Export as curl = %v, want %v", err, domain.CodeUnknownFormat)
 	}
@@ -637,37 +624,4 @@ func TestCurlJoinsACommandPerRequestUnderItsName(t *testing.T) {
 	if domain.CodeOf(err) != domain.CodeNodeHasNoRequests {
 		t.Errorf("empty level = %v, want %v", err, domain.CodeNodeHasNoRequests)
 	}
-}
-
-// exportedVar is one variable of a Schemo file's environment list, read back out of the bytes so a
-// test can tell a value that was left out from a variable that was.
-type exportedVar struct {
-	value  string
-	found  bool
-	secret bool
-}
-
-func exportedVariable(t *testing.T, data []byte, name string) exportedVar {
-	t.Helper()
-
-	var file struct {
-		Environments []struct {
-			Variables []struct {
-				Name   string `json:"name"`
-				Value  string `json:"value"`
-				Secret bool   `json:"secret"`
-			} `json:"variables"`
-		} `json:"environments"`
-	}
-	if err := json.Unmarshal(data, &file); err != nil {
-		t.Fatalf("unmarshalling the export: %v", err)
-	}
-	for _, environment := range file.Environments {
-		for _, variable := range environment.Variables {
-			if variable.Name == name {
-				return exportedVar{value: variable.Value, found: true, secret: variable.Secret}
-			}
-		}
-	}
-	return exportedVar{}
 }

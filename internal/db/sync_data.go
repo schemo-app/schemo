@@ -54,7 +54,7 @@ var syncKinds = map[domain.EntityType]syncKind{
 			return authSecrets(n.Auth), nil
 		},
 	},
-	domain.EntityEnvironment: {},
+	domain.EntityEnvironment: {parent: domain.EntityCollection},
 	domain.EntityVariable: {
 		parent: domain.EntityEnvironment,
 		secrets: func(row entity) ([]string, error) {

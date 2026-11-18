@@ -1,4 +1,7 @@
-import type { VariableKind } from '../../bindings/schemo/internal/domain'
+import type { ComputedRef, InjectionKey } from 'vue'
+import type { Resolution, VariableKind } from '../../bindings/schemo/internal/domain'
+
+export const requestVariablePreview: InjectionKey<ComputedRef<Record<string, Resolution | undefined>>> = Symbol('request variables')
 
 export type VarKind = VariableKind
 
@@ -6,6 +9,7 @@ export type VarKind = VariableKind
 export interface VarResolution {
   value: string
   source: 'env' | 'global'
+  envId?: string
   kind: VarKind
 }
 

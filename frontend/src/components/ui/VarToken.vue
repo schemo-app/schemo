@@ -1,21 +1,25 @@
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue'
+import { computed, inject, useTemplateRef } from 'vue'
 import Tooltip from './Tooltip.vue'
 import { useEnvironmentsStore } from '../../stores/environments'
 import { hoveredVar } from '../../lib/varPeek'
-import { usePlatform } from '../../composables/usePlatform'
+import { requestVariablePreview } from '../../lib/vars'
 import { t } from '../../i18n'
 
 // Takes no pointer, so the field keeps every click; `v-var-peek` handles the tooltip.
 const { name, text, envId } = defineProps<{ name: string; text?: string; envId?: string }>()
 
 const environments = useEnvironmentsStore()
-const { isMac } = usePlatform()
 
 const root = useTemplateRef<HTMLElement>('root')
 
-const resolved = computed(() => environments.resolveVariable(name, envId))
+const requestPreview = inject(requestVariablePreview, null)
+const resolved = computed(() => requestPreview ? requestPreview.value[name] ?? null : environments.resolveVariable(name, envId))
 const known = computed(() => resolved.value !== null)
+const environmentId = computed(() => {
+  const value = resolved.value
+  return value && 'environmentId' in value ? value.environmentId : undefined
+})
 const label = computed(() => text ?? `{{${name}}}`)
 
 // A secret says that it is one and nothing else: no value of a secret is drawn anywhere.
@@ -25,23 +29,18 @@ const value = computed(() =>
     : resolved.value?.value || t('varToken.empty')
 )
 
-const modifier = computed(() =>
-  t('varToken.clickModifier', { modifier: isMac.value ? '⌥' : 'Alt' })
-)
-
 const open = computed(() => root.value !== null && hoveredVar.value === root.value)
 </script>
 
 <template>
   <Tooltip :open="open">
     <template #trigger>
-      <span ref="root" class="var-token" :class="{ unknown: !known }" :data-var="name">{{ label }}</span>
+      <span ref="root" class="var-token" :class="{ unknown: !known }" :data-var="name"
+        :data-var-source="resolved?.source" :data-var-environment="environmentId">{{ label }}</span>
     </template>
 
-    <span class="var-tip">
-      <span class="var-tip-value">{{ value }}</span>
-      <span class="var-tip-meta">{{ t('varToken.hint', { modifier }) }}</span>
-    </span>
+    <span v-if="known" class="var-tip-value">{{ value }}</span>
+    <span v-else>{{ t('varToken.missing') }}</span>
   </Tooltip>
 </template>
 
@@ -59,17 +58,10 @@ const open = computed(() => root.value !== null && hoveredVar.value === root.val
   color: var(--red);
 }
 
-.var-tip {
-  @apply flex flex-col gap-0.5;
-}
-
 .var-tip-value {
-  @apply text-12 break-all;
+  display: block;
+  max-width: min(22rem, calc(100vw - 2.5rem));
+  overflow-wrap: anywhere;
   font-family: var(--mono);
-}
-
-.var-tip-meta {
-  @apply text-12;
-  color: color-mix(in srgb, var(--tip-text) 60%, transparent);
 }
 </style>

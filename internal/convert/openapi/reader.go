@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"maps"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,18 +17,23 @@ const baseVariable = "{{" + domain.BaseURLVariable + "}}"
 // reader holds what the walk needs beside the document: the variables it declares as it goes, the
 // folders it opens, and the order the document declared its tags in.
 type reader struct {
-	doc       document
-	doc2      bool
-	out       *domain.Document
-	variables map[string]domain.Variable
-	root      *folderNode
-	topItems  int64
-	server    string
+	doc           document
+	doc2          bool
+	out           *domain.Document
+	variables     map[string]domain.Variable
+	root          *folderNode
+	topItems      int64
+	server        string
+	serverUnknown bool
+	source        *url.URL
+	origin        *url.URL
 }
 
 func (r *reader) collection() domain.Collection {
-	base, server := r.baseURL()
-	r.server = server
+	servers := r.servers()
+	base, requestBase := r.baseURL(servers[0])
+	r.server = requestBase
+	r.serverUnknown, r.out.NeedsServer = r.out.NeedsServer, false
 	r.declare(domain.BaseURLVariable, base, base == "")
 
 	type operationAt struct {
@@ -47,7 +53,7 @@ func (r *reader) collection() domain.Collection {
 				continue
 			}
 			operations = append(operations, operationAt{
-				r.request(path, method, op, item.Parameters), op.Tags,
+				r.request(path, method, op, item), op.Tags,
 			})
 		}
 	}
@@ -115,6 +121,20 @@ func (r *reader) collection() domain.Collection {
 	for _, name := range slices.Sorted(maps.Keys(r.variables)) {
 		collection.Variables = append(collection.Variables, r.variables[name])
 	}
+	if len(servers) > 1 {
+		r.out.NeedsServer = r.out.NeedsServer || r.serverUnknown
+		collection.Environments = append(collection.Environments,
+			domain.EnvironmentDraft{Name: serverName(servers[0], base, 0), Base: true})
+		for i, server := range servers[1:] {
+			address, _ := r.baseURL(server)
+			collection.Environments = append(collection.Environments, domain.EnvironmentDraft{
+				Name: serverName(server, address, i+1),
+				Variables: []domain.Variable{{
+					Name: domain.BaseURLVariable, Value: address, Kind: domain.VariableText, Enabled: address != "",
+				}},
+			})
+		}
+	}
 	return collection
 }
 
@@ -131,38 +151,88 @@ func (r *reader) declare(name, value string, off bool) {
 	}
 }
 
-func (r *reader) baseURL() (value, server string) {
+func (r *reader) servers() []server {
 	if !r.doc2 {
 		if len(r.doc.Servers) == 0 {
-			return "", baseVariable
+			return []server{{URL: "/"}}
 		}
-		address := r.doc.Servers[0].URL
-		for name, variable := range r.doc.Servers[0].Variables {
-			address = strings.ReplaceAll(address, "{"+name+"}", variable.Default)
-		}
-		return splitServer(address)
+		return r.doc.Servers
 	}
-
 	if r.doc.Host == "" {
-		return r.doc.BasePath, baseVariable
+		return []server{{URL: r.doc.BasePath}}
 	}
-	scheme := "https"
-	if len(r.doc.Schemes) > 0 {
-		scheme = r.doc.Schemes[0]
+	schemes := r.doc.Schemes
+	if len(schemes) == 0 {
+		scheme := "https"
+		if r.source != nil {
+			scheme = r.source.Scheme
+		}
+		schemes = []string{scheme}
 	}
-	return splitServer(scheme + "://" + r.doc.Host + r.doc.BasePath)
+	out := make([]server, 0, len(schemes))
+	for _, scheme := range schemes {
+		out = append(out, server{URL: scheme + "://" + r.doc.Host + r.doc.BasePath})
+	}
+	return out
 }
 
-func splitServer(address string) (value, server string) {
-	address = strings.TrimSuffix(strings.TrimSpace(address), "/")
-	if hole := holeServer.FindStringSubmatch(address); hole != nil {
-		return "", baseVariable + hole[1]
+func (r *reader) baseURL(server server) (value, requestBase string) {
+	address := strings.TrimSpace(server.URL)
+	if len(server.Variables) > 0 {
+		pairs := make([]string, 0, 2*len(server.Variables))
+		for _, name := range slices.Sorted(maps.Keys(server.Variables)) {
+			pairs = append(pairs, "{"+name+"}", server.Variables[name].Default)
+		}
+		address = strings.NewReplacer(pairs...).Replace(address)
 	}
-	return address, baseVariable
+	if hole := holeServer.FindStringSubmatch(address); hole != nil {
+		path := strings.TrimSuffix(hole[1], "/")
+		if r.origin != nil {
+			return strings.TrimSuffix(r.origin.String(), "/") + path, baseVariable
+		}
+		r.out.NeedsServer = true
+		return "", baseVariable + path
+	}
+
+	parsed, err := url.Parse(address)
+	if err == nil {
+		base := r.source
+		if base == nil {
+			base = r.origin
+		}
+		if !parsed.IsAbs() && base != nil {
+			if address == "" {
+				parsed.Path = "/"
+			}
+			parsed = base.ResolveReference(parsed)
+		}
+		if (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" &&
+			parsed.User == nil && parsed.RawQuery == "" && parsed.Fragment == "" {
+			return strings.TrimSuffix(parsed.String(), "/"), baseVariable
+		}
+	}
+	r.out.NeedsServer = true
+	path := strings.Trim(address, "/")
+	if path != "" && err == nil && !parsed.IsAbs() && parsed.Host == "" {
+		return "", baseVariable + "/" + path
+	}
+	return "", baseVariable
+}
+
+func serverName(server server, address string, index int) string {
+	if description := strings.TrimSpace(server.Description); description != "" {
+		return description
+	}
+	if address != "" {
+		if parsed, err := url.Parse(address); err == nil && parsed.Host != "" {
+			return parsed.Host + parsed.EscapedPath()
+		}
+	}
+	return "Server " + strconv.Itoa(index+1)
 }
 
 func (r *reader) request(
-	path, method string, op operation, shared []parameter,
+	path, method string, op operation, item pathItem,
 ) domain.CollectionNode {
 	node := domain.CollectionNode{
 		Name:        nameOf(op),
@@ -170,10 +240,24 @@ func (r *reader) request(
 		Description: strings.TrimSpace(op.Description),
 	}
 
-	address := r.server + path
+	base := r.server
+	servers := op.Servers
+	if len(servers) == 0 {
+		servers = item.Servers
+	}
+	if !r.doc2 && len(servers) > 0 {
+		value, template := r.baseURL(servers[0])
+		base = template
+		if value != "" {
+			base = value
+		}
+	} else if r.serverUnknown {
+		r.out.NeedsServer = true
+	}
+	address := base + path
 	query := []string{}
 
-	for _, param := range append(append([]parameter{}, shared...), op.Parameters...) {
+	for _, param := range append(append([]parameter{}, item.Parameters...), op.Parameters...) {
 		r.parameter(&node, param, &address, &query)
 	}
 

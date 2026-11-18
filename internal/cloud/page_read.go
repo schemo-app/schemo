@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/url"
 	"schemo/internal/domain"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -70,14 +71,12 @@ func AsDocument(packed []byte) (domain.Document, error) {
 		}
 	}
 
-	document := domain.Document{
-		Collections:  []domain.Collection{readCollection(snapshot)},
-		Environments: readEnvironments(snapshot),
-	}
-	if len(document.Environments) == 0 && len(snapshot.Collection.Groups) == 0 {
+	collection := readCollection(snapshot)
+	collection.Environments = readEnvironments(snapshot)
+	if len(collection.Environments) == 0 && len(snapshot.Collection.Groups) == 0 {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
-	return document, nil
+	return domain.Document{Collections: []domain.Collection{collection}}, nil
 }
 
 // Group IDs distinguish the collection's own requests from equally named child folders.
@@ -243,6 +242,7 @@ func readEnvironments(snapshot snapshotv1.Snapshot) []domain.EnvironmentDraft {
 		}
 		out = append(out, domain.EnvironmentDraft{
 			Name: environment.Name,
+			Base: environment.Name == snapshot.Environment.Name && base == strings.TrimSpace(snapshot.Environment.BaseURL),
 			Variables: []domain.Variable{{
 				Name:     domain.BaseURLVariable,
 				Value:    base,
@@ -251,6 +251,9 @@ func readEnvironments(snapshot snapshotv1.Snapshot) []domain.EnvironmentDraft {
 				Position: 1,
 			}},
 		})
+	}
+	if len(out) > 0 && !slices.ContainsFunc(out, func(env domain.EnvironmentDraft) bool { return env.Base }) {
+		out[0].Base = true
 	}
 	return out
 }

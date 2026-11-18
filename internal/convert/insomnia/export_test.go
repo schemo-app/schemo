@@ -308,14 +308,15 @@ func TestExportHoldsBackSecretsUntilAsked(t *testing.T) {
 	}
 
 	back := roundTrip(t, storefront(), environments, true)
-	if len(back.Environments) != 1 || back.Environments[0].Name != "Dev" {
-		t.Fatalf("environments = %+v, want Dev back", back.Environments)
+	owned := only(t, back).Environments
+	if len(back.Environments) != 0 || len(owned) != 2 || owned[1].Name != "Dev" {
+		t.Fatalf("environments = %+v, want Dev back with a collection base", owned)
 	}
-	url := variable(t, back.Environments[0].Variables, "base_url")
+	url := variable(t, owned[1].Variables, "base_url")
 	if url.Value != "https://api.dev.example" || url.Kind != domain.VariableText {
 		t.Errorf("base_url = %+v, want the plain value back", url)
 	}
-	token := variable(t, back.Environments[0].Variables, "dev_token")
+	token := variable(t, owned[1].Variables, "dev_token")
 	if token.Value != "tok_dev" || token.Kind != domain.VariableSecret {
 		t.Errorf("dev_token = %+v, want the value and the name's own kind", token)
 	}

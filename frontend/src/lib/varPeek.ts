@@ -18,9 +18,9 @@ function tokenAt(field: HTMLElement, e: MouseEvent): HTMLElement | null {
 
 function open(name: string, envId: string | undefined) {
   const environments = useEnvironmentsStore()
+  const resolved = environments.resolveVariable(name, envId)
   const scope = envId || environments.activeId
-  const own = environments.resolveVariable(name, envId)?.source !== 'global' && scope !== null
-  environments.openSheet({ envId: own ? scope : null, varName: name })
+  environments.openSheet({ envId: resolved?.source === 'global' ? null : resolved?.envId ?? scope, varName: name })
 }
 
 const scopes = new WeakMap<HTMLElement, string | undefined>()
@@ -44,9 +44,13 @@ export const vVarPeek: Directive<HTMLElement, string | undefined> = {
       }
       const onDown = (e: MouseEvent) => {
         const token = e.altKey ? tokenAt(field, e) : null
-        if (!token) return
+        if (!token || ['folder', 'collection', 'runtime'].includes(token.dataset.varSource ?? '')) return
         e.preventDefault()
-        open(token.dataset.var ?? '', scopes.get(field))
+        if (token.dataset.varSource === 'global') {
+          useEnvironmentsStore().openSheet({ envId: null, varName: token.dataset.var ?? '' })
+          return
+        }
+        open(token.dataset.var ?? '', token.dataset.varEnvironment ?? scopes.get(field))
       }
 
       // A double click takes the name between the braces; the variable is the braces as well.

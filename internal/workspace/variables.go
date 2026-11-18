@@ -10,8 +10,9 @@ import (
 
 // Above is the auth and variables the levels over a request answer, read in one walk.
 type Above struct {
-	Auth      *domain.Auth
-	Variables []domain.Variable
+	Auth          *domain.Auth
+	Variables     []domain.Variable
+	EnvironmentID string
 }
 
 // cleanVariables trims and numbers collection variables, keeping unnamed rows. Secrets are refused:

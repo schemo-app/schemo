@@ -27,7 +27,7 @@ const envDotStyle = computed(() => {
       <DropdownMenuTrigger as-child>
         <button type="button" class="env-btn" :title="t('titlebar.environment', { name: activeEnvName })">
           <span class="env-dot" :style="envDotStyle"></span>
-          <span>{{ activeEnvName }}</span>
+          <span class="env-name">{{ activeEnvName }}</span>
           <Icon name="ChevronDown" :size="10" :stroke-width="2.6" class="env-caret" />
         </button>
       </DropdownMenuTrigger>
@@ -51,8 +51,14 @@ const envDotStyle = computed(() => {
   font-size: var(--text-13);
 }
 
-.env-btn:hover {
+.env-btn:hover,
+.env-btn[data-state='open'] {
   background: var(--bg-hover);
+}
+
+.env-name {
+  @apply truncate;
+  max-width: min(10rem, 20vw);
 }
 
 .env-dot {

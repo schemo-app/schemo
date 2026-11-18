@@ -22,10 +22,11 @@ import { rem, unitScale } from '../../lib/units'
 import { protocolOf } from '../../lib/protocol'
 
 // Description and examples fill the workspace; other sections share it with the response.
-const { source, expanded = false, methodSlot = null } = defineProps<{
+const { source, expanded = false, methodSlot = null, envId } = defineProps<{
   source: RequestSource
   expanded?: boolean
   methodSlot?: HTMLElement | null
+  envId?: string
 }>()
 
 const { setLayout } = useSettings()
@@ -144,9 +145,9 @@ function resetPaneHeight() {
       :style="!expanded && height > 0 ? { height: rem(height) } : undefined"
     >
       <ProtocolSchema v-if="hasSchema" :source :section="open" :method-slot="methodSlot" />
-      <RowsPane v-if="open === 'params'" v-model:text-mode="rowsTextMode" :source :toolbar kind="params" @open-auth="choose('auth')" />
-      <RowsPane v-else-if="open === 'headers'" v-model:text-mode="rowsTextMode" :source :toolbar kind="headers" @open-auth="choose('auth')" />
-      <AuthPane v-else-if="open === 'auth'" :source />
+      <RowsPane v-if="open === 'params'" v-model:text-mode="rowsTextMode" :source :toolbar :env-id="envId" kind="params" @open-auth="choose('auth')" />
+      <RowsPane v-else-if="open === 'headers'" v-model:text-mode="rowsTextMode" :source :toolbar :env-id="envId" kind="headers" @open-auth="choose('auth')" />
+      <AuthPane v-else-if="open === 'auth'" :source :env-id="envId" />
       <BodyPane v-else-if="open === 'body' && !protocolEditor" :source />
       <ExamplesPane v-else-if="open === 'examples'" :source />
       <WebSocketComposer v-else-if="open === 'messages'" :source />

@@ -1,6 +1,7 @@
 package request
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -92,7 +93,13 @@ func (s *Runs) Run(ctx context.Context, collectionID, nodeID string) (string, er
 		s.running.Store(false)
 		return "", domain.Refuse(domain.CodeNodeHasNoRequests, domain.ErrNotAllowed, nil)
 	}
-	environment, _ := s.environments.InWorkspace(workspace).ActiveName(ctx)
+	environment, _ := s.environments.InWorkspace(workspace).ActiveName(ctx, requests[0].EnvironmentID)
+	for _, item := range requests[1:] {
+		if item.EnvironmentID != requests[0].EnvironmentID {
+			environment = ""
+			break
+		}
+	}
 	run := domain.CollectionRun{
 		ID:           s.ids(),
 		CollectionID: collectionID,
@@ -275,7 +282,7 @@ type runRequest struct {
 	Headers       []domain.HeaderPair
 	Auth          *domain.Auth      // from the nearest level that answered
 	Variables     []domain.Variable // of the levels above, outermost first
-	EnvironmentID string            // the request's own pin; empty means the active one
+	EnvironmentID string            // empty means the workspace's active environment
 }
 
 func runRequestFrom(workspace string, item domain.ResolvedRequest, runID, agent string) runRequest {
@@ -296,7 +303,7 @@ func runRequestFrom(workspace string, item domain.ResolvedRequest, runID, agent 
 		Headers:       []domain.HeaderPair{},
 		Auth:          item.Auth,
 		Variables:     item.Variables,
-		EnvironmentID: node.EnvironmentID,
+		EnvironmentID: cmp.Or(node.EnvironmentID, item.EnvironmentID),
 	}
 	for _, row := range node.Headers {
 		if row.Enabled && strings.TrimSpace(row.Name) != "" {

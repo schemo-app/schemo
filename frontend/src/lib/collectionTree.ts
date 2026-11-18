@@ -41,6 +41,13 @@ export function holderOf(trail: Trail | null): Collection | null {
   return trail.collection ?? trail.ancestors[trail.ancestors.length - 1] ?? null
 }
 
+// An imported collection starts a scope of its own even when nested inside another collection.
+export function environmentOwnerOf(trail: Trail | null, active?: Record<string, string | undefined> | null) {
+  if (!trail) return undefined
+  const levels = trail.collection ? [...trail.ancestors, trail.collection] : trail.ancestors
+  return levels.findLast((level) => level.environmentRoot || active?.[level.id]) ?? levels[0]
+}
+
 /** Recursively finds a request node by ID in the collection tree. */
 export function findNode(tree: Collection[], id: string | null): CollectionNode | null {
   if (!id) return null

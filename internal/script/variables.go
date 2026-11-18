@@ -13,29 +13,27 @@ const maxRuns = 32
 type scriptVariables struct {
 	ctx   context.Context
 	owner *Scripts
+	store Variables
 	run   string
+	above []domain.Variable
 }
 
 // Lookup searches the run scope, the environment, then the globals, as a request resolves; a named
 // scope reads only that one.
 func (v scriptVariables) Lookup(scope domain.VarScope, name string) (string, bool, error) {
 	if scope != domain.ScopeRun {
-		return v.owner.vars.Variable(v.ctx, scope, name)
+		return v.store.Variable(v.ctx, scope, name)
 	}
 	if value, ok := v.owner.runVariable(v.run, name); ok {
 		return value, true, nil
 	}
-	value, ok, err := v.owner.vars.Variable(v.ctx, domain.ScopeEnvironment, name)
-	if err != nil || ok {
-		return value, ok, err
-	}
-	return v.owner.vars.Variable(v.ctx, domain.ScopeGlobals, name)
+	return v.store.RequestVariable(v.ctx, v.above, name)
 }
 
 // Set writes to the scope given. Run-scope values last for the run only; the other scopes are stored.
 func (v scriptVariables) Set(scope domain.VarScope, name string, value string) error {
 	if scope != domain.ScopeRun {
-		err := v.owner.vars.SetVariable(v.ctx, scope, name, value)
+		err := v.store.SetVariable(v.ctx, scope, name, value)
 		return v.owner.keptForTheRun(v.run, name, value, err)
 	}
 	v.owner.setRunVariable(v.run, name, value)
@@ -62,7 +60,7 @@ func (s *Scripts) RunVariables(run string) []domain.Variable {
 	kept := make([]domain.Variable, 0, len(s.runs[run]))
 	for name, value := range s.runs[run] {
 		kept = append(kept, domain.Variable{
-			Name: name, Value: value, Kind: domain.VariableText, Enabled: true, HasValue: value != "",
+			Name: name, Value: value, Kind: domain.VariableText, Enabled: true, HasValue: value != "", Source: domain.ScopeRun,
 		})
 	}
 	slices.SortFunc(kept, func(a, b domain.Variable) int { return cmp.Compare(a.Name, b.Name) })

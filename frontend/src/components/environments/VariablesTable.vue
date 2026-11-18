@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { refAutoReset } from '@vueuse/core'
 import { SECRET_MASK } from '../../lib/layout'
+import Checkbox from '../ui/Checkbox.vue'
 import Icon from '../ui/Icon.vue'
 import IconButton from '../ui/IconButton.vue'
 import { useEnvironmentsStore } from '../../stores/environments'
@@ -11,14 +12,19 @@ import { useSheetNotice } from '../../composables/useSheetNotice'
 import { useVariableCells } from '../../composables/useVariableCells'
 import { t } from '../../i18n'
 
-const { locked } = defineProps<{ locked: boolean }>()
+const { locked, environmentId, focusName } = defineProps<{
+  locked: boolean
+  environmentId?: string
+  focusName?: string
+}>()
 
 const emit = defineEmits<{ (e: 'import'): void }>()
 
 const environments = useEnvironmentsStore()
 const { notice, withNotice } = useSheetNotice()
 
-const envId = computed(() => environments.editedEnvId)
+const inline = computed(() => environmentId !== undefined)
+const envId = computed(() => environmentId ?? environments.editedEnvId)
 
 const rows = computed(() => environments.rowsFor(envId.value))
 const vars = computed(() => rows.value.own)
@@ -57,12 +63,13 @@ const { draft, setCellInput, isEditingCell, start, commitFrom, onCellKeydown, ca
 
 const flashId = refAutoReset<string | null>(null, 1200)
 
-function openGlobal(g: Variable, edit = false) {
-  environments.editEnv(null)
+function openInherited(g: Variable, edit = false) {
+  const scope = rows.value.base?.id ?? null
+  environments.editEnv(scope)
   nextTick(() => {
     document.getElementById('var-' + g.id)?.scrollIntoView({ block: 'center' })
     if (edit) {
-      void start(g, 'name', null)
+      void start(g, 'name', scope)
       return
     }
     flashId.value = g.id
@@ -85,7 +92,7 @@ function revealName(name: string) {
 watch(
   () => environments.sheetFocus,
   (focus) => {
-    if (!focus || !focus.varName) return
+    if (inline.value || !focus?.varName) return
     const wanted = environments.takeFocus()
     if (!wanted) return
     if (wanted.envId !== envId.value) environments.editEnv(wanted.envId)
@@ -93,6 +100,10 @@ watch(
   },
   { immediate: true }
 )
+
+watch(() => focusName, (name) => {
+  if (name && inline.value) void nextTick(() => revealName(name))
+}, { immediate: true })
 
 watch(vars, () => {
   if (pendingName.value) revealName(pendingName.value)
@@ -110,6 +121,11 @@ function removeVar(v: Variable) {
   void environments.removeVar(envId.value, v.id)
 }
 
+function toggleEnabled(v: Variable) {
+  if (locked) return
+  void withNotice(() => environments.updateVar(envId.value, v.id, { enabled: !v.enabled }))
+}
+
 // There is no type to pick: a value is text, and the lock is what keeps it out of the export, the
 // logs and the screen — everywhere a secret is left out.
 function toggleSecret(v: Variable) {
@@ -122,9 +138,9 @@ defineExpose({ cancelTop })
 </script>
 
 <template>
-  <div class="variables">
+  <div class="variables" :class="{ compact: inline }">
     <div class="section">
-      <div class="section-head">
+      <div v-if="!inline" class="section-head">
         <span class="section-label">{{ t('environments.variablesLabel') }}</span>
         <span class="section-count mono">{{ vars.length }}</span>
         <span class="head-spacer"></span>
@@ -140,7 +156,8 @@ defineExpose({ cancelTop })
       </div>
 
       <div class="card">
-        <div v-if="vars.length" class="grid card-head">
+        <div v-if="vars.length || $slots['before-rows']" class="grid card-head">
+          <span v-if="inline"></span>
           <div>{{ t('environments.variable') }}</div>
           <div>{{ t('environments.value') }}</div>
           <div></div>
@@ -148,13 +165,18 @@ defineExpose({ cancelTop })
           <div></div>
         </div>
 
+        <slot name="before-rows" />
+
         <div
           v-for="v in vars"
           :key="v.id"
           :id="'var-' + v.id"
           class="grid row"
-          :class="{ flash: flashId === v.id }"
+          :class="{ flash: flashId === v.id, off: inline && !v.enabled }"
         >
+          <div v-if="inline" class="cell">
+            <Checkbox :model-value="v.enabled" :disabled="locked" :aria-label="v.name" @update:model-value="toggleEnabled(v)" />
+          </div>
           <div class="cell cell-name" @click="start(v, 'name')">
             <input
               v-if="isEditingCell(v, 'name', envId)"
@@ -233,21 +255,21 @@ defineExpose({ cancelTop })
           </div>
         </div>
 
-        <button class="new-row" :disabled="locked" @click="addVar">
-          <Icon name="Plus" :size="14" />
+        <button type="button" :class="inline ? 'collection-variable-add' : 'new-row'" :disabled="locked" @click="addVar">
+          <Icon name="Plus" :size="14" :stroke-width="2.2" />
           <span class="cap-line">{{ t('environments.newVariable') }}</span>
         </button>
       </div>
 
-      <span class="note" :class="{ bad: !!notice }">{{ notice || t('environments.secretsNote') }}</span>
+      <span v-if="notice || !inline" class="note" :class="{ bad: !!notice }">{{ notice || t('environments.secretsNote') }}</span>
     </div>
 
-    <div v-if="rows.inherited.length" class="section">
+    <div v-if="!inline && rows.inherited.length" class="section">
       <div class="section-head">
-        <span class="section-label">{{ t('environments.inheritedFromGlobals') }}</span>
+        <span class="section-label">{{ rows.base?.name ?? t('environments.inheritedFromGlobals') }}</span>
         <span class="section-count mono">{{ rows.inherited.length }}</span>
         <span class="head-spacer"></span>
-        <span class="section-hint">{{ t('environments.applyEverywhere') }}</span>
+        <span v-if="!rows.base" class="section-hint">{{ t('environments.applyEverywhere') }}</span>
       </div>
 
       <div class="card">
@@ -258,8 +280,8 @@ defineExpose({ cancelTop })
           :id="'var-' + g.id"
           class="grid row inherited"
           :class="{ overridden: g.overridden, flash: flashId === g.id }"
-          :title="t('environments.goToGlobal')"
-          @click="openGlobal(g)"
+          :title="rows.base?.name ?? t('environments.goToGlobal')"
+          @click="openInherited(g)"
         >
           <div class="cell cell-name">
             <Icon name="CornerDownRight" :size="12" class="inherit-icon" />
@@ -277,13 +299,13 @@ defineExpose({ cancelTop })
             <span v-if="g.overridden" class="tag tag-overridden">{{
               t('environments.overriddenShort')
             }}</span>
-            <span v-else class="tag tag-global">{{ t('environments.global') }}</span>
+            <span v-else-if="!rows.base" class="tag tag-global">{{ t('environments.global') }}</span>
           </div>
           <div class="cell cell-icon">
             <IconButton
               size="xl"
-              :hint="t('environments.editGlobal')"
-              @click.stop="openGlobal(g, true)"
+              :hint="rows.base ? t('environments.editVariables') : t('environments.editGlobal')"
+              @click.stop="openInherited(g, true)"
             >
               <Icon name="Pencil" :size="14" />
             </IconButton>
@@ -345,6 +367,30 @@ defineExpose({ cancelTop })
   @apply grid items-stretch;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2rem 2rem 2rem;
   padding: 0 0.75rem;
+}
+
+.compact .grid:not(.inherited) {
+  grid-template-columns: var(--collection-variable-columns);
+  padding-inline: var(--collection-variable-gutter);
+}
+
+.compact .card-head > :nth-child(2),
+.compact .card-head > :nth-child(3),
+.compact .cell-text {
+  padding-inline-start: var(--collection-variable-label-inset);
+}
+
+.compact .cell-input {
+  padding-inline-start: calc(var(--collection-variable-label-inset) - 1px);
+}
+
+.compact :deep(.check) {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.row.off {
+  opacity: 0.45;
 }
 
 .card-head {

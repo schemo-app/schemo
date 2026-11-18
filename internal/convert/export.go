@@ -1,7 +1,6 @@
 package convert
 
-// Exporting collections. The writers are pure format packages; this file picks the environments and
-// is the one place a secret value may leave.
+// Exporting collections. The writers receive the environments owned by the collection.
 
 import (
 	"context"
@@ -20,7 +19,6 @@ func (s *Transfer) export(
 	ctx context.Context,
 	id string,
 	format Format,
-	secrets bool,
 ) (Export, error) {
 	collection, err := s.collections.Full(ctx, id)
 	if err != nil {
@@ -36,15 +34,7 @@ func (s *Transfer) export(
 	var data []byte
 	switch format {
 	case FormatSchemo:
-		environments, err := s.environmentsOf(ctx, secrets)
-		if err != nil {
-			return Export{}, err
-		}
-		document := domain.Document{
-			Collections:  []domain.Collection{collection},
-			Environments: environments,
-		}
-		data, err = schemofile.Write(document, secrets)
+		data, err = schemofile.Write(domain.Document{Collections: []domain.Collection{collection}}, false)
 		if err != nil {
 			return Export{}, err
 		}
@@ -59,11 +49,7 @@ func (s *Transfer) export(
 			return Export{}, err
 		}
 	case FormatInsomnia:
-		environments, err := s.environmentsOf(ctx, secrets)
-		if err != nil {
-			return Export{}, err
-		}
-		data, err = insomnia.Export(collection, environments, secrets)
+		data, err = insomnia.Export(collection, collection.Environments, false)
 		if err != nil {
 			return Export{}, err
 		}
@@ -91,41 +77,4 @@ func checkExportProtocol(collection domain.Collection, format Format) error {
 		}
 	}
 	return nil
-}
-
-// environmentsOf is the environments a file carries. Secret values are revealed only when asked for;
-// otherwise the file notes a value without carrying it.
-func (s *Transfer) environmentsOf(
-	ctx context.Context,
-	secrets bool,
-) ([]domain.EnvironmentDraft, error) {
-	state, err := s.environments.State(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]domain.EnvironmentDraft, 0, len(state.Environments))
-	for _, environment := range state.Environments {
-		draft := domain.EnvironmentDraft{Name: environment.Name, Color: environment.Color}
-		for _, variable := range environment.Vars {
-			item := domain.Variable{
-				Name:     variable.Name,
-				Kind:     variable.Kind,
-				Enabled:  variable.Enabled,
-				Position: variable.Position,
-			}
-			switch {
-			case variable.Kind != domain.VariableSecret:
-				item.Value = variable.Value
-			case secrets && variable.HasValue:
-				value, err := s.environments.Reveal(ctx, variable.ID)
-				if err != nil {
-					return nil, err
-				}
-				item.Value = value
-			}
-			draft.Variables = append(draft.Variables, item)
-		}
-		out = append(out, draft)
-	}
-	return out, nil
 }

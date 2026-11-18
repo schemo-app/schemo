@@ -52,15 +52,16 @@ func importV4(file export) (domain.Document, error) {
 			Name:        cmp.Or(strings.TrimSpace(workspace.Name), untitledCollection),
 			Description: strings.TrimSpace(workspace.Description),
 			Auth:        requestAuth(workspace.Auth, &out),
-			Variables:   variablesOf(workspace.Environment),
 		}
 		read.level(workspace.ID, &collection, &out)
-		read.environments(workspace.ID, &out)
+		environments := read.environments(workspace.ID, variablesOf(workspace.Environment))
 
-		// A workspace that held nothing is not written: a collection with no requests would be a
-		// row in the tree that opens onto nothing.
-		if len(collection.Items) > 0 || len(collection.Children) > 0 {
+		if len(collection.Items) > 0 || len(collection.Children) > 0 ||
+			(workspace.Scope == "collection" || workspace.Scope == "design") && len(environments) > 0 {
+			collection.Environments = environments
 			out.Collections = append(out.Collections, collection)
+		} else {
+			out.Environments = append(out.Environments, standaloneEnvironments(environments)...)
 		}
 	}
 	if len(out.Collections) == 0 && len(out.Environments) == 0 {
@@ -77,6 +78,7 @@ type export struct {
 type resource struct {
 	ID             string         `json:"_id" yaml:"-"`
 	Type           string         `json:"_type" yaml:"-"`
+	Scope          string         `json:"scope" yaml:"-"`
 	ParentID       string         `json:"parentId,omitempty" yaml:"-"`
 	Name           string         `json:"name,omitempty"`
 	Description    string         `json:"description,omitempty"`
@@ -162,8 +164,8 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 				Name:        strings.TrimSpace(one.Name),
 				Description: strings.TrimSpace(one.Description),
 				Position:    position,
-				Variables:   variablesOf(one.Environment),
 			}
+			nested.Variables = variablesOf(one.Environment)
 			position++
 			r.level(one.ID, &nested, out)
 			into.Children = append(into.Children, nested)
@@ -176,31 +178,72 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 	}
 }
 
-// environments folds Insomnia's always-applied base environment into every named one, since this app
-// resolves against one environment.
-func (r *reader) environments(parent string, out *domain.Document) {
-	var base []domain.Variable
-	named := []domain.EnvironmentDraft{}
+// The base's id is the parent of v4 sub-environments. Older files also place named siblings directly
+// under the workspace.
+func (r *reader) environments(parent string, inline []domain.Variable) []domain.EnvironmentDraft {
+	base := domain.EnvironmentDraft{Name: baseEnvironment, Base: true, Variables: inline}
+	var named []domain.EnvironmentDraft
 	for _, one := range r.of(parent, "environment") {
 		name := strings.TrimSpace(one.Name)
-		if name == "" {
+		children := r.of(one.ID, "environment")
+		if one.ID != "" && (len(children) > 0 || one.ID == "__BASE_ENVIRONMENT_ID__") ||
+			strings.EqualFold(name, baseEnvironment) {
+			base.Name = cmp.Or(name, baseEnvironment)
+			variables := variablesOf(one.Data)
+			base.Variables = renumber(append(variables, missing(inline, variables)...))
+			for _, child := range children {
+				if childName := strings.TrimSpace(child.Name); childName != "" {
+					named = append(named, domain.EnvironmentDraft{Name: childName, Variables: variablesOf(child.Data)})
+				}
+			}
 			continue
 		}
-		if strings.EqualFold(name, baseEnvironment) {
-			base = variablesOf(one.Data)
-			continue
+		if name != "" {
+			named = append(named, domain.EnvironmentDraft{Name: name, Variables: variablesOf(one.Data)})
 		}
-		named = append(named, domain.EnvironmentDraft{Name: name, Variables: variablesOf(one.Data)})
 	}
+	return withBase(base, named)
+}
 
-	if len(base) > 0 {
-		out.Environments = append(out.Environments,
-			domain.EnvironmentDraft{Name: baseEnvironment, Variables: base})
+func withBase(base domain.EnvironmentDraft, named []domain.EnvironmentDraft) []domain.EnvironmentDraft {
+	if len(base.Variables) == 0 && len(named) == 0 {
+		return nil
 	}
-	for _, draft := range named {
-		draft.Variables = renumber(append(draft.Variables, missing(base, draft.Variables)...))
-		out.Environments = append(out.Environments, draft)
+	confidential := map[string]bool{}
+	for _, variable := range base.Variables {
+		if variable.Kind == domain.VariableSecret {
+			confidential[variable.Name] = true
+		}
 	}
+	for _, env := range named {
+		for i := range env.Variables {
+			if confidential[env.Variables[i].Name] {
+				env.Variables[i].Kind = domain.VariableSecret
+			}
+		}
+	}
+	return append([]domain.EnvironmentDraft{base}, named...)
+}
+
+// A standalone environment file has no collection base after import, so each variant keeps the
+// defaults it inherited.
+func standaloneEnvironments(environments []domain.EnvironmentDraft) []domain.EnvironmentDraft {
+	if len(environments) == 0 {
+		return nil
+	}
+	base := environments[0].Variables
+	var out []domain.EnvironmentDraft
+	for _, env := range environments {
+		if env.Base && len(base) == 0 {
+			continue
+		}
+		if !env.Base {
+			env.Variables = renumber(append(slices.Clone(env.Variables), missing(base, env.Variables)...))
+		}
+		env.Base = false
+		out = append(out, env)
+	}
+	return out
 }
 
 // missing is what the base environment holds and the environment does not set itself: in Insomnia

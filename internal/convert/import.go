@@ -64,3 +64,16 @@ func countCollection(collection domain.Collection) (requests, folders int) {
 	}
 	return requests, folders
 }
+
+func countEnvironments(collections []domain.Collection) int {
+	count := 0
+	for _, collection := range collections {
+		for _, environment := range collection.Environments {
+			if !environment.Folder {
+				count++
+			}
+		}
+		count += countEnvironments(collection.Children)
+	}
+	return count
+}

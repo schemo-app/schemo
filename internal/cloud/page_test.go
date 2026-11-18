@@ -700,10 +700,11 @@ func TestTheAddressesOfAPageComeBackAsEnvironments(t *testing.T) {
 		t.Fatalf("AsDocument: %v", err)
 	}
 
-	if len(document.Environments) != 2 {
-		t.Fatalf("environments = %d, want the two that stand somewhere", len(document.Environments))
+	environments := document.Collections[0].Environments
+	if len(document.Environments) != 0 || len(environments) != 2 {
+		t.Fatalf("environments = %d, want the two with addresses inside the collection", len(environments))
 	}
-	first := document.Environments[0]
+	first := environments[0]
 	if first.Name != "Production" {
 		t.Errorf("name = %q, want the page's own name for it", first.Name)
 	}

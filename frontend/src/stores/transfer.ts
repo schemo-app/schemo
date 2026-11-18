@@ -6,6 +6,7 @@ import { markStep } from '../composables/useGettingStarted'
 import { copyToClipboard } from '../lib/clipboard'
 import {
   Transfer,
+  type ImportOptions,
   type Preview,
   type Workspace,
 } from '../../bindings/schemo/internal/convert'
@@ -126,10 +127,10 @@ export const useTransferStore = defineStore('transfer', () => {
 
   // What a preview read is written where the person chose: Go answers with the tree to draw and
   // the count the toast says.
-  function apply(token: string, parentID: string, name: string): Promise<boolean> {
+  function apply(token: string, parentID: string, name: string, options: ImportOptions): Promise<boolean> {
     return whileBusy(async () => {
       const summary = await callOrToast(
-        collections.applyTree(Transfer.Apply(token, parentID, name)),
+        collections.applyTree(Transfer.Apply(token, parentID, name, options)),
         'transfer.importFailed'
       )
       if (!summary) return false
@@ -175,6 +176,7 @@ export const useTransferStore = defineStore('transfer', () => {
         'transfer.importFailed'
       )
       if (!summary) return false
+      if (summary.envState) await environments.applyState(summary.envState)
       toast.show(
         t('transfer.copied', {
           n: t('counts.collections', summary.collections),
@@ -186,27 +188,19 @@ export const useTransferStore = defineStore('transfer', () => {
   }
 
   // The name the file was written under; an empty one is a cancelled save dialog, not an error.
-  async function exportSave(
-    id: string,
-    format: TransferFormat,
-    secrets: boolean
-  ): Promise<boolean> {
+  async function exportSave(id: string, format: TransferFormat): Promise<boolean> {
     const written = await callOrToast(
-      Transfer.Export(t('files.exportCollection'), id, format, secrets),
+      Transfer.Export(t('files.exportCollection'), id, format),
       'transfer.exportFailed'
     )
     if (!written) return false
-    toast.show(t(secrets ? 'transfer.savedSecrets' : 'transfer.saved', { file: written }))
+    toast.show(t('transfer.saved', { file: written }))
     return true
   }
 
-  async function exportText(
-    id: string,
-    format: TransferFormat,
-    secrets: boolean
-  ): Promise<string | null> {
+  async function exportText(id: string, format: TransferFormat): Promise<string | null> {
     const text = await callOrToast(
-      Transfer.ExportText(id, format, secrets),
+      Transfer.ExportText(id, format),
       'transfer.exportFailed'
     )
     return text ?? null

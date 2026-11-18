@@ -198,6 +198,8 @@ export enum Code {
     CodeURLUnreachable = "urlUnreachable",
     CodeNothingToImport = "nothingToImport",
     CodeImportExpired = "importExpired",
+    CodeImportServer = "importServer",
+    CodeImportDestination = "importDestination",
     CodeSkippedCookieJar = "skippedCookieJar",
     CodeSkippedExternalRef = "skippedExternalRef",
     CodeSkippedBase64Body = "skippedBase64Body",
@@ -283,6 +285,16 @@ export interface Collection {
     "children": Collection[] | null;
     "auth"?: Auth | null;
     "variables"?: Variable[] | null;
+
+    /**
+     * EnvironmentRoot starts an independent collection even when it was imported inside a folder.
+     */
+    "environmentRoot"?: boolean;
+
+    /**
+     * Environments travels with a whole collection when it is imported or exported.
+     */
+    "environments"?: EnvironmentDraft[] | null;
 
     /**
      * Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
@@ -522,6 +534,8 @@ export interface EnvState {
      * ActiveID is empty when no environment is selected.
      */
     "activeId"?: string;
+    "collectionEnvironments"?: Environment[] | null;
+    "collectionActive"?: { [_ in string]?: string } | null;
 }
 
 /**
@@ -534,6 +548,25 @@ export interface Environment {
     "readonly": boolean;
     "position": number;
     "vars": Variable[] | null;
+
+    /**
+     * CollectionID is empty for workspace environments.
+     */
+    "collectionId"?: string;
+    "base"?: boolean;
+    "folder"?: boolean;
+}
+
+/**
+ * EnvironmentDraft is an environment described by a file. Ids, positions and the active environment
+ * are decided where the draft is written.
+ */
+export interface EnvironmentDraft {
+    "name": string;
+    "color"?: string;
+    "base"?: boolean;
+    "folder"?: boolean;
+    "variables"?: Variable[] | null;
 }
 
 /**
@@ -1373,6 +1406,21 @@ export interface Requests {
 }
 
 /**
+ * Resolution is what a `{{token}}` resolves to, with where it came from so the tooltip can say it.
+ */
+export interface Resolution {
+    "value"?: string;
+    "source": string;
+    "environmentId"?: string;
+    "kind": VariableKind;
+
+    /**
+     * HasValue is false when the value was withheld from the answer (a secret) or is empty.
+     */
+    "hasValue": boolean;
+}
+
+/**
  * ResponseExample is one saved answer: what it is called, the status it carried, its headers and
  * its body as they were written down.
  */
@@ -1988,6 +2036,7 @@ export enum VarScope {
     ScopeRun = "variables",
     ScopeEnvironment = "environment",
     ScopeGlobals = "globals",
+    ScopeFolder = "folder",
 };
 
 /**

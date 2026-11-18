@@ -116,15 +116,6 @@ defineExpose({ cancelTop })
 
     <div class="foot">
       <span class="danger-note">{{ dangerNote }}</span>
-      <button
-        v-if="env"
-        type="button"
-        class="use"
-        :disabled="env.id === environments.activeId"
-        @click="environments.setActive(env.id)"
-      >
-        {{ t('environments.useIt') }}
-      </button>
       <Button
         variant="danger"
         size="field"
@@ -207,17 +198,4 @@ defineExpose({ cancelTop })
   @apply flex-1 min-w-0 text-12 text-text-tertiary;
 }
 
-.use {
-  @apply flex-none h-7.5 px-3 rounded-[0.4375rem] cursor-pointer border-0 text-text text-13;
-  font-family: inherit;
-  background: var(--chip);
-}
-
-.use:hover:not(:disabled) {
-  @apply bg-bg-hover;
-}
-
-.use:disabled {
-  @apply opacity-40 cursor-default;
-}
 </style>

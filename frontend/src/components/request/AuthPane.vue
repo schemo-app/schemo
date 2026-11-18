@@ -9,7 +9,7 @@ import type { RequestSource } from '../../lib/requestSource'
 import { formatCheckedAt, textOf, t } from '../../i18n'
 import type { Auth } from '../../../bindings/schemo/internal/domain'
 
-const { source } = defineProps<{ source: RequestSource }>()
+const { source, envId } = defineProps<{ source: RequestSource; envId?: string }>()
 
 const { menuFor, nameOf, schemeOf } = useAuthSchemes()
 
@@ -55,6 +55,7 @@ const tokenState = computed(() => {
 
     <AuthFields
       v-if="scheme?.fields?.length"
+      :env-id="envId"
       :scheme
       :auth="source.auth"
       scale="rows"

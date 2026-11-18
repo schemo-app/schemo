@@ -27,7 +27,7 @@ func Import(data []byte) (domain.Document, error) {
 		return doc, nil
 	}
 
-	collection, err := readCollection(data, &doc)
+	collection, err := readCollection(data)
 	if err != nil {
 		return domain.Document{}, err
 	}
@@ -36,7 +36,7 @@ func Import(data []byte) (domain.Document, error) {
 }
 
 // readCollection leaves ids empty: minting them is the tree's business, not this package's.
-func readCollection(data []byte, doc *domain.Document) (domain.Collection, error) {
+func readCollection(data []byte) (domain.Collection, error) {
 	var file collectionFile
 	if err := json.Unmarshal(data, &file); err != nil {
 		return domain.Collection{}, domain.Refuse(domain.CodeNotJSON, domain.ErrNotAllowed, nil)
@@ -47,7 +47,7 @@ func readCollection(data []byte, doc *domain.Document) (domain.Collection, error
 
 	imported := domain.Collection{
 		Name:      file.Info.Name,
-		Variables: importedVariables(file.Variable, doc),
+		Variables: importedVariables(file.Variable),
 		Scripts:   scriptOf(file.Event),
 	}
 	if file.Info.Description != nil {
@@ -59,28 +59,26 @@ func readCollection(data []byte, doc *domain.Document) (domain.Collection, error
 	if file.Auth != nil {
 		imported.Auth = authOf(*file.Auth)
 	}
-	readLevel(file.Item, &imported, doc)
+	readLevel(file.Item, &imported)
 	return imported, nil
 }
 
-// importedVariables keeps the file's order (the last answer wins) and skips nameless rows. A secret
-// arrives as its name without a value, since collection variables cannot be secret here.
-func importedVariables(from []variable, doc *domain.Document) []domain.Variable {
+// importedVariables keeps the ordering and secrecy declared by the source.
+func importedVariables(from []variable) []domain.Variable {
 	out := []domain.Variable{}
 	for _, v := range from {
 		name := strings.TrimSpace(v.Key)
 		if name == "" {
 			continue
 		}
-		value := domain.ValueText(v.Value)
+		kind := domain.VariableText
 		if v.secret() {
-			value = ""
-			doc.LeftOut(domain.CodeSkippedSecretValue, 1)
+			kind = domain.VariableSecret
 		}
 		out = append(out, domain.Variable{
 			Name:     name,
-			Value:    value,
-			Kind:     domain.VariableText,
+			Value:    domain.ValueText(v.Value),
+			Kind:     kind,
 			Enabled:  v.switchedOn(),
 			Position: len(out) + 1,
 		})
@@ -124,7 +122,7 @@ func scriptOf(events []event) *domain.Scripts {
 	}
 }
 
-func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
+func readLevel(items []item, into *domain.Collection) {
 	into.Items = []domain.CollectionNode{}
 	into.Children = []domain.Collection{}
 
@@ -138,7 +136,7 @@ func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
 		nested := domain.Collection{
 			Name:      entry.Name,
 			Position:  position,
-			Variables: importedVariables(entry.Variable, doc),
+			Variables: importedVariables(entry.Variable),
 			Scripts:   scriptOf(entry.Event),
 		}
 		if entry.Description != nil {
@@ -147,7 +145,7 @@ func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
 		if entry.Auth != nil {
 			nested.Auth = authOf(*entry.Auth)
 		}
-		readLevel(entry.Item, &nested, doc)
+		readLevel(entry.Item, &nested)
 		into.Children = append(into.Children, nested)
 	}
 }

@@ -87,6 +87,7 @@ export interface Paste {
  */
 export interface Preview {
     "missing": string[] | null;
+    "variables": { [_ in string]?: domain$0.Resolution } | null;
     "projected": domain$0.ProjectedRow[] | null;
     "auto": domain$0.ProjectedRow[] | null;
     "token"?: domain$0.AuthToken | null;

@@ -225,7 +225,7 @@ func TestACaptureIntoAWorkspaceThatCannotBeWrittenIsKeptForTheRun(t *testing.T) 
 // refusal is still its own error.
 func TestAScriptSettingAVariableInAWorkspaceThatCannotBeWrittenKeepsItForTheRun(t *testing.T) {
 	scripts, _, _, _, vars := newScripts(t)
-	store := scriptVariables{ctx: context.Background(), owner: scripts, run: "run-1"}
+	store := scriptVariables{ctx: context.Background(), owner: scripts, store: vars, run: "run-1"}
 
 	vars.readOnly = true
 	if err := store.Set(domain.ScopeEnvironment, "token", "abc"); err != nil {

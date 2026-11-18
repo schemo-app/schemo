@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import VarToken from './VarToken.vue'
 import { tokenSegments } from '../../lib/vars'
 
-const { value, multiline = false } = defineProps<{ value: string; multiline?: boolean }>()
+const { value, multiline = false, envId } = defineProps<{ value: string; multiline?: boolean; envId?: string }>()
 
 const segments = computed(() => tokenSegments(value))
 </script>
@@ -11,7 +11,7 @@ const segments = computed(() => tokenSegments(value))
 <template>
   <span class="highlight" :class="{ area: multiline }" aria-hidden="true">
     <template v-for="(seg, si) in segments" :key="si">
-      <VarToken v-if="seg.tokenName" :name="seg.tokenName" :text="seg.text" />
+      <VarToken v-if="seg.tokenName" :name="seg.tokenName" :text="seg.text" :env-id="envId" />
       <span v-else>{{ seg.text }}</span>
     </template>
   </span>

@@ -26,7 +26,7 @@ func NewFetcher(client *http.Client) *Fetcher {
 }
 
 // Fetch reads a URL whole. Every failure before the document arrives is one refusal naming the address.
-func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, error) {
+func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, *url.URL, error) {
 	fail := func(reason string) error {
 		return domain.Refuse(domain.CodeURLUnreachable, domain.ErrNotAllowed,
 			domain.Args{"url": address, "reason": reason})
@@ -34,15 +34,15 @@ func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, error) {
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
-		return nil, fail(err.Error())
+		return nil, nil, fail(err.Error())
 	}
 	response, err := f.client.Do(request)
 	if err != nil {
-		return nil, fail(reasonOf(err))
+		return nil, nil, fail(reasonOf(err))
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, fail("HTTP " + strconv.Itoa(response.StatusCode))
+		return nil, nil, fail("HTTP " + strconv.Itoa(response.StatusCode))
 	}
 
 	limit := cmp.Or(f.MaxBytes, domain.MaxBodyBytes)
@@ -50,12 +50,12 @@ func (f *Fetcher) Fetch(ctx context.Context, address string) ([]byte, error) {
 	// is refused, not imported.
 	data, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil {
-		return nil, fail(err.Error())
+		return nil, nil, fail(err.Error())
 	}
 	if int64(len(data)) > limit {
-		return nil, platform.TooLarge(address, limit)
+		return nil, nil, platform.TooLarge(address, limit)
 	}
-	return data, nil
+	return data, response.Request.URL, nil
 }
 
 // reasonOf is the error without the address in it: the sentence already names the URL, and the

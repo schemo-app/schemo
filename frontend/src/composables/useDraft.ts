@@ -76,6 +76,7 @@ export function useDraft(target: DraftTarget) {
   const token = computed(() => preview.value?.token ?? null)
   const inherited = computed(() => preview.value?.inherited ?? null)
   const missing = computed(() => preview.value?.missing ?? [])
+  const variablePreview = computed(() => preview.value?.variables ?? {})
   const enabledParamsCount = computed(() => params.value.filter((param) => param.enabled && param.name.trim()).length)
   const enabledHeadersCount = computed(
     () => headers.value.filter((header) => header.enabled && header.name.trim()).length
@@ -526,6 +527,7 @@ export function useDraft(target: DraftTarget) {
     token,
     inherited,
     missing,
+    variablePreview,
     enabledParamsCount,
     enabledHeadersCount,
     hasBody,

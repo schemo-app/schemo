@@ -3,6 +3,7 @@ package openapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -41,8 +42,8 @@ func Export(collection domain.Collection) ([]byte, error) {
 		"info":    info,
 		"paths":   w.paths,
 	}
-	if address := serverAddress(collection.Variables); address != "" {
-		doc["servers"] = []any{map[string]any{"url": address}}
+	if servers := exportedServers(collection); len(servers) > 0 {
+		doc["servers"] = servers
 	}
 	if len(w.tags) > 0 {
 		doc["tags"] = w.tags
@@ -66,11 +67,41 @@ func Export(collection domain.Collection) ([]byte, error) {
 // `baseUrl` variable, which is the variable the reader declares out of a document in turn.
 func serverAddress(variables []domain.Variable) string {
 	for _, variable := range variables {
-		if variable.Name == domain.BaseURLVariable && variable.Value != "" {
+		if variable.Name == domain.BaseURLVariable && variable.Value != "" && variable.Kind != domain.VariableSecret {
 			return variable.Value
 		}
 	}
 	return ""
+}
+
+func exportedServers(collection domain.Collection) []map[string]string {
+	var servers []map[string]string
+	seen := map[string]bool{}
+	add := func(address, description string) {
+		if address == "" || seen[address] {
+			return
+		}
+		item := map[string]string{"url": address}
+		if description != "" {
+			item["description"] = description
+		}
+		servers = append(servers, item)
+		seen[address] = true
+	}
+	for _, environment := range collection.Environments {
+		if environment.Base {
+			add(serverAddress(environment.Variables), environment.Name)
+		}
+	}
+	if len(servers) == 0 {
+		add(serverAddress(collection.Variables), "")
+	}
+	for _, environment := range collection.Environments {
+		if !environment.Base && !environment.Folder {
+			add(serverAddress(environment.Variables), environment.Name)
+		}
+	}
+	return servers
 }
 
 // writer gathers the document as it is built: the paths the requests became, the schemes declared
@@ -130,6 +161,8 @@ func (w *writer) folder(folder domain.Collection, parent string) {
 // operation writes one request as the operation of its path: the name as the summary, the address
 // as the path, and what it carries and asks for beside them.
 func (w *writer) operation(node domain.CollectionNode, tag string) {
+	address, relative := requestServer(node.URL)
+	node.URL = relative
 	path, parameters := pathOf(node)
 	item := w.paths[path]
 	if item == nil {
@@ -139,6 +172,9 @@ func (w *writer) operation(node domain.CollectionNode, tag string) {
 
 	parameters = append(parameters, rowParameters(node)...)
 	op := map[string]any{"summary": node.Name}
+	if address != "" {
+		op["servers"] = []map[string]string{{"url": address}}
+	}
 	if strings.TrimSpace(node.Description) != "" {
 		op["description"] = node.Description
 	}
@@ -160,6 +196,27 @@ func (w *writer) operation(node domain.CollectionNode, tag string) {
 	// A path and a method name one operation, and a second request on the same pair is the later
 	// one: the map decides that, rather than an error nobody could act on.
 	item[methodKey(node.Method)] = op
+}
+
+func requestServer(raw string) (address, relative string) {
+	scheme, remaining, ok := strings.Cut(raw, "://")
+	if !ok || (scheme != "http" && scheme != "https") {
+		return "", raw
+	}
+	end := strings.IndexAny(remaining, "/?#")
+	if end < 0 {
+		end = len(remaining)
+	}
+	address = scheme + "://" + remaining[:end]
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil {
+		return "", raw
+	}
+	relative = remaining[end:]
+	if !strings.HasPrefix(relative, "/") {
+		relative = "/" + relative
+	}
+	return address, relative
 }
 
 // writtenResponses declares one response per example, keyed by status with the body verbatim; no

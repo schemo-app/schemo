@@ -4,6 +4,7 @@ package request
 // a send as it gets without being one: the same texts, the same authorization, the real values.
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -22,7 +23,8 @@ func (s *Drafts) CopySaved(
 	secrets bool,
 ) (Copy, error) {
 	current := FromNode(from.Node)
-	cookie, err := s.jarCookies(ctx, current)
+	current.EnvironmentID = cmp.Or(current.EnvironmentID, from.EnvironmentID)
+	cookie, err := s.jarCookies(ctx, current, from.Variables)
 	if err != nil {
 		return Copy{}, err
 	}

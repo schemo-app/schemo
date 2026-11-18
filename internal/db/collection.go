@@ -10,6 +10,7 @@ import (
 
 func collectionRow(workspace string, c domain.Collection) (entity, error) {
 	c.Items, c.Children = nil, nil
+	c.Environments = nil
 	c.Variables = append([]domain.Variable(nil), c.Variables...)
 	for i := range c.Variables {
 		c.Variables[i].HasValue = false
@@ -142,7 +143,11 @@ func subtree(ctx context.Context, q querier, workspaceID, id string) ([]entity, 
 	if err != nil {
 		return nil, err
 	}
-	all, err := listEntities(ctx, q, workspaceID, kinds(domain.EntityCollection, domain.EntityRequest), "")
+	if root.Workspace != workspaceID {
+		return nil, domain.ErrNotFound
+	}
+	all, err := listEntities(ctx, q, workspaceID,
+		kinds(domain.EntityCollection, domain.EntityRequest, domain.EntityEnvironment, domain.EntityVariable), "")
 	if err != nil {
 		return nil, err
 	}
@@ -154,11 +159,15 @@ func subtree(ctx context.Context, q querier, workspaceID, id string) ([]entity, 
 	var walk func(e entity, depth int)
 	walk = func(e entity, depth int) {
 		out = append(out, e)
-		if e.Kind != domain.EntityCollection || depth > len(all) {
+		if depth > len(all) {
 			return
 		}
 		for _, child := range byParent[e.ID] {
-			walk(child, depth+1)
+			switch {
+			case e.Kind == domain.EntityCollection && child.Kind != domain.EntityVariable,
+				e.Kind == domain.EntityEnvironment && child.Kind == domain.EntityVariable:
+				walk(child, depth+1)
+			}
 		}
 	}
 	walk(root, 0)
@@ -218,6 +227,48 @@ func (s *Store) SaveCollection(ctx context.Context, workspaceID string, c domain
 	})
 }
 
+// SaveCollectionTree writes an imported or copied tree and its environments in one transaction.
+// Levels arrive in parent-first order.
+func (s *Store) SaveCollectionTree(
+	ctx context.Context, workspaceID string, levels []domain.Collection, environments []domain.Environment,
+) error {
+	return s.inTx(ctx, "saving collection tree", func(tx *writeTx) error {
+		for _, level := range levels {
+			if level.ParentID != "" {
+				parent, err := getEntity(ctx, tx, domain.EntityCollection, level.ParentID)
+				if err != nil {
+					return err
+				}
+				if parent.Workspace != workspaceID {
+					return domain.ErrNotFound
+				}
+			}
+			row, err := collectionRow(workspaceID, level)
+			if err != nil {
+				return err
+			}
+			if err := putEntity(ctx, tx, row); err != nil {
+				return err
+			}
+			for _, node := range level.Items {
+				row, err := nodeRow(workspaceID, node)
+				if err != nil {
+					return err
+				}
+				if err := putEntity(ctx, tx, row); err != nil {
+					return err
+				}
+			}
+		}
+		for _, env := range environments {
+			if err := saveScope(ctx, tx, workspaceID, &env, domain.EnvScope{Environment: env.ID}, env.Vars); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *Store) SaveNode(ctx context.Context, node domain.CollectionNode) error {
 	return s.inTx(ctx, "saving node "+node.ID, func(tx *writeTx) error {
 		parent, err := getEntity(ctx, tx, domain.EntityCollection, node.CollectionID)
@@ -240,21 +291,20 @@ func (s *Store) DeleteCollection(ctx context.Context, workspaceID, id string) er
 		if err != nil {
 			return err
 		}
-		var folders, requests []entity
 		var ids []any
 		for _, row := range rows {
 			if row.Kind == domain.EntityCollection {
-				folders = append(folders, row)
 				ids = append(ids, row.ID)
-			} else {
-				requests = append(requests, row)
+				if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, collectionEnvironmentSetting+row.ID); err != nil {
+					return err
+				}
 			}
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM collection_runs WHERE collection_id IN (`+
 			placeholders(len(ids))+`)`, ids...); err != nil {
 			return fmt.Errorf("deleting the runs of %s: %w", id, err)
 		}
-		return deleteEntities(ctx, tx, workspaceID, append(folders, requests...))
+		return deleteEntities(ctx, tx, workspaceID, rows)
 	})
 }
 

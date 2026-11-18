@@ -7,6 +7,7 @@ export {
 };
 
 export type {
+    ImportOptions,
     Preview,
     Summary,
     Workspace,

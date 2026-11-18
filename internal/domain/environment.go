@@ -31,6 +31,8 @@ type Variable struct {
 	Position int          `json:"position"`
 	Enabled  bool         `json:"enabled"`
 	HasValue bool         `json:"hasValue"`
+	// Source is assigned during inheritance and never stored as part of the variable.
+	Source VarScope `json:"-"`
 }
 
 // Environment is a named set of variables, one of which is active at a time.
@@ -41,7 +43,18 @@ type Environment struct {
 	Readonly bool       `json:"readonly"`
 	Position int        `json:"position"`
 	Vars     []Variable `json:"vars"`
+	// CollectionID is empty for workspace environments.
+	CollectionID string `json:"collectionId,omitempty"`
+	Base         bool   `json:"base,omitempty"`
+	Folder       bool   `json:"folder,omitempty"`
 }
+
+const (
+	// EnvironmentBase uses collection defaults and globals without a selected environment.
+	EnvironmentBase = "base"
+	// EnvironmentWindow follows the workspace's active environment.
+	EnvironmentWindow = "window"
+)
 
 // EnvState is everything the environments screen and the request preview need. Globals are the
 // scope that applies whatever the active environment is.
@@ -49,7 +62,9 @@ type EnvState struct {
 	Environments []Environment `json:"environments"`
 	Globals      []Variable    `json:"globals"`
 	// ActiveID is empty when no environment is selected.
-	ActiveID string `json:"activeId,omitempty"`
+	ActiveID               string            `json:"activeId,omitempty"`
+	CollectionEnvironments []Environment     `json:"collectionEnvironments,omitempty"`
+	CollectionActive       map[string]string `json:"collectionActive,omitempty"`
 }
 
 // Find is the environment with the id; false when there is none.
@@ -59,7 +74,20 @@ func (s EnvState) Find(id string) (Environment, bool) {
 			return environment, true
 		}
 	}
+	for _, environment := range s.CollectionEnvironments {
+		if environment.ID == id {
+			return environment, true
+		}
+	}
 	return Environment{}, false
+}
+
+// Selected answers the requested environment, interpreting the window selection consistently.
+func (s EnvState) Selected(id string) (Environment, bool) {
+	if id == "" || id == EnvironmentWindow {
+		id = s.ActiveID
+	}
+	return s.Find(id)
 }
 
 // EnvScope names where a variable lives: one environment, or the globals that always apply.
@@ -70,9 +98,10 @@ type EnvScope struct {
 
 // Resolution is what a `{{token}}` resolves to, with where it came from so the tooltip can say it.
 type Resolution struct {
-	Value  string       `json:"value,omitempty"`
-	Source string       `json:"source"` // "env" | "global"
-	Kind   VariableKind `json:"kind"`
+	Value         string       `json:"value,omitempty"`
+	Source        string       `json:"source"`
+	EnvironmentID string       `json:"environmentId,omitempty"`
+	Kind          VariableKind `json:"kind"`
 	// HasValue is false when the value was withheld from the answer (a secret) or is empty.
 	HasValue bool `json:"hasValue"`
 }
@@ -148,11 +177,13 @@ type ScriptRequest struct {
 
 // ScriptPass is one attempt as its scripts see it; internal only, hence no tags.
 type ScriptPass struct {
-	Run      string
-	RecordID string
-	NodeID   string
-	Request  *ScriptRequest
-	Response *Response
+	Run           string
+	RecordID      string
+	NodeID        string
+	EnvironmentID string
+	Inherited     []Variable
+	Request       *ScriptRequest
+	Response      *Response
 
 	// Ran carries pre-request reports to the post-request half, since the record is written after the answer.
 	Ran []ScriptRun
@@ -167,6 +198,7 @@ const (
 	ScopeRun         VarScope = "variables"
 	ScopeEnvironment VarScope = "environment"
 	ScopeGlobals     VarScope = "globals"
+	ScopeFolder      VarScope = "folder"
 )
 
 // VarStore holds script variables. `variables` reads run scope, environment, then globals; the others

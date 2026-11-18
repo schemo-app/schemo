@@ -15,11 +15,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
- * Apply writes what a preview read under a level and returns the updated tree and environments. The
- * name fills in when the document has none; the token is single-use.
+ * Apply writes what a preview read under a level. A valid token is consumed once a write begins.
  */
-export function Apply(token: string, parentID: string, name: string): $CancellablePromise<$models.Summary> {
-    return $Call.ByID(2803246791, token, parentID, name);
+export function Apply(token: string, parentID: string, name: string, options: $models.ImportOptions): $CancellablePromise<$models.Summary> {
+    return $Call.ByID(2803246791, token, parentID, name, options);
 }
 
 /**
@@ -33,16 +32,16 @@ export function Curl(id: string, secrets: boolean): $CancellablePromise<string> 
 /**
  * Export writes a collection to a file the user picks and returns its name; empty means cancelled.
  */
-export function Export(title: string, id: string, format: string, secrets: boolean): $CancellablePromise<string> {
-    return $Call.ByID(1479769239, title, id, format, secrets);
+export function Export(title: string, id: string, format: string): $CancellablePromise<string> {
+    return $Call.ByID(1479769239, title, id, format);
 }
 
 /**
  * ExportText is the same export as the text the window copies: a collection somebody is handed in a
  * chat is handed as its text.
  */
-export function ExportText(id: string, format: string, secrets: boolean): $CancellablePromise<string> {
-    return $Call.ByID(2343494096, id, format, secrets);
+export function ExportText(id: string, format: string): $CancellablePromise<string> {
+    return $Call.ByID(2343494096, id, format);
 }
 
 /**

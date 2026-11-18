@@ -123,13 +123,12 @@ func (s *Transfer) Export(
 	title string,
 	id string,
 	format string,
-	secrets bool,
 ) (string, error) {
 	parsed, err := FormatOf(format)
 	if err != nil {
 		return "", err
 	}
-	out, err := s.export(ctx, id, parsed, secrets)
+	out, err := s.export(ctx, id, parsed)
 	if err != nil {
 		return "", err
 	}
@@ -140,8 +139,7 @@ func (s *Transfer) Export(
 	if err != nil || path == "" {
 		return "", err
 	}
-	// 0644 and not the database's 0600: the file is meant to be handed to somebody else. When the
-	// person asked for the secret values, they are in it — and the window has said so.
+	// The file is meant to be shared, so the collection writer leaves secret variables out.
 	if err := os.WriteFile(path, out.Data, 0o644); err != nil {
 		return "", fmt.Errorf("file %s: %w", path, err)
 	}
@@ -154,13 +152,12 @@ func (s *Transfer) ExportText(
 	ctx context.Context,
 	id string,
 	format string,
-	secrets bool,
 ) (string, error) {
 	parsed, err := FormatOf(format)
 	if err != nil {
 		return "", err
 	}
-	out, err := s.export(ctx, id, parsed, secrets)
+	out, err := s.export(ctx, id, parsed)
 	if err != nil {
 		return "", err
 	}

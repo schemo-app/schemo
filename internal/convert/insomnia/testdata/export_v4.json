@@ -104,7 +104,7 @@
     },
     {
       "_id": "env_dev",
-      "parentId": "wrk_storefront",
+      "parentId": "env_base",
       "name": "Dev",
       "data": { "dev_token": "tok_dev" },
       "_type": "environment"

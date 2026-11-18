@@ -21,6 +21,10 @@ type Collection struct {
 	Children    []Collection     `json:"children"`
 	Auth        *Auth            `json:"auth,omitempty"`
 	Variables   []Variable       `json:"variables,omitempty"`
+	// EnvironmentRoot starts an independent collection even when it was imported inside a folder.
+	EnvironmentRoot bool `json:"environmentRoot,omitempty"`
+	// Environments travels with a whole collection when it is imported or exported.
+	Environments []EnvironmentDraft `json:"environments,omitempty"`
 	// Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
 	Scripts *Scripts `json:"scripts,omitempty"`
 }
@@ -122,6 +126,7 @@ type Document struct {
 	Collections  []Collection       `json:"collections,omitempty"`
 	Environments []EnvironmentDraft `json:"environments,omitempty"`
 	Skipped      []Skip             `json:"skipped,omitempty"`
+	NeedsServer  bool               `json:"-"`
 }
 
 // EnvironmentDraft is an environment described by a file. Ids, positions and the active environment
@@ -129,6 +134,8 @@ type Document struct {
 type EnvironmentDraft struct {
 	Name      string     `json:"name"`
 	Color     string     `json:"color,omitempty"`
+	Base      bool       `json:"base,omitempty"`
+	Folder    bool       `json:"folder,omitempty"`
 	Variables []Variable `json:"variables,omitempty"`
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"schemo/internal/domain"
@@ -37,13 +38,12 @@ type writtenWorkspace struct {
 	Scope       string `json:"scope"`
 }
 
-// writtenGroup is a folder, which the reader takes back as a collection inside one. The environment
-// beside it is Insomnia's own place for a level's values, and this export leaves it empty.
+// writtenGroup is a folder together with its own variable overrides.
 type writtenGroup struct {
 	writtenRow
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Environment map[string]any `json:"environment"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Environment map[string]string `json:"environment"`
 }
 
 type writtenRequest struct {
@@ -109,10 +109,10 @@ func Export(
 		Scope:       "collection",
 	})
 
-	tree := &writer{}
+	tree := &writer{secrets: secrets}
 	tree.walk(&collection, workspaceID)
 	file.Resources = append(file.Resources, tree.rows...)
-	file.Resources = append(file.Resources, exportedEnvironments(environments, secrets)...)
+	file.Resources = append(file.Resources, exportedEnvironments(withCollectionDefaults(collection, environments), secrets)...)
 
 	data, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
@@ -121,12 +121,38 @@ func Export(
 	return append(data, '\n'), nil
 }
 
+func withCollectionDefaults(collection domain.Collection, environments []domain.EnvironmentDraft) []domain.EnvironmentDraft {
+	drafts := slices.DeleteFunc(slices.Clone(environments), func(env domain.EnvironmentDraft) bool { return env.Folder })
+	defaults := ownVariables(collection)
+	if len(defaults) == 0 {
+		return drafts
+	}
+	for i := range drafts {
+		if drafts[i].Base {
+			drafts[i].Variables = append(slices.Clone(drafts[i].Variables), missing(defaults, drafts[i].Variables)...)
+			return drafts
+		}
+	}
+	return append([]domain.EnvironmentDraft{{Name: baseEnvironment, Base: true, Variables: defaults}}, drafts...)
+}
+
+func ownVariables(collection domain.Collection) []domain.Variable {
+	variables := slices.Clone(collection.Variables)
+	for _, env := range collection.Environments {
+		if env.Folder {
+			variables = append(variables, env.Variables...)
+		}
+	}
+	return variables
+}
+
 // writer numbers the folders and the requests as it walks, each kind in the order the walk reaches
 // it.
 type writer struct {
 	folders  int
 	requests int
 	rows     []any
+	secrets  bool
 }
 
 // walk writes one level depth-first, in the order the tree draws it: a folder's own row comes
@@ -140,7 +166,7 @@ func (w *writer) walk(collection *domain.Collection, parent string) {
 				writtenRow:  writtenRow{ID: id, Type: "request_group", ParentID: parentID(parent)},
 				Name:        entry.Collection.Name,
 				Description: entry.Collection.Description,
-				Environment: map[string]any{},
+				Environment: exportedVariables(ownVariables(*entry.Collection), w.secrets),
 			})
 			w.walk(entry.Collection, id)
 			continue
@@ -270,25 +296,39 @@ func exportedBody(node domain.CollectionNode) *writtenBody {
 // workspace an export holds.
 func exportedEnvironments(drafts []domain.EnvironmentDraft, secrets bool) []any {
 	out := []any{}
+	parent := workspaceID
+	for _, draft := range drafts {
+		if draft.Base {
+			parent = "__BASE_ENVIRONMENT_ID__"
+			break
+		}
+	}
 	for index, draft := range drafts {
-		data := map[string]string{}
-		for _, variable := range draft.Variables {
-			name := strings.TrimSpace(variable.Name)
-			if name == "" {
-				continue
-			}
-			data[name] = exportedValue(variable, secrets)
+		id := fmt.Sprintf("env_%d", index+1)
+		owner := parent
+		if draft.Base {
+			id, owner = parent, workspaceID
 		}
 		out = append(out, writtenEnvironment{
 			writtenRow: writtenRow{
-				ID:       fmt.Sprintf("env_%d", index+1),
+				ID:       id,
 				Type:     "environment",
-				ParentID: parentID(workspaceID),
+				ParentID: parentID(owner),
 			},
 			Name:    draft.Name,
-			Data:    data,
+			Data:    exportedVariables(draft.Variables, secrets),
 			SortKey: index,
 		})
+	}
+	return out
+}
+
+func exportedVariables(variables []domain.Variable, secrets bool) map[string]string {
+	out := map[string]string{}
+	for _, variable := range variables {
+		if name := strings.TrimSpace(variable.Name); name != "" && variable.Enabled {
+			out[name] = exportedValue(variable, secrets)
+		}
 	}
 	return out
 }

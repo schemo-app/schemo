@@ -55,7 +55,10 @@ const note = computed(() => {
 })
 
 async function create() {
-  if (await withNotice(() => environments.createEnv({ name: name.value, color: color.value, startFrom: base.value }))) {
+  if (await withNotice(async () => {
+    const id = await environments.createEnv({ name: name.value, color: color.value, startFrom: base.value })
+    environments.editEnv(id)
+  })) {
     emit('created')
   }
 }

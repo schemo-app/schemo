@@ -33,8 +33,6 @@ const secrets = ref(false)
 const fixed = computed(() => transfer.exportTarget !== '')
 const chosen = computed(() => findCollection(collections.tree, colId.value))
 const requests = computed(() => (chosen.value ? requestCount(chosen.value) : 0))
-// OpenAPI carries authorization schemes only, so the checkbox says nothing there.
-const carried = computed(() => secrets.value && format.value !== 'openapi')
 
 const title = computed(() =>
   fixed.value ? t('transfer.exportOf', { name: chosen.value?.name ?? '' }) : t('transfer.export')
@@ -67,13 +65,8 @@ watch(
 const formatName = (id: ExportFormat) => t(`transfer.exportName.${id}`)
 const formatHint = (id: ExportFormat) => t(`transfer.exportHint.${id}`)
 
-function toggleSecrets() {
-  if (format.value === 'openapi') return
-  secrets.value = !secrets.value
-}
-
 async function copyAs() {
-  const text = await transfer.exportText(colId.value, format.value, carried.value)
+  const text = await transfer.exportText(colId.value, format.value)
   if (text === null) return
   await transfer.copy(
     text,
@@ -84,13 +77,13 @@ async function copyAs() {
 
 async function primary() {
   if (format.value === 'curl') {
-    const text = await transfer.curlText(colId.value, carried.value)
+    const text = await transfer.curlText(colId.value, secrets.value)
     if (text === null) return
     await transfer.copy(text, t('transfer.copiedCurl', { n: t('counts.commands', requests.value) }))
     transfer.closeTransfer()
     return
   }
-  if (await transfer.exportSave(colId.value, format.value, carried.value)) transfer.closeTransfer()
+  if (await transfer.exportSave(colId.value, format.value)) transfer.closeTransfer()
 }
 </script>
 
@@ -116,10 +109,10 @@ async function primary() {
       </div>
     </TransferField>
 
-    <div class="secrets" :class="{ inert: format === 'openapi' }" @click="toggleSecrets">
-      <TransferCheck :on="carried" />
+    <button v-if="format === 'curl'" type="button" class="secrets" :aria-pressed="secrets" @click="secrets = !secrets">
+      <TransferCheck :on="secrets" />
       <span>{{ t('transfer.secrets') }}</span>
-    </div>
+    </button>
 
     <template #foot>
       <DialogButton @click="transfer.closeTransfer()">{{ t('transfer.cancel') }}</DialogButton>
@@ -145,12 +138,8 @@ async function primary() {
 }
 
 .secrets {
-  @apply flex items-center;
+  @apply flex items-center border-0 bg-transparent text-inherit;
   gap: 0.5625rem;
   cursor: default;
-}
-
-.secrets.inert {
-  opacity: 0.5;
 }
 </style>

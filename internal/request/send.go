@@ -90,9 +90,11 @@ func (s *History) executeAttempt(
 	pass := domain.ScriptPass{
 		// The scripts of a run share one scope, and a request sent on its own is a run of one: what
 		// the record keeps is the run it names, which for a send on its own is none.
-		Run:      runScope(in.Run, id),
-		RecordID: id,
-		NodeID:   in.Node,
+		Run:           runScope(in.Run, id),
+		RecordID:      id,
+		NodeID:        in.Node,
+		EnvironmentID: in.EnvironmentID,
+		Inherited:     in.Variables,
 		Request: &domain.ScriptRequest{
 			Method:   in.Method,
 			URL:      in.URL,

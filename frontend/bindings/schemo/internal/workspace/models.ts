@@ -47,6 +47,7 @@ export interface EnvironmentInput {
     "name": string;
     "color"?: string;
     "startFrom"?: string;
+    "collectionId"?: string;
 }
 
 /**

@@ -17,9 +17,10 @@ import (
 const maxEnvironmentName = 40
 
 type Environments struct {
-	store *db.Store
-	scope domain.Scope
-	ids   platform.IDGen
+	store         *db.Store
+	scope         domain.Scope
+	ids           platform.IDGen
+	environmentID string
 }
 
 func NewEnvironments(store *db.Store, scope domain.Scope, ids platform.IDGen) *Environments {
@@ -33,12 +34,22 @@ func (s *Environments) InWorkspace(workspace string) *Environments {
 	return NewEnvironments(s.store, domain.WorkspaceScope(workspace), s.ids)
 }
 
+// InEnvironment keeps a request's scripts in the workspace and environment used for the send.
+//
+//wails:ignore
+func (s *Environments) InEnvironment(workspace, environmentID string) *Environments {
+	scoped := s.InWorkspace(workspace)
+	scoped.environmentID = environmentID
+	return scoped
+}
+
 // EnvironmentInput is what a new environment is asked for. StartFrom names an environment to copy the
 // variables of, empty for a blank one.
 type EnvironmentInput struct {
-	Name      string `json:"name"`
-	Color     string `json:"color,omitempty"`
-	StartFrom string `json:"startFrom,omitempty"`
+	Name         string `json:"name"`
+	Color        string `json:"color,omitempty"`
+	StartFrom    string `json:"startFrom,omitempty"`
+	CollectionID string `json:"collectionId,omitempty"`
 }
 
 // State is every environment and the globals, with secret values withheld: a secret says whether
@@ -65,7 +76,7 @@ func (s *Environments) Save(ctx context.Context, env domain.Environment) error {
 	if env.Name, err = domain.CleanName(env.Name, maxEnvironmentName); err != nil {
 		return err
 	}
-	if nameTaken(state.Environments, env.ID, env.Name) {
+	if nameTaken(environmentsOf(state, held.CollectionID), env.ID, env.Name) {
 		return domain.NameTaken()
 	}
 	vars, err := savedVariables(held.Vars, env.Vars)
@@ -77,6 +88,7 @@ func (s *Environments) Save(ctx context.Context, env domain.Environment) error {
 		return domain.Refuse(domain.CodeEnvironmentReadOnly, domain.ErrNotAllowed, nil)
 	}
 	env.Position, env.Vars = held.Position, nil
+	env.CollectionID, env.Base, env.Folder = held.CollectionID, held.Base, held.Folder
 	return s.store.SaveScope(ctx, workspace, &env, domain.EnvScope{Environment: env.ID}, vars)
 }
 
@@ -94,7 +106,7 @@ func (s *Environments) SaveGlobals(ctx context.Context, vars []domain.Variable) 
 	return s.store.SaveScope(ctx, workspace, nil, domain.EnvScope{}, saved)
 }
 
-// Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
+// Create appends an environment. Workspace environments become active, while collections keep their selection.
 func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (string, error) {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
@@ -104,19 +116,20 @@ func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (stri
 	if err != nil {
 		return "", err
 	}
-	if nameTaken(state.Environments, "", name) {
+	siblings := environmentsOf(state, draft.CollectionID)
+	if nameTaken(siblings, "", name) {
 		return "", domain.NameTaken()
 	}
 	base := domain.Environment{}
 	if draft.StartFrom != "" {
 		found, ok := state.Find(draft.StartFrom)
-		if !ok {
+		if !ok || found.CollectionID != draft.CollectionID {
 			return "", environmentNotFound(draft.StartFrom)
 		}
 		base = found
 	}
-	env := domain.Environment{ID: s.ids(), Name: name, Color: draft.Color,
-		Position: nextPosition(state.Environments, func(e domain.Environment) int { return e.Position })}
+	env := domain.Environment{ID: s.ids(), Name: name, Color: draft.Color, CollectionID: draft.CollectionID,
+		Position: nextPosition(siblings, func(e domain.Environment) int { return e.Position })}
 	vars := make([]domain.Variable, len(base.Vars))
 	for i, v := range base.Vars {
 		vars[i] = domain.Variable{ID: s.ids(), Name: v.Name, Kind: v.Kind, Enabled: v.Enabled, Position: i + 1}
@@ -126,6 +139,9 @@ func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (stri
 	}
 	if err := s.store.SaveScope(ctx, workspace, &env, domain.EnvScope{Environment: env.ID}, vars); err != nil {
 		return "", err
+	}
+	if env.CollectionID != "" {
+		return env.ID, nil
 	}
 	return env.ID, s.store.SetActiveEnvironment(ctx, workspace, env.ID)
 }
@@ -176,10 +192,25 @@ func (s *Environments) Activate(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := state.Find(id); id != "" && !ok {
-		return environmentNotFound(id)
+	if id != "" {
+		env, ok := state.Find(id)
+		if !ok {
+			return environmentNotFound(id)
+		}
+		if env.CollectionID != "" {
+			return s.store.SelectCollectionEnvironment(ctx, workspace, env.CollectionID, id)
+		}
 	}
 	return s.store.SetActiveEnvironment(ctx, workspace, id)
+}
+
+// SelectCollection changes the environment used by the given collection. Empty restores its default.
+func (s *Environments) SelectCollection(ctx context.Context, collectionID, id string) error {
+	workspace, err := s.scope.ActiveWorkspace(ctx)
+	if err != nil {
+		return err
+	}
+	return s.store.SelectCollectionEnvironment(ctx, workspace, collectionID, id)
 }
 
 // EnsureDefaults gives an empty workspace its starting environment, except unpulled or read-only ones.
@@ -261,11 +292,11 @@ func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name
 	var vars []domain.Variable
 	switch scope {
 	case domain.ScopeEnvironment:
-		env, ok := state.Find(state.ActiveID)
+		env, ok := state.Selected(s.environmentID)
 		if !ok {
 			return "", false, nil
 		}
-		vars = env.Vars
+		vars = append(slices.Clone(env.Vars), baseVariables(state, env)...)
 	case domain.ScopeGlobals:
 		vars = state.Globals
 	default:
@@ -277,6 +308,18 @@ func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name
 		}
 	}
 	return "", false, nil
+}
+
+// RequestVariable uses the request's resolution order for pm.variables.
+//
+//wails:ignore
+func (s *Environments) RequestVariable(ctx context.Context, above []domain.Variable, name string) (string, bool, error) {
+	resolve, _, err := s.resolver(ctx, true, above, s.environmentID)
+	if err != nil {
+		return "", false, err
+	}
+	value, ok := resolve(name)
+	return value.Value, ok, nil
 }
 
 // SetVariable writes a variable for a script, even into a closed environment.
@@ -313,10 +356,14 @@ func (s *Environments) write(ctx context.Context, scope domain.VarScope, name, v
 	where := domain.EnvScope{}
 	switch scope {
 	case domain.ScopeEnvironment:
-		if _, ok := state.Find(state.ActiveID); !ok {
+		env, ok := state.Selected(s.environmentID)
+		if !ok {
 			return domain.Refuse(domain.CodeNoEnvironment, domain.ErrNotAllowed, nil)
 		}
-		where.Environment = state.ActiveID
+		where.Environment = env.ID
+		secret = secret || slices.ContainsFunc(baseVariables(state, env), func(v domain.Variable) bool {
+			return v.Enabled && v.Name == name && v.Kind == domain.VariableSecret
+		})
 	case domain.ScopeGlobals:
 	default:
 		return fmt.Errorf("scope %q: %w", scope, domain.ErrNotAllowed)
@@ -475,8 +522,24 @@ func hideSecretValues(state domain.EnvState) domain.EnvState {
 	for i := range state.Environments {
 		state.Environments[i].Vars = hide(state.Environments[i].Vars)
 	}
+	for i := range state.CollectionEnvironments {
+		state.CollectionEnvironments[i].Vars = hide(state.CollectionEnvironments[i].Vars)
+	}
 	state.Globals = hide(state.Globals)
 	return state
+}
+
+func environmentsOf(state domain.EnvState, collectionID string) []domain.Environment {
+	if collectionID == "" {
+		return state.Environments
+	}
+	var out []domain.Environment
+	for _, env := range state.CollectionEnvironments {
+		if env.CollectionID == collectionID {
+			out = append(out, env)
+		}
+	}
+	return out
 }
 
 func kindFor(secret bool) domain.VariableKind {
@@ -516,15 +579,15 @@ func environmentNotFound(id string) error {
 	return fmt.Errorf("environment %s: %w", id, domain.ErrNotFound)
 }
 
-// ActiveName is the name of the active environment, empty when none is.
+// ActiveName is the name of a request's environment, or the active workspace environment by default.
 //
 //wails:ignore
-func (s *Environments) ActiveName(ctx context.Context) (string, error) {
+func (s *Environments) ActiveName(ctx context.Context, id string) (string, error) {
 	state, err := s.State(ctx)
 	if err != nil {
 		return "", err
 	}
-	active, _ := state.Find(state.ActiveID)
+	active, _ := state.Selected(id)
 	return active.Name, nil
 }
 

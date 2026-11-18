@@ -21,14 +21,16 @@ type file struct {
 // level is a collection or one of the collections inside it. Ids and timestamps are not written:
 // they name rows of this database, and a file that carries them promises a tree it cannot keep.
 type level struct {
-	Name        string          `json:"name"`
-	Position    int64           `json:"position"`
-	Description string          `json:"description,omitempty"`
-	Auth        *domain.Auth    `json:"auth,omitempty"`
-	Variables   []variable      `json:"variables,omitempty"`
-	Scripts     *domain.Scripts `json:"scripts,omitempty"`
-	Items       []request       `json:"requests,omitempty"`
-	Children    []level         `json:"collections,omitempty"`
+	Name            string          `json:"name"`
+	Position        int64           `json:"position"`
+	Description     string          `json:"description,omitempty"`
+	Auth            *domain.Auth    `json:"auth,omitempty"`
+	Variables       []variable      `json:"variables,omitempty"`
+	Environments    []environment   `json:"environments,omitempty"`
+	EnvironmentRoot bool            `json:"environmentRoot,omitempty"`
+	Scripts         *domain.Scripts `json:"scripts,omitempty"`
+	Items           []request       `json:"requests,omitempty"`
+	Children        []level         `json:"collections,omitempty"`
 }
 
 type request struct {
@@ -79,6 +81,8 @@ type variable struct {
 type environment struct {
 	Name      string     `json:"name"`
 	Color     string     `json:"color,omitempty"`
+	Base      bool       `json:"base,omitempty"`
+	Folder    bool       `json:"folder,omitempty"`
 	Variables []variable `json:"variables,omitempty"`
 }
 
@@ -92,9 +96,7 @@ func Write(doc domain.Document, secrets bool) ([]byte, error) {
 		out.Collections = append(out.Collections, written)
 	}
 	for _, draft := range doc.Environments {
-		written := environment{Name: draft.Name, Color: draft.Color}
-		written.Variables = writtenVariables(draft.Variables, secrets)
-		out.Environments = append(out.Environments, written)
+		out.Environments = append(out.Environments, writtenEnvironment(draft, secrets))
 	}
 
 	data, err := json.MarshalIndent(out, "", "  ")
@@ -104,15 +106,25 @@ func Write(doc domain.Document, secrets bool) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+func writtenEnvironment(draft domain.EnvironmentDraft, secrets bool) environment {
+	return environment{
+		Name: draft.Name, Color: draft.Color, Base: draft.Base, Folder: draft.Folder, Variables: writtenVariables(draft.Variables, secrets),
+	}
+}
+
 func writtenLevel(collection domain.Collection, secrets bool) level {
 	out := level{
-		Name:        collection.Name,
-		Description: collection.Description,
-		Auth:        collection.Auth,
-		Variables:   writtenVariables(collection.Variables, secrets),
-		Scripts:     collection.Scripts,
-		Items:       []request{},
-		Children:    []level{},
+		EnvironmentRoot: collection.EnvironmentRoot,
+		Name:            collection.Name,
+		Description:     collection.Description,
+		Auth:            collection.Auth,
+		Variables:       writtenVariables(collection.Variables, secrets),
+		Scripts:         collection.Scripts,
+		Items:           []request{},
+		Children:        []level{},
+	}
+	for _, draft := range collection.Environments {
+		out.Environments = append(out.Environments, writtenEnvironment(draft, false))
 	}
 	for _, entry := range collection.Level() {
 		if entry.Collection != nil {
@@ -213,21 +225,7 @@ func Read(data []byte) (domain.Document, error) {
 		doc.Collections = append(doc.Collections, collection)
 	}
 	for _, one := range parsed.Environments {
-		draft := domain.EnvironmentDraft{Name: one.Name, Color: one.Color}
-		for _, v := range one.Variables {
-			kind := v.Kind
-			if v.Secret {
-				kind = domain.VariableSecret
-			}
-			draft.Variables = append(draft.Variables, domain.Variable{
-				Name:     v.Name,
-				Value:    v.Value,
-				Kind:     kind,
-				Enabled:  v.Enabled,
-				Position: v.Position,
-			})
-		}
-		doc.Environments = append(doc.Environments, draft)
+		doc.Environments = append(doc.Environments, readEnvironment(one))
 	}
 	if len(doc.Collections) == 0 && len(doc.Environments) == 0 {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
@@ -235,14 +233,24 @@ func Read(data []byte) (domain.Document, error) {
 	return doc, nil
 }
 
+func readEnvironment(from environment) domain.EnvironmentDraft {
+	return domain.EnvironmentDraft{
+		Name: from.Name, Color: from.Color, Base: from.Base, Folder: from.Folder, Variables: readVariables(from.Variables),
+	}
+}
+
 func readLevel(from level) domain.Collection {
 	out := domain.Collection{
-		Name:        from.Name,
-		Position:    from.Position,
-		Description: from.Description,
-		Auth:        from.Auth,
-		Variables:   readVariables(from.Variables),
-		Scripts:     from.Scripts,
+		Name:            from.Name,
+		EnvironmentRoot: from.EnvironmentRoot,
+		Position:        from.Position,
+		Description:     from.Description,
+		Auth:            from.Auth,
+		Variables:       readVariables(from.Variables),
+		Scripts:         from.Scripts,
+	}
+	for _, environment := range from.Environments {
+		out.Environments = append(out.Environments, readEnvironment(environment))
 	}
 	for _, one := range from.Items {
 		node := domain.CollectionNode{

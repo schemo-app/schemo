@@ -116,6 +116,37 @@ func (s *Environments) Missing(
 	return out, nil
 }
 
+// InspectTexts exposes the origin of variables shown by a draft, with secret values withheld.
+//
+//wails:ignore
+func (s *Environments) InspectTexts(
+	ctx context.Context, above []domain.Variable, texts []string, envID string,
+) ([]string, map[string]domain.Resolution, error) {
+	resolve, secrets, err := s.resolver(ctx, false, above, envID)
+	if err != nil {
+		return nil, nil, err
+	}
+	unresolved := []string{}
+	resolved := map[string]domain.Resolution{}
+	seen := map[string]bool{}
+	for _, text := range texts {
+		for _, token := range tokens(text) {
+			if seen[token.name] {
+				continue
+			}
+			seen[token.name] = true
+			value, ok := resolve(token.name)
+			if !ok {
+				unresolved = append(unresolved, token.name)
+				continue
+			}
+			value.Value = redact(value.Value, secrets)
+			resolved[token.name] = value
+		}
+	}
+	return unresolved, resolved, nil
+}
+
 //wails:ignore
 func (s *Environments) MaskTexts(
 	ctx context.Context,
@@ -184,12 +215,8 @@ func (s *Environments) resolverIn(
 }
 
 func variableLookup(state domain.EnvState, revealSecrets bool, above []domain.Variable, envID string) (lookup, []string) {
-	if envID == "" {
-		envID = state.ActiveID
-	}
-
 	active := map[string]domain.Variable{}
-	env, _ := state.Find(envID)
+	env, _ := state.Selected(envID)
 	for _, v := range env.Vars {
 		if v.Enabled && v.Name != "" {
 			active[v.Name] = v
@@ -204,43 +231,83 @@ func variableLookup(state domain.EnvState, revealSecrets bool, above []domain.Va
 	}
 
 	collections := map[string]domain.Variable{}
-	for _, v := range above {
+	for _, v := range baseVariables(state, env) {
 		if v.Enabled && v.Name != "" {
+			collections[v.Name] = v
+		}
+	}
+	folders := map[string]domain.Variable{}
+	runtime := map[string]domain.Variable{}
+	for _, v := range above {
+		if !v.Enabled || v.Name == "" {
+			continue
+		}
+		switch v.Source {
+		case domain.ScopeFolder:
+			folders[v.Name] = v
+		case domain.ScopeRun:
+			runtime[v.Name] = v
+		default:
 			collections[v.Name] = v
 		}
 	}
 
 	secrets := []string{}
 	if !revealSecrets {
-		secrets = secretValues(collections, active, globals)
+		secrets = secretValues(state.CollectionEnvironments, runtime, folders, collections, active, globals)
 	}
 
-	// Environment levels beat a collection's, so an imported name cannot shadow the person's own;
-	// a collection still answers names nobody else holds.
 	return func(name string) (domain.Resolution, bool) {
-		if v, ok := active[name]; ok {
-			return resolution(v, "env", revealSecrets), true
+		if v, ok := runtime[name]; ok {
+			return resolution(v, "runtime", revealSecrets), true
 		}
-		if v, ok := globals[name]; ok {
-			return resolution(v, "global", revealSecrets), true
+		if v, ok := folders[name]; ok {
+			return resolution(v, "folder", revealSecrets), true
+		}
+		if v, ok := active[name]; ok {
+			value := resolution(v, "env", revealSecrets)
+			value.EnvironmentID = env.ID
+			return value, true
 		}
 		if v, ok := collections[name]; ok {
 			return resolution(v, "collection", revealSecrets), true
+		}
+		if v, ok := globals[name]; ok {
+			return resolution(v, "global", revealSecrets), true
 		}
 		return domain.Resolution{}, false
 	}, secrets
 }
 
-func secretValues(levels ...map[string]domain.Variable) []string {
+func baseVariables(state domain.EnvState, env domain.Environment) []domain.Variable {
+	if env.CollectionID == "" || env.Base {
+		return nil
+	}
+	for _, base := range state.CollectionEnvironments {
+		if base.CollectionID == env.CollectionID && base.Base && !base.Folder {
+			return base.Vars
+		}
+	}
+	return nil
+}
+
+func secretValues(scoped []domain.Environment, levels ...map[string]domain.Variable) []string {
 	out := []string{}
 	seen := map[string]bool{}
-	for _, level := range levels {
-		for _, v := range level {
-			if v.Kind != domain.VariableSecret || v.Value == "" || seen[v.Value] {
-				continue
-			}
+	add := func(v domain.Variable) {
+		if v.Kind == domain.VariableSecret && v.Value != "" && !seen[v.Value] {
 			seen[v.Value] = true
 			out = append(out, v.Value)
+		}
+	}
+	for _, level := range levels {
+		for _, v := range level {
+			add(v)
+		}
+	}
+	for _, env := range scoped {
+		for _, v := range env.Vars {
+			add(v)
 		}
 	}
 	slices.SortFunc(out, func(a, b string) int {

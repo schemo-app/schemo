@@ -15,11 +15,20 @@ import (
 )
 
 func (s *Transfer) previewFile(ctx context.Context, format Format, path string) (Preview, error) {
+	if format == FormatOpenAPI {
+		data, err := s.files.Read(path)
+		if err != nil {
+			return Preview{}, err
+		}
+		preview, err := s.stageOpenAPI(data, nil)
+		preview.File = filepath.Base(path)
+		return preview, err
+	}
 	document, size, err := s.readPath(ctx, format, path)
 	if err != nil {
 		return Preview{}, err
 	}
-	preview := s.stage(document, size)
+	preview := s.stage(document, size, nil)
 	preview.File = filepath.Base(path)
 	return preview, nil
 }

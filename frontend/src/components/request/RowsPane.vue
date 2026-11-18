@@ -19,10 +19,11 @@ import { useToast } from '../../composables/useToast'
 import { usePlatform } from '../../composables/usePlatform'
 
 // Headers share one table with their automatic rows. Parameters keep path values above the query.
-const { source, kind, toolbar = null } = defineProps<{
+const { source, kind, toolbar = null, envId } = defineProps<{
   source: RequestSource
   kind: 'params' | 'headers'
   toolbar?: HTMLElement | null
+  envId?: string
 }>()
 
 const emit = defineEmits<{ openAuth: [] }>()
@@ -153,6 +154,7 @@ function patchValue(id: string, value: string) {
         >
           <TokenField
             variant="cell"
+            :env-id="envId"
             :value="row.value"
             :placeholder="t('request.placeholderValue')"
             @change="source.patchRow(RowKind.RowPathParams, row.id, { value: $event })"
@@ -161,7 +163,7 @@ function patchValue(id: string, value: string) {
       </div>
     </template>
 
-    <BulkRowsEditor v-if="bulkEditing" ref="editor" :rows :env-id="source.environmentId" @apply="applyBulk" />
+    <BulkRowsEditor v-if="bulkEditing" ref="editor" :rows :env-id="envId" @apply="applyBulk" />
     <div ref="table" class="kv" :class="{ 'kv-text-auto': bulkEditing }" :tabindex="bulkEditing ? undefined : 0" :aria-label="t(`request.chips.${kind}`)" @paste="onPaste">
       <KvRow
         v-for="(row, index) in bulkEditing ? [] : rows"
@@ -180,6 +182,7 @@ function patchValue(id: string, value: string) {
       >
         <TokenField
           variant="cell"
+          :env-id="envId"
           :value="row.value"
           :placeholder="t('request.placeholderValue')"
           @change="patchValue(row.id, $event)"

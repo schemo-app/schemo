@@ -44,6 +44,9 @@ let latestRead = 0
 const url = ref('')
 const curl = ref('')
 const target = ref('')
+const serverOrigin = ref('')
+const environmentTarget = ref('skip')
+const environmentCollection = ref('0')
 const workspaceId = ref('')
 const picked = ref<Record<string, boolean>>({})
 // The address and the paste are the one thing to type on their screen: the caret is in it.
@@ -99,7 +102,10 @@ const found = computed(() => {
   const folders = read.folders
     ? ` ${t('transfer.inFolders', { n: t('counts.folders', read.folders) })}`
     : ''
-  return `${formatBytes(read.size)} · ${t('counts.requests', read.requests)}${folders}`
+  const content = read.requests || !read.environments
+    ? `${t('counts.requests', read.requests)}${folders}`
+    : t('counts.environments', read.environments)
+  return `${formatBytes(read.size)} · ${content}`
 })
 
 const urlPlaceholder = computed(() => {
@@ -131,15 +137,27 @@ const newName = computed(() => {
 })
 
 const targets = computed(() => {
-  const top = source.value === 'ws' ? t('transfer.separate') : newName.value
+  const top = environmentFile.value ? t('transfer.envWorkspace') : source.value === 'ws' ? t('transfer.separate') : newName.value
   return [{ id: '', label: top }, ...places.value]
 })
+
+const environmentFile = computed(() => preview.value?.collections === 0 && Boolean(preview.value.looseEnvironments))
+const legacyEnvironments = computed(() => Boolean(preview.value?.collections && preview.value.looseEnvironments))
+const environmentTargets = computed(() => [
+  { id: 'skip', label: t('transfer.envSkip') },
+  { id: 'collection', label: t('transfer.envCollection') },
+  { id: 'workspace', label: t('transfer.envWorkspace') },
+])
+const environmentCollections = computed(() => (preview.value?.collectionNames ?? []).map(
+  (name, index) => ({ id: String(index), label: name || t('transfer.newCollectionPlain') })
+))
 
 const ready = computed(() => {
   if (transfer.busy || importing.value) return false
   if (source.value === 'ws') return pickedIds.value.length > 0
   const read = preview.value
   if (!read) return false
+  if (read.needsServer && !serverOrigin.value.trim()) return false
   return via.value !== 'paste' || read.requests > 0
 })
 
@@ -192,6 +210,9 @@ watch(
 function forgetPreview() {
   latestRead++
   preview.value = null
+  serverOrigin.value = ''
+  environmentTarget.value = 'skip'
+  environmentCollection.value = '0'
 }
 
 // Takes the answer of a read as the preview, unless the dialog has moved on or asked again since.
@@ -286,7 +307,12 @@ async function commit() {
     }
     const read = preview.value
     if (!read) return
-    if (await transfer.apply(read.token, target.value, t('transfer.fromCurl'))) {
+    const destination = environmentFile.value ? (target.value ? 'collection' : 'workspace') : environmentTarget.value
+    if (await transfer.apply(read.token, target.value, t('transfer.fromCurl'), {
+      serverOrigin: serverOrigin.value,
+      environmentTarget: destination,
+      environmentCollection: Number(environmentCollection.value),
+    })) {
       transfer.closeTransfer()
     }
   } finally {
@@ -370,7 +396,7 @@ async function commit() {
             <span class="file-name">{{ preview.file }}</span>
             <span class="file-meta">{{ found }}</span>
           </div>
-          <button type="button" class="replace" @click="preview = null">
+          <button type="button" class="replace" @click="forgetPreview">
             {{ t('transfer.replace') }}
           </button>
         </div>
@@ -383,7 +409,7 @@ async function commit() {
         class="url"
         spellcheck="false"
         :placeholder="urlPlaceholder"
-        @input="preview = null"
+        @input="forgetPreview"
         @keydown.enter="readUrl"
       />
 
@@ -397,7 +423,25 @@ async function commit() {
         @input="pause.start()"
       ></textarea>
 
-      <TransferField v-model="target" :label="t('transfer.where')" :options="targets" />
+      <TransferField v-if="preview?.needsServer">
+        <label class="server-origin">
+          <span>{{ t('transfer.serverOrigin') }}</span>
+          <input v-model="serverOrigin" class="url" spellcheck="false" placeholder="https://api.example.com" />
+        </label>
+      </TransferField>
+      <TransferField v-model="target" :label="t(environmentFile ? 'transfer.envDestination' : 'transfer.where')" :options="targets" />
+      <TransferField
+        v-if="legacyEnvironments"
+        v-model="environmentTarget"
+        :label="t('transfer.looseEnvironments', { n: preview?.looseEnvironments ?? 0 })"
+        :options="environmentTargets"
+      />
+      <TransferField
+        v-if="legacyEnvironments && environmentTarget === 'collection' && environmentCollections.length > 1"
+        v-model="environmentCollection"
+        :label="t('transfer.collection')"
+        :options="environmentCollections"
+      />
     </template>
 
     <template v-if="source" #foot>
@@ -532,6 +576,10 @@ async function commit() {
 
 .url {
   height: 2rem;
+}
+
+.server-origin {
+  @apply flex flex-col gap-1.5 text-12 text-text-secondary;
 }
 
 .paste {

@@ -1,6 +1,7 @@
 package request
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -315,5 +316,6 @@ func (s *Drafts) schemaInput(ctx context.Context, draft domain.Draft) (SendInput
 	draft.Options = &options
 	draft.Body = ""
 	above := s.above(ctx, draft.ID)
+	draft.EnvironmentID = cmp.Or(draft.EnvironmentID, above.EnvironmentID)
 	return s.Prepared(ctx, draft, above.Auth, above.Variables)
 }

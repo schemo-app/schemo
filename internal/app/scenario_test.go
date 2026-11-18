@@ -113,7 +113,7 @@ func TestASavedRequestSendsWithASecretAndExportsWithoutIt(t *testing.T) {
 		t.Fatalf("server saw nothing: %+v", device.events.last(request.TopicRequestFinished))
 	}
 
-	exported, err := device.Transfer.ExportText(ctx, node.CollectionID, string(convert.FormatSchemo), false)
+	exported, err := device.Transfer.ExportText(ctx, node.CollectionID, string(convert.FormatSchemo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestASavedRequestSendsWithASecretAndExportsWithoutIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, err := device.Transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := device.Transfer.Apply(ctx, preview.Token, "", "", convert.ImportOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
