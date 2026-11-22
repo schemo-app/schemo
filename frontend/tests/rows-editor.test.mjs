@@ -22,12 +22,18 @@ const load = await vite({
         export const useRowOrder = ({rows}) => ({press() {}, states: computed(() => rows().map(() => ({class: {}, style: {}})))});`,
 }, {
     other(path) {
-        if (['RequestPane', 'RowsPane', 'BulkRowsEditor', 'KvRow'].some(name => path.endsWith(`/request/${name}.vue`))) return clientComponent(path)
+        if (['RequestPane', 'RowsPane', 'BulkRowsEditor', 'KvRow', 'BodyPane'].some(name => path.endsWith(`/request/${name}.vue`))) return clientComponent(path)
+        if (path.endsWith('/ui/RowCreate.vue')) return clientComponent(path)
+        if (path.endsWith('/ui/TokenField.vue')) return `
+            import {h} from 'vue'; export default {props:['value'], emits:['change'], setup(props,{emit}) {
+                return () => h('input',{class:'row-input',value:props.value,onInput:event=>emit('change',event.target.value)})
+            }};`
         if (path.endsWith('.vue')) return 'export default {render() {return null}}'
     },
 })
 const { default: RowsPane } = await load('/src/components/request/RowsPane.vue')
 const { default: RequestPane } = await load('/src/components/request/RequestPane.vue')
+const { default: BodyPane } = await load('/src/components/request/BodyPane.vue')
 
 function mount(context, kind = 'headers', requestPane = false) {
     const nodes = []
@@ -38,9 +44,10 @@ function mount(context, kind = 'headers', requestPane = false) {
                 addEventListener() {}, removeEventListener() {}, setSelectionRange() {},
                 focus() {globalThis.document.activeElement = this},
                 querySelector(selector) {
-                    const id = selector.match(/^\[data-row="(.+)"\]$/)?.[1]
-                    const find = held => held.props?.['data-row'] === id ? held : held.children?.map(find).find(Boolean)
-                    return find(this)
+                    const data = selector.match(/^\[(data-row|data-kv)="(.+)"\]/)
+                    const find = (held, matches) => matches(held) ? held : held.children?.map(child=>find(child,matches)).find(Boolean)
+                    const row = data && find(this,held=>held.props?.[data[1]] === data[2])
+                    return selector.endsWith(' .row-input') ? row && find(row,held=>held.props?.class?.includes('row-input')) : row
                 },
                 getRootNode() {return globalThis.document},
                 closest() {return ['input', 'textarea'].includes(type) ? this : null},
@@ -67,24 +74,27 @@ function mount(context, kind = 'headers', requestPane = false) {
     })
     const source = reactive({
         headers: [{id: 'header', name: 'Accept', value: 'application/json', enabled: true, description: 'Keep the note'}],
-        params: [], pathParams: [], projected: [], auto: [], url: 'https://original.test', method: 'GET', body: '',
+        params: [], form: [], pathParams: [], projected: [], auto: [], url: 'https://original.test', method: 'GET', body: '',bodyKind:'form',draftId:'draft',
         openChip: kind, nodeId: null, responses: [], enabledHeadersCount: 1, enabledParamsCount: 0,
         setOpenChip(chip) {this.openChip = chip},
         replaceRows(kind, rows) {writes.push(rows); this[kind] = rows},
-        async addRow() {
-            const id = `header-${this.headers.length}`
-            this.headers.push({id, name: '', value: '', enabled: true})
+        async addRow(kind,name,value) {
+            if (!name.trim()) return ''
+            const id = `${kind}-${this[kind].length}`
+            this[kind].push({id, name, value, enabled: true})
             return id
         },
     })
     const toolbar = {children: []}
-    const app = renderer.createApp({render: () => requestPane ? h(RequestPane, {source}) : h(RowsPane, {source, kind, toolbar})})
+    const app = renderer.createApp({render: () => kind === 'form' ? h(BodyPane,{source}) : requestPane ? h(RequestPane, {source}) : h(RowsPane, {source, kind, toolbar})})
     app.mount({children: []})
     context.after(() => app.unmount())
     const mode = () => nodes.find(node => !node.removed && node.props.class?.includes('rows-mode'))
     const editor = () => nodes.find(node => !node.removed && node.type === 'textarea')
     const table = () => nodes.find(node => !node.removed && node.props.class?.split(' ').includes('kv'))
-    return {source, writes, toolbar, mode, editor, table}
+    const create = () => nodes.find(node=>!node.removed && node.props.class?.split(' ').includes('kv-add'))
+    const input = label => nodes.find(node=>!node.removed && node.type === 'input' && node.props['aria-label'] === label)
+    return {source, writes, toolbar, mode, editor, table,create,input}
 }
 
 test('text mode applies valid edits immediately and refuses to discard invalid input when switching to the table', async context => {
@@ -159,8 +169,8 @@ for (const prefix of ['#', '//']) {
     })
 }
 
-test('adding a header replaces the add-row position and focuses its name before automatic headers', async context => {
-    const {source, table} = mount(context)
+test('adding a named header preserves the add-row position and focuses its value before automatic headers', async context => {
+    const {source, table,create,input} = mount(context)
     source.auto = [{name: 'User-Agent', value: 'Schemo/2.0'}]
     await nextTick()
     const rows = () => table().children.filter(node => node.props?.class?.split(' ').includes('kv-row'))
@@ -168,16 +178,52 @@ test('adding a header replaces the add-row position and focuses its name before 
         const before = rows()
         const position = before.findIndex(node => node.props.class.includes('kv-add'))
         assert.ok(before[position + 1].props.class.includes('header-auto-row'))
-        await before[position].props.onClick()
+        const placeholder = create()
+        const findButton = node=>node.type === 'button' ? node : node.children?.map(findButton).find(Boolean)
+        findButton(placeholder).props.onClick()
+        await nextTick()
+        const field = input('request.pane.headerName')
+        field.props.onInput({target:{value:`X-Header-${index}`}})
+        await field.props.onBlur()
         await nextTick()
         const after = rows()
         const added = source.headers.at(-1)
         assert.equal(after[position].props['data-kv'], added.id)
         assert.ok(after[position + 1].props.class.includes('kv-add'))
         assert.ok(after[position + 2].props.class.includes('header-auto-row'))
-        assert.equal(globalThis.document.activeElement.props['data-row'], added.id)
+        assert.equal(globalThis.document.activeElement.props.class,'row-input')
+        assert.equal(added.name,`X-Header-${index}`)
     }
 })
+
+for (const kind of ['params','headers','form']) {
+    test(`${kind} keeps empty input local and creates a filled row when its name is entered`, async context => {
+        const {source,create,input} = mount(context,kind)
+        const count = source[kind].length
+        const buttons = node => [...(node.type === 'button' ? [node] : []), ...(node.children?.flatMap(buttons) ?? [])]
+        const nameLabel = kind === 'headers' ? 'request.pane.headerName' : 'request.placeholderKey'
+        buttons(create())[0].props.onClick()
+        await nextTick()
+        input(nameLabel).props.onInput({target:{value:'   '}})
+        await input(nameLabel).props.onBlur()
+        await nextTick()
+        assert.equal(source[kind].length,count)
+        buttons(create())[1].props.onClick()
+        await nextTick()
+        input('request.placeholderValue').props.onInput({target:{value:'new value'}})
+        await input('request.placeholderValue').props.onBlur()
+        await nextTick()
+        assert.equal(source[kind].length,count)
+        buttons(create())[0].props.onClick()
+        await nextTick()
+        input(nameLabel).props.onInput({target:{value:'newName'}})
+        await input(nameLabel).props.onBlur()
+        await nextTick()
+        assert.equal(source[kind].length,count+1)
+        assert.equal(source[kind].at(-1).name,'newName')
+        assert.equal(source[kind].at(-1).value,'new value')
+    })
+}
 
 async function paste(table, text, target = table) {
     let prevented = false

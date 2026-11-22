@@ -100,13 +100,8 @@ func TestInterpolate(t *testing.T) {
 		{"known", "{{host}}/articles", "api.example.com/articles"},
 		{"the name is trimmed", "{{ host }}", "api.example.com"},
 		{"a secret is substituted too: this is the send path", "Bearer {{token}}", "Bearer s3cret"},
-		{
-			// A request goes out either way: the window says which names came to nothing, and the
-			// address carries a value rather than a name in braces.
-			"unknown leaves nothing behind",
-			"Bearer {{nope}}",
-			"Bearer ",
-		},
+		// An unknown name stays as written, so the gap is visible where it went out.
+		{"unknown stays as written", "Bearer {{nope}}", "Bearer {{nope}}"},
 		{
 			"an escaped opener is not a token",
 			`\{{host}}`,
@@ -134,7 +129,7 @@ func TestInterpolateMasksSecrets(t *testing.T) {
 		{"known text value", "{{host}}", "api.example.com"},
 		{"a global value is not a secret", "{{page}}", "2"},
 		{"a secret leaves as the mask", "Bearer {{token}}", "Bearer " + domain.SecretMask},
-		{"unknown leaves nothing behind", "{{nope}}", ""},
+		{"unknown stays as written", "{{nope}}", "{{nope}}"},
 		{"escaped", `\{{token}}`, `\{{token}}`},
 	}
 	for _, tc := range cases {

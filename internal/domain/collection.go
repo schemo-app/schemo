@@ -21,8 +21,7 @@ type Collection struct {
 	Children    []Collection     `json:"children"`
 	Auth        *Auth            `json:"auth,omitempty"`
 	Variables   []Variable       `json:"variables,omitempty"`
-	// Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
-	Scripts *Scripts `json:"scripts,omitempty"`
+	Scripts     *Scripts         `json:"scripts,omitempty"`
 }
 
 type LevelRow struct {
@@ -54,30 +53,27 @@ func (c *Collection) Level() []LevelEntry {
 }
 
 type CollectionNode struct {
-	Protocol      Protocol         `json:"protocol,omitempty"`
-	Options       *ProtocolOptions `json:"options,omitempty"`
-	ID            string           `json:"id"`
-	CollectionID  string           `json:"collectionId"`
-	Name          string           `json:"name"`
-	Position      int64            `json:"position"`
-	Method        string           `json:"method,omitempty"`
-	URL           string           `json:"url,omitempty"`
-	Params        []Row            `json:"params,omitempty"`
-	Headers       []Row            `json:"headers,omitempty"`
-	PathParams    []Row            `json:"pathParams,omitempty"`
-	Body          string           `json:"body,omitempty"`
-	BodyKind      BodyKind         `json:"bodyKind,omitempty"`
-	Form          []FormRow        `json:"form,omitempty"`
-	BodyFile      string           `json:"bodyFile,omitempty"`
-	EnvironmentID string           `json:"environmentId,omitempty"`
-	Auth          *Auth            `json:"auth,omitempty"`
-	Scripts       *Scripts         `json:"scripts,omitempty"`
-	Description   string           `json:"description,omitempty"`
-	// Responses are example answers carried by a file (a Postman example, a declared response).
-	// They are read-only: a request sent from the app composes its own answer.
-	Responses []ResponseExample `json:"responses,omitempty"`
-	CreatedAt int64             `json:"createdAt"`
-	UpdatedAt int64             `json:"updatedAt"`
+	Protocol     Protocol          `json:"protocol,omitempty"`
+	Options      *ProtocolOptions  `json:"options,omitempty"`
+	ID           string            `json:"id"`
+	CollectionID string            `json:"collectionId"`
+	Name         string            `json:"name"`
+	Position     int64             `json:"position"`
+	Method       string            `json:"method,omitempty"`
+	URL          string            `json:"url,omitempty"`
+	Params       []Row             `json:"params,omitempty"`
+	Headers      []Row             `json:"headers,omitempty"`
+	PathParams   []Row             `json:"pathParams,omitempty"`
+	Body         string            `json:"body,omitempty"`
+	BodyKind     BodyKind          `json:"bodyKind,omitempty"`
+	Form         []FormRow         `json:"form,omitempty"`
+	BodyFile     string            `json:"bodyFile,omitempty"`
+	Auth         *Auth             `json:"auth,omitempty"`
+	Scripts      *Scripts          `json:"scripts,omitempty"`
+	Description  string            `json:"description,omitempty"`
+	Responses    []ResponseExample `json:"responses,omitempty"`
+	CreatedAt    int64             `json:"createdAt"`
+	UpdatedAt    int64             `json:"updatedAt"`
 }
 
 // ResponseExample is one saved answer: what it is called, the status it carried, its headers and
@@ -116,20 +112,29 @@ type CollectionRunResult struct {
 	Skipped          bool     `json:"skipped,omitempty"`
 }
 
-// Document is what a foreign file holds in this app's terms: collections for the tree and
-// environments for the environment list. A format may carry only one of the two.
+// Document is what a foreign file holds in this app's terms: collections for the tree,
+// environments for the environment list and globals for the workspace. A format may carry any part.
 type Document struct {
 	Collections  []Collection       `json:"collections,omitempty"`
 	Environments []EnvironmentDraft `json:"environments,omitempty"`
+	Globals      []Variable         `json:"globals,omitempty"`
 	Skipped      []Skip             `json:"skipped,omitempty"`
 }
 
 // EnvironmentDraft is an environment described by a file. Ids, positions and the active environment
 // are decided where the draft is written.
 type EnvironmentDraft struct {
-	Name      string     `json:"name"`
-	Color     string     `json:"color,omitempty"`
-	Variables []Variable `json:"variables,omitempty"`
+	Name      string       `json:"name"`
+	Color     string       `json:"color,omitempty"`
+	Variables []Variable   `json:"variables,omitempty"`
+	Blocks    []BlockDraft `json:"blocks,omitempty"`
+}
+
+// BlockDraft is one collection's values in an environment a file described. The collection is its
+// index in the document, since the ids are minted only when the collections are written.
+type BlockDraft struct {
+	Collection int        `json:"collection"`
+	Variables  []Variable `json:"variables,omitempty"`
 }
 
 // Skip is one thing an import deliberately left out, counted rather than carried: a code the window

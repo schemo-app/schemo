@@ -5,6 +5,7 @@ import IconButton from '../ui/IconButton.vue'
 import Segment from '../ui/Segment.vue'
 import TextEditor from '../ui/TextEditor.vue'
 import KvRow from './KvRow.vue'
+import RowCreate from '../ui/RowCreate.vue'
 import { statusBadgeClass } from '../../lib/format'
 import { tryParseJson } from '../../lib/json'
 import { responseParser } from '../../lib/responseFormat'
@@ -122,12 +123,15 @@ function removeHeader(index: number) {
   writeHeaders()
 }
 
-async function addHeader() {
+async function addHeader(name: string, value: string): Promise<boolean> {
+  name = name.trim()
+  if (!name) return false
   const id = `h${seq++}`
-  rows.value.push({ id, name: '', value: '' })
+  rows.value.push({ id, name, value })
   writeHeaders()
   await nextTick()
-  table.value?.querySelector<HTMLInputElement>(`[data-row="${id}"]`)?.focus()
+  table.value?.querySelector<HTMLInputElement>(`[data-value-row="${id}"]`)?.focus()
+  return true
 }
 </script>
 
@@ -223,17 +227,19 @@ async function addHeader() {
       >
         <input
           class="kv-input mono"
+          :data-value-row="row.id"
           :value="row.value"
           :placeholder="t('request.examples.columnValue')"
           spellcheck="false"
           @input="valueHeader(i, ($event.target as HTMLInputElement).value)"
         />
       </KvRow>
-      <button type="button" class="kv-row kv-add" @click="addHeader">
-        <span></span>
-        <span class="kv-ghost mono">{{ t('request.examples.columnName') }}</span>
-        <span class="kv-ghost mono">{{ t('request.examples.columnValue') }}</span>
-      </button>
+      <RowCreate
+        class="kv-row kv-add mono"
+        :create="addHeader"
+        :name-placeholder="t('request.examples.columnName')"
+        :value-placeholder="t('request.examples.columnValue')"
+      />
     </div>
   </div>
 </template>
@@ -328,14 +334,13 @@ async function addHeader() {
 .example-headers {
   @apply flex-1 min-h-0 overflow-auto;
   padding: 0.375rem 0.75rem 1rem;
+  --row-columns: 1rem minmax(0, min(13.75rem, 38%)) minmax(0, 1fr) 1.75rem;
+  --create-row-height: 2.125rem;
+  --create-cell-padding: 0 0.5rem;
 }
 
 .example-headers .kv-row {
   grid-template-columns: 1rem minmax(0, min(13.75rem, 38%)) minmax(0, 1fr) 1.75rem;
-}
-
-.example-headers .kv-add {
-  @apply cursor-text;
 }
 
 @container (max-width: 31rem) {

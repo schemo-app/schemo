@@ -228,7 +228,8 @@ func unescaped(text string) string {
 	return held
 }
 
-// readEnvironments turns the page's base addresses into environments; one with no address is skipped.
+// readEnvironments turns the page's base addresses into the page collection's block in each
+// environment; one with no address is skipped.
 func readEnvironments(snapshot snapshotv1.Snapshot) []domain.EnvironmentDraft {
 	held := snapshot.Environments
 	if len(held) == 0 && strings.TrimSpace(snapshot.Environment.BaseURL) != "" {
@@ -243,13 +244,13 @@ func readEnvironments(snapshot snapshotv1.Snapshot) []domain.EnvironmentDraft {
 		}
 		out = append(out, domain.EnvironmentDraft{
 			Name: environment.Name,
-			Variables: []domain.Variable{{
+			Blocks: []domain.BlockDraft{{Collection: 0, Variables: []domain.Variable{{
 				Name:     domain.BaseURLVariable,
 				Value:    base,
 				Kind:     domain.VariableText,
 				Enabled:  true,
 				Position: 1,
-			}},
+			}}}},
 		})
 	}
 	return out

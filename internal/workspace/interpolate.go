@@ -43,8 +43,6 @@ func tokens(text string) []token {
 		close += i + 2
 		name := strings.TrimSpace(text[i+2 : close])
 		if !domain.IsVariableName(name) {
-			// `{{a b}}` is not a name, so it is text. The scan resumes at the second brace rather
-			// than past the token, so that a real one written inside it is still found.
 			i += 2
 			continue
 		}
@@ -55,9 +53,15 @@ func tokens(text string) []token {
 	return out
 }
 
-// interpolate fills a text's variables; with maskSecrets a secret becomes its mask. Unresolved names
-// become empty; `Missing` reports which they were.
+// maxDepth is how deep a value that names other variables (`{{host}}:{{port}}`) is followed.
+const maxDepth = 10
+
+// interpolate fills a text's variables; with maskSecrets a secret becomes its mask.
 func interpolate(text string, resolve lookup, maskSecrets bool) string {
+	return expand(text, resolve, maskSecrets, map[string]bool{}, 0)
+}
+
+func expand(text string, resolve lookup, maskSecrets bool, open map[string]bool, depth int) string {
 	found := tokens(text)
 	if len(found) == 0 {
 		return text
@@ -68,12 +72,14 @@ func interpolate(text string, resolve lookup, maskSecrets bool) string {
 	for _, t := range found {
 		out.WriteString(text[last:t.start])
 		switch r, ok := resolve(t.name); {
-		case !ok:
-			// Nothing: a name nothing answers leaves nothing behind.
+		case !ok, open[t.name], depth >= maxDepth:
+			out.WriteString(t.raw)
 		case maskSecrets && r.Kind == domain.VariableSecret:
 			out.WriteString(domain.SecretMask)
 		default:
-			out.WriteString(r.Value)
+			open[t.name] = true
+			out.WriteString(expand(r.Value, resolve, maskSecrets, open, depth+1))
+			delete(open, t.name)
 		}
 		last = t.end
 	}

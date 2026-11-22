@@ -194,7 +194,7 @@ func TestRunCarriesEveryLevelAbove(t *testing.T) {
 	f.run(f.collectionID, deep)
 	sent := f.sender.requests()
 	if len(sent) != 1 || sent[0].Auth.Answer("token") != "middle" ||
-		len(sent[0].Variables) != 1 || sent[0].Variables[0].Name != "page" {
+		len(sent[0].Levels.Variables) != 1 || sent[0].Levels.Variables[0].Name != "page" {
 		t.Errorf("deep request = %+v, want the middle level's auth and variables", sent)
 	}
 }
@@ -350,11 +350,15 @@ func TestRunKeepsItsWorkspaceAndEnvironment(t *testing.T) {
 	r := newRuns(t)
 	ctx := t.Context()
 	envs := workspace.NewEnvironments(r.store, r.store, platform.NewIDGen())
-	if _, err := envs.Create(ctx, workspace.EnvironmentInput{Name: "Local"}); err != nil {
+	local, err := envs.Create(ctx, "Local", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := envs.Activate(ctx, local); err != nil {
 		t.Fatal(err)
 	}
 	collection := r.collection("Collection")
-	r.request(collection, domain.CollectionNode{Name: "Pinned", URL: addr("a"), EnvironmentID: "env-prod"})
+	r.request(collection, domain.CollectionNode{Name: "Pinned", URL: addr("a")})
 	r.request(collection, domain.CollectionNode{
 		Name: "Upload", Method: "POST", URL: addr("b"),
 		BodyKind: domain.BodyForm, Form: []domain.FormRow{{ID: "f", Name: "field", Enabled: true}},
@@ -370,9 +374,6 @@ func TestRunKeepsItsWorkspaceAndEnvironment(t *testing.T) {
 		if req.Workspace != personal {
 			t.Errorf("request went out in %q, want %q", req.Workspace, personal)
 		}
-	}
-	if sent[0].EnvironmentID != "env-prod" {
-		t.Errorf("pin = %q, want env-prod", sent[0].EnvironmentID)
 	}
 	if sent[1].BodyKind != domain.BodyForm || len(sent[1].Form) != 1 || sent[1].BodyFile != "/tmp/report.pdf" {
 		t.Errorf("upload = %+v, want its form and file", sent[1])
@@ -407,7 +408,7 @@ func TestSendOneRequestForAnAgent(t *testing.T) {
 	}
 	sent := r.sender.requests()[0]
 	if sent.Workspace != "b" || sent.Agent != "Claude Desktop" || sent.Run != "" ||
-		sent.URL != "https://api.example/products/a%20b" || len(sent.Variables) != 1 {
+		sent.URL != "https://api.example/products/a%20b" || len(sent.Levels.Variables) != 1 {
 		t.Errorf("sent = %+v", sent)
 	}
 	if _, err := r.Send(ctx, "b", "missing", ""); !errors.Is(err, domain.ErrNotFound) {

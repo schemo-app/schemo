@@ -289,7 +289,7 @@ func production() domain.EnvState {
 		Environments: []domain.Environment{{
 			ID:   "env-1",
 			Name: "Production",
-			Vars: []domain.Variable{{Name: domain.BaseURLVariable, Value: "https://api.example.com"}},
+			Vars: []domain.Variable{{Name: domain.BaseURLVariable, Value: "https://api.example.com", Enabled: true}},
 		}},
 		ActiveID: "env-1",
 	}

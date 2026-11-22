@@ -64,7 +64,10 @@ var syncKinds = map[domain.EntityType]syncKind{
 			}
 			return []string{"/value"}, nil
 		},
-		key: func(row entity) string { return naturalKey(row.Parent, row.Name) },
+		key: func(row entity) string {
+			_, collection, _ := variableFrom(row)
+			return variableKey(row.Parent, collection, row.Name)
+		},
 	},
 	domain.EntityJarDomain: {
 		key: func(row entity) string { return naturalKey(row.Name) },

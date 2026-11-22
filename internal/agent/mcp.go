@@ -272,7 +272,6 @@ type Request struct {
 	BodyKind    string       `json:"bodyKind,omitempty"`
 	Params      []Header     `json:"params,omitempty"`
 	Description string       `json:"description,omitempty"`
-	Environment string       `json:"environment,omitempty"`
 	Auth        *domain.Auth `json:"auth,omitempty"`
 }
 

@@ -3,10 +3,11 @@ import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } f
 import Icon from './Icon.vue'
 import { t } from '../../i18n'
 
-const { width = 940, title, cancelTop } = defineProps<{
+const { width = 940, title, cancelTop, splitHeader = false } = defineProps<{
   title: string
   width?: number
   cancelTop?: () => boolean
+  splitHeader?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -28,12 +29,14 @@ function onEscape(event: KeyboardEvent) {
       <div class="sheet-layout">
         <DialogContent
           class="sheet"
+          :class="{ 'split-header': splitHeader }"
           :style="{ maxWidth: `${width}px` }"
           :aria-describedby="undefined"
           @escape-key-down="onEscape"
           @pointer-down-outside.prevent
         >
-          <div class="sheet-head">
+          <DialogTitle v-if="splitHeader" class="sr-only">{{ title }}</DialogTitle>
+          <div v-else class="sheet-head">
             <DialogTitle class="sheet-title">{{ title }}</DialogTitle>
             <button
               type="button"
@@ -83,6 +86,11 @@ function onEscape(event: KeyboardEvent) {
   height: 3.5rem;
   padding: 0 0.75rem 0 1.25rem;
   border-color: var(--border);
+}
+
+.sheet.split-header {
+  height: min(600px, calc(100vh - 48px));
+  width: calc(100vw - 48px);
 }
 
 .sheet-title {

@@ -1,69 +1,111 @@
 <script setup lang="ts">
-import { useColorLabels } from '../../composables/useColorLabels'
-import { computed, useTemplateRef, watch } from 'vue'
-import Button from '../ui/Button.vue'
-import ColorSwatches from '../ui/ColorSwatches.vue'
-import Segment from '../ui/Segment.vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
+import Icon from '../ui/Icon.vue'
+import IconButton from '../ui/IconButton.vue'
+import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
+import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
+import DropdownMenuSubmenu from '../ui/DropdownMenuSubmenu.vue'
 import VariablesTable from './VariablesTable.vue'
-import { ENVIRONMENT_COLORS, ENVIRONMENT_TINTS } from '../../lib/environmentPalette'
+import { ENVIRONMENT_COLORS, dotOf } from '../../lib/environmentPalette'
+import { useColorLabels } from '../../composables/useColorLabels'
 import { useEnvironmentsStore } from '../../stores/environments'
 import { useWorkspacesStore } from '../../stores/workspaces'
 import { useNameField } from '../../composables/useNameField'
+import { useSheetNotice } from '../../composables/useSheetNotice'
 import { t } from '../../i18n'
 
-const emit = defineEmits<{ (e: 'import'): void; (e: 'danger'): void }>()
+const emit = defineEmits<{ (e: 'merge', into: string): void; (e: 'delete'): void; (e: 'close'): void }>()
 
 const environments = useEnvironmentsStore()
 const workspaces = useWorkspacesStore()
-
+const { withNotice } = useSheetNotice()
 const colorLabels = useColorLabels('environments', ENVIRONMENT_COLORS)
 
-const env = computed(() => environments.environments.find((environment) => environment.id === environments.editedEnvId) ?? null)
+const env = computed(() => environments.envOf(environments.editedEnvId))
 const isGlobals = computed(() => environments.editedEnvId === null)
+const readonly = computed(() => Boolean(env.value?.readonly))
+const locked = computed(() => readonly.value || !workspaces.canWrite)
+const isActive = computed(() => env.value !== null && env.value.id === environments.activeId)
+const mergeTargets = computed(() =>
+  environments.environments.filter((one) => one.id !== env.value?.id && !one.readonly)
+)
+
+const textMode = ref(false)
 
 const nameInput = useTemplateRef<HTMLInputElement>('nameInput')
+const editingName = ref(false)
 const { name, invalid, show, commit, revert } = useNameField({
   input: nameInput,
   target: () => env.value,
-  save: (id, wanted) => environments.renameEnv(id, wanted),
+  save: (id, wanted) => environments.updateEnv(id, { name: wanted }),
 })
 
 watch(
-  [() => env.value?.id, () => env.value?.name, isGlobals],
-  () => show(isGlobals.value ? t('environments.globals') : (env.value?.name ?? '')),
+  () => [env.value?.id, env.value?.name],
+  () => show(env.value?.name ?? ''),
   { immediate: true }
 )
 
-const accessOptions = computed(() => [
-  { value: 'editable', label: t('environments.accessEditable') },
-  { value: 'readonly', label: t('environments.accessReadonly') },
-])
+watch(() => environments.editedEnvId, () => {
+  editingName.value = false
+})
 
-const access = computed(() => (env.value?.readonly ? 'readonly' : 'editable'))
+// A new environment opens with its name being edited.
+watch(
+  () => environments.renaming,
+  (id) => {
+    if (id && id === env.value?.id) {
+      environments.renaming = null
+      rename()
+    }
+  },
+  { immediate: true }
+)
 
-function pickAccess(value: string) {
-  const target = env.value
-  if (!target) return
-  void environments.setEnvReadonly(target.id, value === 'readonly')
+function rename() {
+  if (locked.value || !env.value) return
+  editingName.value = true
+  void nextTick(() => nameInput.value?.select())
+}
+
+async function finishRename() {
+  await commit()
+  if (!invalid.value) editingName.value = false
+}
+
+function cancelRename() {
+  revert()
+  editingName.value = false
+}
+
+function use() {
+  if (env.value) void withNotice(() => environments.setActive(env.value!.id))
 }
 
 function pickColor(color: string) {
-  const target = env.value
-  if (!target) return
-  void environments.setEnvColor(target.id, color)
+  if (env.value) void withNotice(() => environments.updateEnv(env.value!.id, { color }))
 }
 
-const dangerNote = computed(() =>
-  isGlobals.value ? t('environments.dangerGlobalsNote') : t('environments.dangerDeleteNote')
-)
+function toggleReadonly() {
+  if (env.value) void withNotice(() => environments.updateEnv(env.value!.id, { readonly: !readonly.value }))
+}
 
-const dangerLabel = computed(() =>
-  isGlobals.value ? t('environments.dangerClear') : t('environments.dangerDelete')
-)
+function duplicate() {
+  if (env.value) void withNotice(() => environments.duplicateEnv(env.value!.id))
+}
+
+const importFile = () => void withNotice(() => environments.importFile(environments.editedEnvId))
+const exportFile = () => void withNotice(() => environments.exportFile(environments.editedEnvId))
 
 const table = useTemplateRef<InstanceType<typeof VariablesTable>>('table')
 
 function cancelTop(): boolean {
+  if (editingName.value) {
+    cancelRename()
+    return true
+  }
   return table.value?.cancelTop() ?? false
 }
 
@@ -72,67 +114,95 @@ defineExpose({ cancelTop })
 
 <template>
   <div class="pane">
+    <div class="pane-head">
+      <template v-if="isGlobals">
+        <span class="title">{{ t('environments.globals') }}</span>
+      </template>
+      <template v-else-if="env">
+        <span class="dot" :style="{ background: dotOf(env.color ?? '') }"></span>
+        <input
+          v-if="editingName"
+          ref="nameInput"
+          v-model="name"
+          class="name-input"
+          :class="{ invalid }"
+          maxlength="40"
+          spellcheck="false"
+          @keydown.enter.prevent="finishRename"
+          @keydown.esc.stop.prevent="cancelRename"
+          @blur="finishRename"
+        />
+        <span v-else class="title" @dblclick="rename">{{ env.name }}</span>
+      </template>
+
+      <span class="spacer"></span>
+
+      <span v-if="readonly" class="badge" :title="t('environments.readonlyHint')">
+        <Icon name="Lock" :size="11" />{{ t('environments.readonly') }}
+      </span>
+      <span v-if="isActive" class="in-use"><Icon name="Check" :size="12" :stroke-width="2.4" />{{ t('environments.inUse') }}</span>
+      <button v-else-if="env" type="button" class="use" :title="t('environments.useHint')" @click="use">
+        {{ t('environments.use') }}
+      </button>
+
+      <IconButton
+        size="lg"
+        :class="{ on: textMode }"
+        :hint="t('environments.textMode')"
+        :aria-label="t('environments.textMode')"
+        :aria-pressed="textMode"
+        @click="textMode = !textMode"
+      >
+        <Icon name="AlignLeft" :size="14" />
+      </IconButton>
+
+      <DropdownMenuRoot>
+        <DropdownMenuTrigger as-child>
+          <IconButton size="lg" :hint="t('common.options')" :aria-label="t('common.options')"><Icon name="Ellipsis" :size="14" /></IconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <template v-if="env">
+            <DropdownMenuItem :disabled="locked" @select="rename">{{ t('environments.rename') }}</DropdownMenuItem>
+            <DropdownMenuSubmenu :label="t('environments.colorLabel')" :disabled="!workspaces.canWrite">
+              <template #indicator>
+                <span class="dot" :style="{ background: dotOf(env.color ?? '') }"></span>
+              </template>
+              <DropdownMenuItem v-for="color in ENVIRONMENT_COLORS" :key="color" @select="pickColor(color)">
+                <span class="dot" :style="{ background: dotOf(color) }"></span>
+                <span class="cap-line">{{ colorLabels[color] }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubmenu>
+            <DropdownMenuItem :disabled="!workspaces.canWrite" @select="duplicate">{{ t('environments.duplicate') }}</DropdownMenuItem>
+            <DropdownMenuSubmenu v-if="!locked && mergeTargets.length" :label="t('environments.mergeWith')">
+              <DropdownMenuItem v-for="target in mergeTargets" :key="target.id" @select="emit('merge', target.id)">
+                <span class="dot" :style="{ background: dotOf(target.color ?? '') }"></span>
+                <span class="cap-line">{{ target.name }}</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubmenu>
+            <DropdownMenuSeparator />
+          </template>
+          <DropdownMenuItem v-if="!locked" @select="importFile">{{ t('environments.importFile') }}</DropdownMenuItem>
+          <DropdownMenuItem @select="exportFile">{{ t('environments.exportFile') }}</DropdownMenuItem>
+          <template v-if="env && workspaces.canWrite">
+            <DropdownMenuItem @select="toggleReadonly">
+              {{ readonly ? t('environments.allowChanges') : t('environments.readonly') }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem class="danger" @select="emit('delete')">{{ t('environments.deleteEnv') }}</DropdownMenuItem>
+          </template>
+        </DropdownMenuContent>
+      </DropdownMenuRoot>
+      <IconButton size="lg" :hint="t('common.close') + ' · Esc'" :aria-label="t('common.close')" @click="emit('close')">
+        <Icon name="X" :size="14" :stroke-width="2" />
+      </IconButton>
+    </div>
+
     <div class="pane-body">
-      <div class="pair">
-        <label class="field">
-          <span class="field-label">{{ t('environments.nameLabel') }}</span>
-          <input
-            ref="nameInput"
-            v-model="name"
-            class="input"
-            :class="{ invalid }"
-            :readonly="isGlobals || !workspaces.canWrite"
-            maxlength="40"
-            spellcheck="false"
-            @keydown.enter="commit"
-            @keydown.esc.prevent="revert"
-            @blur="commit"
-          />
-        </label>
-
-        <div v-if="env && workspaces.canWrite" class="field tight">
-          <span class="field-label">{{ t('environments.colorLabel') }}</span>
-          <ColorSwatches
-            :value="env.color ?? ''"
-            :colors="ENVIRONMENT_COLORS"
-            :tints="ENVIRONMENT_TINTS"
-            :labels="colorLabels"
-            @pick="pickColor"
-          />
-        </div>
-      </div>
-
-      <div v-if="env && workspaces.canWrite" class="field">
-        <span class="field-label">{{ t('environments.accessLabel') }}</span>
-        <Segment class="access" :options="accessOptions" :value="access" @pick="pickAccess" />
-      </div>
-
-      <VariablesTable
-        ref="table"
-        :locked="Boolean(env?.readonly) || !workspaces.canWrite"
-        @import="emit('import')"
-      />
+      <VariablesTable ref="table" :env-id="environments.editedEnvId" :locked :text-mode />
     </div>
 
     <div class="foot">
-      <span class="danger-note">{{ dangerNote }}</span>
-      <button
-        v-if="env"
-        type="button"
-        class="use"
-        :disabled="env.id === environments.activeId"
-        @click="environments.setActive(env.id)"
-      >
-        {{ t('environments.useIt') }}
-      </button>
-      <Button
-        variant="danger"
-        size="field"
-        :disabled="!workspaces.canWrite || (isGlobals && environments.globals.length === 0)"
-        @click="emit('danger')"
-      >
-        {{ dangerLabel }}
-      </Button>
+      <span>{{ readonly ? t('environments.readonlyNote') : t('environments.secretsNote') }}</span>
     </div>
   </div>
 </template>
@@ -144,80 +214,81 @@ defineExpose({ cancelTop })
   @apply flex-1 min-w-0 flex flex-col min-h-0;
 }
 
-.pane-body {
-  @apply flex-1 min-h-0 overflow-y-auto flex flex-col gap-4.5;
-  padding: 0.5rem 1.25rem 1rem;
+.pane-head {
+  @apply flex-none flex items-center gap-1.5;
+  height: 52px;
+  padding: 0 12px 0 24px;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
-.pair {
-  @apply flex gap-3.5 items-end;
+.title {
+  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-14;
 }
 
-.field {
-  @apply flex flex-col gap-1.5 min-w-0;
+.dot {
+  @apply flex-none rounded-full;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin-right: 0.25rem;
 }
 
-.pair > .field {
-  @apply flex-1;
-}
-
-.pair > .field.tight {
-  @apply flex-none;
-}
-
-.field-label {
-  @apply section-label;
-}
-
-.input {
-  @apply w-full h-8.5 px-2.5 rounded-lg text-13 text-text outline-none;
+.name-input {
+  @apply min-w-0 h-7 px-2 rounded-md text-13 font-semibold text-text outline-none;
+  width: 14rem;
   font-family: inherit;
   background: var(--bg-inset);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--accent);
 }
 
-.input:focus,
-.input.invalid {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.input.invalid {
+.name-input.invalid {
   border-color: color-mix(in srgb, var(--red) 45%, transparent);
   box-shadow: 0 0 0 3px var(--red-soft);
 }
 
-.input[readonly] {
-  @apply text-text-tertiary cursor-default;
-  background: var(--bg-sidebar);
+.spacer {
+  @apply flex-1;
 }
 
-.access {
-  max-width: 16.25rem;
+.badge,
+.in-use {
+  @apply flex items-center gap-1.5 text-12 text-text-tertiary;
+  padding: 0 0.25rem;
 }
 
-.foot {
-  gap: 0.5rem;
-  @apply flex-none flex items-center px-4 pl-5;
-  height: 3.25rem;
-  border-top: 1px solid var(--border);
-}
-
-.danger-note {
-  @apply flex-1 min-w-0 text-12 text-text-tertiary;
+.in-use {
+  @apply text-text-secondary;
+  margin-right: 0.25rem;
 }
 
 .use {
-  @apply flex-none h-7.5 px-3 rounded-[0.4375rem] cursor-pointer border-0 text-text text-13;
+  @apply flex-none h-7 px-3 rounded-[0.4375rem] cursor-pointer border-0 text-text text-12;
+  margin-right: 0.25rem;
   font-family: inherit;
   background: var(--chip);
 }
 
-.use:hover:not(:disabled) {
+.use:hover {
   @apply bg-bg-hover;
 }
 
-.use:disabled {
-  @apply opacity-40 cursor-default;
+.pane-head :deep(.on) {
+  @apply bg-bg-hover text-text;
+}
+
+.pane-body {
+  @apply flex-1 min-h-0 overflow-y-auto;
+  padding: 12px 24px 24px;
+}
+
+.foot {
+  @apply flex-none flex items-center gap-3 text-12 text-text-tertiary;
+  min-height: 44px;
+  padding: 8px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.danger {
+  @apply text-red;
 }
 </style>

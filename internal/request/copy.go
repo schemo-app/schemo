@@ -26,7 +26,7 @@ func (s *Drafts) CopySaved(
 	if err != nil {
 		return Copy{}, err
 	}
-	return s.renderCommand(ctx, current, from.Auth, from.Variables, format, cookie, secrets)
+	return s.renderCommand(ctx, current, from.Auth, from.Levels, format, cookie, secrets)
 }
 
 // renderCommand is the copy itself, with the jar already read.
@@ -34,7 +34,7 @@ func (s *Drafts) renderCommand(
 	ctx context.Context,
 	current domain.Draft,
 	inherits *domain.Auth,
-	above []domain.Variable,
+	above domain.VarLevels,
 	format command.Format,
 	cookie string,
 	secrets bool,
@@ -44,9 +44,9 @@ func (s *Drafts) renderCommand(
 	var err error
 	if secrets {
 		// One substitution and nothing masked: a command is the one thing that carries the real values.
-		live, err = s.vars.SubstituteTexts(ctx, above, raw.texts(), false, current.EnvironmentID)
+		live, err = s.vars.SubstituteTexts(ctx, above, raw.texts(), false)
 	} else {
-		live, err = s.vars.ReferenceTexts(ctx, above, raw.texts(), current.EnvironmentID)
+		live, err = s.vars.ReferenceTexts(ctx, above, raw.texts())
 	}
 	if err != nil {
 		return Copy{}, err
@@ -118,7 +118,7 @@ func (s *Drafts) renderCommand(
 func (s *Drafts) unresolved(
 	ctx context.Context,
 	current domain.Draft,
-	above []domain.Variable,
+	above domain.VarLevels,
 	raw parts,
 	format command.Format,
 ) ([]command.Omission, error) {
@@ -127,7 +127,7 @@ func (s *Drafts) unresolved(
 		texts = []string{raw.url}
 	}
 
-	missing, err := s.vars.Missing(ctx, above, texts, current.EnvironmentID)
+	missing, err := s.vars.Missing(ctx, above, texts)
 	if err != nil {
 		return nil, err
 	}

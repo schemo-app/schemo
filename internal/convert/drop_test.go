@@ -26,7 +26,7 @@ func TestPreviewPathStagesDroppedFileForImport(t *testing.T) {
 	if len(h.collections.imported) != 0 {
 		t.Fatal("PreviewPath imported before confirmation")
 	}
-	summary, err := h.transfer.Apply(t.Context(), preview.Token, "", "")
+	summary, err := h.transfer.Apply(t.Context(), preview.Token, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

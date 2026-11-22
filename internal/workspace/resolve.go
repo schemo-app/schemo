@@ -13,14 +13,14 @@ import (
 //
 //wails:ignore
 func (s *Environments) Resolver(
-	ctx context.Context, workspace string, above []domain.Variable, envID string,
+	ctx context.Context, workspace string, above domain.VarLevels,
 ) (func(string) (string, string), error) {
 	state, err := s.store.EnvState(ctx, workspace)
 	if err != nil {
 		return nil, err
 	}
-	live, _ := variableLookup(state, true, above, envID)
-	masked, secrets := variableLookup(state, false, above, envID)
+	live, _ := variableLookup(state, true, above)
+	masked, secrets := variableLookup(state, false, above)
 	return func(text string) (string, string) {
 		return interpolate(text, live, false), redact(interpolate(text, masked, true), secrets)
 	}, nil
@@ -29,12 +29,11 @@ func (s *Environments) Resolver(
 //wails:ignore
 func (s *Environments) SubstituteTexts(
 	ctx context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
 	mask bool,
-	envID string,
 ) ([]string, error) {
-	resolver, secrets, err := s.resolver(ctx, !mask, above, envID)
+	resolver, secrets, err := s.resolver(ctx, !mask, above)
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +53,10 @@ func (s *Environments) SubstituteTexts(
 //wails:ignore
 func (s *Environments) ReferenceTexts(
 	ctx context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	envID string,
 ) ([]string, error) {
-	resolve, secrets, err := s.resolver(ctx, false, above, envID)
+	resolve, secrets, err := s.resolver(ctx, false, above)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +91,10 @@ func shellVariable(name string) string {
 //wails:ignore
 func (s *Environments) Missing(
 	ctx context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	envID string,
 ) ([]string, error) {
-	resolver, _, err := s.resolver(ctx, false, above, envID)
+	resolver, _, err := s.resolver(ctx, false, above)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +116,10 @@ func (s *Environments) Missing(
 //wails:ignore
 func (s *Environments) MaskTexts(
 	ctx context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	envID string,
 ) ([]string, error) {
-	_, secrets, err := s.resolver(ctx, false, above, envID)
+	_, secrets, err := s.resolver(ctx, false, above)
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +136,10 @@ func (s *Environments) MaskTexts(
 func (s *Environments) MaskTextsIn(
 	ctx context.Context,
 	workspace string,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	envID string,
 ) ([]string, error) {
-	_, secrets, err := s.resolverIn(ctx, workspace, false, above, envID)
+	_, secrets, err := s.resolverIn(ctx, workspace, false, above)
 	if err != nil {
 		return nil, err
 	}
@@ -158,84 +153,77 @@ func (s *Environments) MaskTextsIn(
 func (s *Environments) resolver(
 	ctx context.Context,
 	revealSecrets bool,
-	above []domain.Variable,
-	envID string,
+	above domain.VarLevels,
 ) (lookup, []string, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	return s.resolverIn(ctx, workspace, revealSecrets, above, envID)
+	return s.resolverIn(ctx, workspace, revealSecrets, above)
 }
 
 func (s *Environments) resolverIn(
 	ctx context.Context,
 	workspace string,
 	revealSecrets bool,
-	above []domain.Variable,
-	envID string,
+	above domain.VarLevels,
 ) (lookup, []string, error) {
 	state, err := s.store.EnvState(ctx, workspace)
 	if err != nil {
 		return nil, nil, err
 	}
-	resolve, secrets := variableLookup(state, revealSecrets, above, envID)
+	resolve, secrets := variableLookup(state, revealSecrets, above)
 	return resolve, secrets, nil
 }
 
-func variableLookup(state domain.EnvState, revealSecrets bool, above []domain.Variable, envID string) (lookup, []string) {
-	if envID == "" {
-		envID = state.ActiveID
-	}
+func variableLookup(state domain.EnvState, revealSecrets bool, above domain.VarLevels) (lookup, []string) {
+	env, _ := state.Find(state.ActiveID)
 
-	active := map[string]domain.Variable{}
-	env, _ := state.Find(envID)
-	for _, v := range env.Vars {
-		if v.Enabled && v.Name != "" {
-			active[v.Name] = v
+	// Last source to hold a name wins: globals, collection, active environment, its block.
+	type held struct {
+		variable domain.Variable
+		source   string
+	}
+	resolved := map[string]held{}
+	layer := func(vars []domain.Variable, source string) {
+		for _, v := range vars {
+			if v.Enabled && v.Name != "" {
+				resolved[v.Name] = held{variable: v, source: source}
+			}
 		}
 	}
-
-	globals := map[string]domain.Variable{}
-	for _, v := range state.Globals {
-		if v.Enabled && v.Name != "" {
-			globals[v.Name] = v
-		}
-	}
-
-	collections := map[string]domain.Variable{}
-	for _, v := range above {
-		if v.Enabled && v.Name != "" {
-			collections[v.Name] = v
-		}
-	}
+	layer(state.Globals, "global")
+	layer(above.Variables, "collection")
+	layer(env.Vars, "env")
+	layer(env.Block(above.Collection), "block")
 
 	secrets := []string{}
 	if !revealSecrets {
-		secrets = secretValues(collections, active, globals)
+		secrets = secretValues(state, above.Variables)
 	}
 
-	// Environment levels beat a collection's, so an imported name cannot shadow the person's own;
-	// a collection still answers names nobody else holds.
 	return func(name string) (domain.Resolution, bool) {
-		if v, ok := active[name]; ok {
-			return resolution(v, "env", revealSecrets), true
-		}
-		if v, ok := globals[name]; ok {
-			return resolution(v, "global", revealSecrets), true
-		}
-		if v, ok := collections[name]; ok {
-			return resolution(v, "collection", revealSecrets), true
+		if v, ok := resolved[name]; ok {
+			return resolution(v.variable, v.source, revealSecrets), true
 		}
 		return domain.Resolution{}, false
 	}, secrets
 }
 
-func secretValues(levels ...map[string]domain.Variable) []string {
+// secretValues are every secret value the workspace holds, longest first: a value pasted as text
+// is hidden whichever environment it belongs to.
+func secretValues(state domain.EnvState, collection []domain.Variable) []string {
+	lists := [][]domain.Variable{state.Globals, collection}
+	for _, env := range state.Environments {
+		lists = append(lists, env.Vars)
+		for _, block := range env.Collections {
+			lists = append(lists, block)
+		}
+	}
 	out := []string{}
 	seen := map[string]bool{}
-	for _, level := range levels {
-		for _, v := range level {
+	for _, list := range lists {
+		for _, v := range list {
 			if v.Kind != domain.VariableSecret || v.Value == "" || seen[v.Value] {
 				continue
 			}

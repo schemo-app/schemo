@@ -4,17 +4,11 @@ package insomnia
 import (
 	"cmp"
 	"encoding/json"
-	"maps"
 	"regexp"
-	"slices"
 	"strings"
 
-	"schemo/internal/convert/dotenv"
 	"schemo/internal/domain"
 )
-
-// baseEnvironment is the environment Insomnia always applies, beside whichever one is selected.
-const baseEnvironment = "Base Environment"
 
 // untitledCollection names a workspace that has no name of its own.
 const untitledCollection = "Insomnia"
@@ -52,16 +46,28 @@ func importV4(file export) (domain.Document, error) {
 			Name:        cmp.Or(strings.TrimSpace(workspace.Name), untitledCollection),
 			Description: strings.TrimSpace(workspace.Description),
 			Auth:        requestAuth(workspace.Auth, &out),
-			Variables:   variablesOf(workspace.Environment),
 		}
-		read.level(workspace.ID, &collection, &out)
-		read.environments(workspace.ID, &out)
+		base, subs := read.environments(workspace.ID)
+		vars := newValues()
+		vars.add(variablesOf(base.Data, &out), &out)
+		vars.add(variablesOf(workspace.Environment, &out), &out)
+		read.level(workspace.ID, &collection, vars, &out)
+		collection.Variables = vars.list
 
-		// A workspace that held nothing is not written: a collection with no requests would be a
-		// row in the tree that opens onto nothing.
-		if len(collection.Items) > 0 || len(collection.Children) > 0 {
-			out.Collections = append(out.Collections, collection)
+		drafts := make([]domain.EnvironmentDraft, 0, len(subs))
+		for _, sub := range subs {
+			if name := strings.TrimSpace(sub.Name); name != "" {
+				drafts = append(drafts, subDraft(name, sub.Color,
+					secrets(variablesOf(sub.Data, &out), nil, sub.IsPrivate)))
+			}
 		}
+		// A workspace that held nothing is not written: it would be a row that opens onto nothing.
+		if len(collection.Items) == 0 && len(collection.Children) == 0 &&
+			len(collection.Variables) == 0 && len(drafts) == 0 {
+			continue
+		}
+		out.Environments = append(out.Environments, blocksFor(len(out.Collections), drafts)...)
+		out.Collections = append(out.Collections, collection)
 	}
 	if len(out.Collections) == 0 && len(out.Environments) == 0 {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
@@ -89,6 +95,8 @@ type resource struct {
 	Auth           *auth          `json:"authentication,omitempty" yaml:"authentication"`
 	Environment    map[string]any `json:"environment,omitempty"`
 	Data           map[string]any `json:"data,omitempty" yaml:"-"`
+	Color          string         `json:"color,omitempty" yaml:"-"`
+	IsPrivate      bool           `json:"isPrivate,omitempty" yaml:"-"`
 }
 
 // field is a header, a parameter or a form field. Insomnia writes `disabled` and leaves it out when
@@ -147,7 +155,7 @@ func (r *reader) of(parent, kind string) []resource {
 
 // level writes what hangs off one id: a request becomes a node and a group becomes a collection
 // inside the current one, both in export order.
-func (r *reader) level(parent string, into *domain.Collection, out *domain.Document) {
+func (r *reader) level(parent string, into *domain.Collection, vars *values, out *domain.Document) {
 	position := int64(0)
 	for _, one := range r.resources {
 		if one.ParentID != parent {
@@ -162,10 +170,11 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 				Name:        strings.TrimSpace(one.Name),
 				Description: strings.TrimSpace(one.Description),
 				Position:    position,
-				Variables:   variablesOf(one.Environment),
 			}
 			position++
-			r.level(one.ID, &nested, out)
+			// Folders hold no variables here; theirs join the collection's.
+			vars.add(variablesOf(one.Environment, out), out)
+			r.level(one.ID, &nested, vars, out)
 			into.Children = append(into.Children, nested)
 		case "request":
 			node := requestNode(one, out)
@@ -176,78 +185,14 @@ func (r *reader) level(parent string, into *domain.Collection, out *domain.Docum
 	}
 }
 
-// environments folds Insomnia's always-applied base environment into every named one, since this app
-// resolves against one environment.
-func (r *reader) environments(parent string, out *domain.Document) {
-	var base []domain.Variable
-	named := []domain.EnvironmentDraft{}
-	for _, one := range r.of(parent, "environment") {
-		name := strings.TrimSpace(one.Name)
-		if name == "" {
-			continue
-		}
-		if strings.EqualFold(name, baseEnvironment) {
-			base = variablesOf(one.Data)
-			continue
-		}
-		named = append(named, domain.EnvironmentDraft{Name: name, Variables: variablesOf(one.Data)})
+// environments splits a workspace's environments: the base hangs off the workspace and the sub
+// environments off the base. Rows beside the base are read as sub environments too.
+func (r *reader) environments(workspace string) (resource, []resource) {
+	under := r.of(workspace, "environment")
+	if len(under) == 0 {
+		return resource{}, nil
 	}
-
-	if len(base) > 0 {
-		out.Environments = append(out.Environments,
-			domain.EnvironmentDraft{Name: baseEnvironment, Variables: base})
-	}
-	for _, draft := range named {
-		draft.Variables = renumber(append(draft.Variables, missing(base, draft.Variables)...))
-		out.Environments = append(out.Environments, draft)
-	}
-}
-
-// missing is what the base environment holds and the environment does not set itself: in Insomnia
-// the selected environment wins over the base, so a name the environment writes is its own.
-func missing(base, own []domain.Variable) []domain.Variable {
-	seen := map[string]bool{}
-	for _, one := range own {
-		seen[one.Name] = true
-	}
-	out := []domain.Variable{}
-	for _, one := range base {
-		if !seen[one.Name] {
-			out = append(out, one)
-		}
-	}
-	return out
-}
-
-func renumber(vars []domain.Variable) []domain.Variable {
-	for index := range vars {
-		vars[index].Position = index + 1
-	}
-	return vars
-}
-
-// variablesOf reads an environment's data as variables. A value that is not a scalar is written as
-// its own JSON, since requests substitute text and flattening nested objects would invent names.
-func variablesOf(data map[string]any) []domain.Variable {
-	out := []domain.Variable{}
-	for _, key := range slices.Sorted(maps.Keys(data)) {
-		name := strings.TrimSpace(key)
-		if name == "" {
-			continue
-		}
-		kind := domain.VariableText
-		if dotenv.SecretName(name) {
-			kind = domain.VariableSecret
-		}
-		out = append(out, domain.Variable{
-			Name:     name,
-			Value:    domain.ValueText(data[key]),
-			Kind:     kind,
-			Enabled:  true,
-			Position: len(out) + 1,
-		})
-	}
-	return out
+	return under[0], append(r.of(under[0].ID, "environment"), under[1:]...)
 }
 
 func requestNode(from resource, out *domain.Document) domain.CollectionNode {
@@ -269,7 +214,7 @@ func requestNode(from resource, out *domain.Document) domain.CollectionNode {
 			continue
 		}
 		node.Headers = append(node.Headers, domain.Row{
-			Name: header.Name, Value: templated(header.Value), Enabled: !header.Disabled,
+			Name: header.Name, Value: templated(header.Value, out), Enabled: !header.Disabled,
 			Description: strings.TrimSpace(header.Description),
 		})
 	}
@@ -281,7 +226,7 @@ func requestNode(from resource, out *domain.Document) domain.CollectionNode {
 		if name == "" {
 			continue
 		}
-		value := templated(param.Value)
+		value := templated(param.Value, out)
 		node.Params = append(node.Params, domain.Row{
 			Name: name, Value: value, Enabled: !param.Disabled,
 			Description: strings.TrimSpace(param.Description),
@@ -290,7 +235,7 @@ func requestNode(from resource, out *domain.Document) domain.CollectionNode {
 			query = append(query, name+"="+value)
 		}
 	}
-	node.URL, node.PathParams = addressOf(from)
+	node.URL, node.PathParams = addressOf(from, out)
 	if len(query) > 0 {
 		separator := "?"
 		if strings.Contains(node.URL, "?") {
@@ -305,7 +250,7 @@ func requestNode(from resource, out *domain.Document) domain.CollectionNode {
 
 // addressOf is the url, whose `:name` path parameters are this app's own notation too, and the rows
 // that fill them: what the file kept beside the url is the value, and the name is the url's.
-func addressOf(from resource) (string, []domain.Row) {
+func addressOf(from resource, out *domain.Document) (string, []domain.Row) {
 	kept := map[string]field{}
 	for _, param := range from.PathParameters {
 		kept[param.Name] = param
@@ -314,11 +259,11 @@ func addressOf(from resource) (string, []domain.Row) {
 	for _, name := range domain.PathParams(from.URL) {
 		param := kept[name]
 		rows = append(rows, domain.Row{
-			Name: name, Value: templated(param.Value), Enabled: true,
+			Name: name, Value: templated(param.Value, out), Enabled: true,
 			Description: strings.TrimSpace(param.Description),
 		})
 	}
-	return templated(from.URL), rows
+	return templated(from.URL, out), rows
 }
 
 // applyBody reads what a request sends. A mime type this app has no kind for is written as the text it
@@ -336,7 +281,7 @@ func applyBody(node *domain.CollectionNode, from *body, out *domain.Document) {
 	case strings.HasPrefix(mime, domain.MediaMultipart):
 		node.BodyKind = domain.BodyForm
 		for _, param := range from.Params {
-			row := domain.FormRow{Name: param.Name, Value: templated(param.Value), Enabled: !param.Disabled}
+			row := domain.FormRow{Name: param.Name, Value: templated(param.Value, out), Enabled: !param.Disabled}
 			if param.Type == "file" || param.FileName != "" {
 				// The field survives and the file does not: a path in the file is where the file
 				// was read from, not something this app can send.
@@ -349,7 +294,7 @@ func applyBody(node *domain.CollectionNode, from *body, out *domain.Document) {
 	case mime == domain.MediaForm:
 		node.BodyKind = domain.BodyRaw
 		if strings.TrimSpace(from.Text) != "" {
-			node.Body = templated(from.Text)
+			node.Body = templated(from.Text, out)
 			return
 		}
 		parts := []string{}
@@ -357,18 +302,18 @@ func applyBody(node *domain.CollectionNode, from *body, out *domain.Document) {
 			if param.Disabled {
 				continue
 			}
-			parts = append(parts, param.Name+"="+templated(param.Value))
+			parts = append(parts, param.Name+"="+templated(param.Value, out))
 		}
 		node.Body = strings.Join(parts, "&")
 	case strings.Contains(mime, "json"):
 		node.BodyKind = domain.BodyJSON
-		node.Body = templated(from.Text)
+		node.Body = templated(from.Text, out)
 	case strings.Contains(mime, "xml"):
 		node.BodyKind = domain.BodyXML
-		node.Body = templated(from.Text)
+		node.Body = templated(from.Text, out)
 	default:
 		node.BodyKind = domain.BodyRaw
-		node.Body = templated(from.Text)
+		node.Body = templated(from.Text, out)
 	}
 }
 
@@ -388,11 +333,11 @@ func requestAuth(from *auth, out *domain.Document) *domain.Auth {
 			prefix = "Bearer"
 		}
 		return &domain.Auth{Type: domain.AuthBearer, Fields: map[string]string{
-			"prefix": prefix, "token": templated(from.Token),
+			"prefix": prefix, "token": templated(from.Token, out),
 		}}
 	case "basic":
 		return &domain.Auth{Type: domain.AuthBasic, Fields: map[string]string{
-			"username": templated(from.Username), "password": templated(from.Password),
+			"username": templated(from.Username, out), "password": templated(from.Password, out),
 		}}
 	case "apikey":
 		place := domain.PlaceHeader
@@ -400,16 +345,16 @@ func requestAuth(from *auth, out *domain.Document) *domain.Auth {
 			place = domain.PlaceQuery
 		}
 		return &domain.Auth{Type: domain.AuthAPIKey, Fields: map[string]string{
-			"key": templated(from.Key), "value": templated(from.Value), "place": place,
+			"key": templated(from.Key, out), "value": templated(from.Value, out), "place": place,
 		}}
 	case "oauth2":
 		return &domain.Auth{Type: domain.AuthOAuth2, Fields: map[string]string{
 			"grant":        domain.GrantNamed(from.GrantType),
-			"authUrl":      templated(from.AuthorizationURL),
-			"tokenUrl":     templated(from.AccessTokenURL),
-			"clientId":     templated(from.ClientID),
-			"clientSecret": templated(from.ClientSecret),
-			"scope":        templated(from.Scope),
+			"authUrl":      templated(from.AuthorizationURL, out),
+			"tokenUrl":     templated(from.AccessTokenURL, out),
+			"clientId":     templated(from.ClientID, out),
+			"clientSecret": templated(from.ClientSecret, out),
+			"scope":        templated(from.Scope, out),
 		}}
 	default:
 		out.LeftOut(domain.CodeSkippedAuthScheme, 1)
@@ -418,11 +363,12 @@ func requestAuth(from *auth, out *domain.Document) *domain.Auth {
 }
 
 // template is Insomnia's way of naming a value (`{{ _.base_url }}`), written as this app writes it.
-// Its other forms call functions and travel as they stand.
 var template = regexp.MustCompile(`\{\{\s*_\.\s*([A-Za-z0-9_.-]+)\s*\}\}`)
 
-func templated(text string) string {
+// templateTag is an Insomnia function call (`{% uuid %}`): it stays as text and is counted.
+var templateTag = regexp.MustCompile(`(?s)\{%.*?%\}`)
+
+func templated(text string, out *domain.Document) string {
+	out.LeftOut(domain.CodeSkippedTemplateTag, len(templateTag.FindAllStringIndex(text, -1)))
 	return template.ReplaceAllString(text, "{{$1}}")
 }
-
-// mimeOf is the media type without its parameters: `application/json; charset=utf-8` is json.

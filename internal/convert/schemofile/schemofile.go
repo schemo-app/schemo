@@ -76,10 +76,18 @@ type variable struct {
 	Secret   bool                `json:"secret,omitempty"`
 }
 
+// environment is an environment as far as the file's collections go: values for all of them and
+// a block per collection, by its index in the file.
 type environment struct {
 	Name      string     `json:"name"`
 	Color     string     `json:"color,omitempty"`
 	Variables []variable `json:"variables,omitempty"`
+	Blocks    []block    `json:"blocks,omitempty"`
+}
+
+type block struct {
+	Collection int        `json:"collection"`
+	Variables  []variable `json:"variables"`
 }
 
 // Write writes the document as a file. Values of secrets are left out unless secrets is set — the
@@ -94,6 +102,10 @@ func Write(doc domain.Document, secrets bool) ([]byte, error) {
 	for _, draft := range doc.Environments {
 		written := environment{Name: draft.Name, Color: draft.Color}
 		written.Variables = writtenVariables(draft.Variables, secrets)
+		for _, one := range draft.Blocks {
+			written.Blocks = append(written.Blocks, block{
+				Collection: one.Collection, Variables: writtenVariables(one.Variables, secrets)})
+		}
 		out.Environments = append(out.Environments, written)
 	}
 
@@ -213,19 +225,10 @@ func Read(data []byte) (domain.Document, error) {
 		doc.Collections = append(doc.Collections, collection)
 	}
 	for _, one := range parsed.Environments {
-		draft := domain.EnvironmentDraft{Name: one.Name, Color: one.Color}
-		for _, v := range one.Variables {
-			kind := v.Kind
-			if v.Secret {
-				kind = domain.VariableSecret
-			}
-			draft.Variables = append(draft.Variables, domain.Variable{
-				Name:     v.Name,
-				Value:    v.Value,
-				Kind:     kind,
-				Enabled:  v.Enabled,
-				Position: v.Position,
-			})
+		draft := domain.EnvironmentDraft{Name: one.Name, Color: one.Color, Variables: readVariables(one.Variables)}
+		for _, held := range one.Blocks {
+			draft.Blocks = append(draft.Blocks, domain.BlockDraft{
+				Collection: held.Collection, Variables: readVariables(held.Variables)})
 		}
 		doc.Environments = append(doc.Environments, draft)
 	}

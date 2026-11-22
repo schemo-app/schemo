@@ -35,12 +35,21 @@ type Variable struct {
 
 // Environment is a named set of variables, one of which is active at a time.
 type Environment struct {
-	ID       string     `json:"id"`
-	Name     string     `json:"name"`
-	Color    string     `json:"color,omitempty"`
-	Readonly bool       `json:"readonly"`
-	Position int        `json:"position"`
-	Vars     []Variable `json:"vars"`
+	ID          string                `json:"id"`
+	Name        string                `json:"name"`
+	Color       string                `json:"color,omitempty"`
+	Readonly    bool                  `json:"readonly"`
+	Position    int                   `json:"position"`
+	Vars        []Variable            `json:"vars"`
+	Collections map[string][]Variable `json:"collections"`
+}
+
+// Block is what the environment holds for one collection; nil when it holds nothing.
+func (e Environment) Block(collection string) []Variable {
+	if collection == "" {
+		return nil
+	}
+	return e.Collections[collection]
 }
 
 // EnvState is everything the environments screen and the request preview need. Globals are the
@@ -62,16 +71,61 @@ func (s EnvState) Find(id string) (Environment, bool) {
 	return Environment{}, false
 }
 
-// EnvScope names where a variable lives: one environment, or the globals that always apply.
+// EnvScope names where a variable lives: one environment, one collection's block in it, or the
+// globals that always apply.
 type EnvScope struct {
 	// Environment is the environment's id; empty means the globals scope.
 	Environment string `json:"environment,omitempty"`
+	// Collection narrows an environment to its block for one collection; it means nothing without one.
+	Collection string `json:"collection,omitempty"`
+}
+
+// Variables returns the values in one scope; the zero scope is the workspace globals.
+func (s EnvState) Variables(scope EnvScope) []Variable {
+	if scope.Environment == "" {
+		return s.Globals
+	}
+	env, _ := s.Find(scope.Environment)
+	if scope.Collection != "" {
+		return env.Collections[scope.Collection]
+	}
+	return env.Vars
+}
+
+// VarLevels is what the levels over a request answer for its `{{tokens}}`: the collection it is in
+// (whose block in the environment applies) and the variables of every level, outermost first.
+type VarLevels struct {
+	Collection string     `json:"collection,omitempty"`
+	Variables  []Variable `json:"variables,omitempty"`
+}
+
+// VarImport is what bringing variables into a set did: names added, and names it already held,
+// whose values were left as they were.
+type VarImport struct {
+	Added int `json:"added"`
+	Kept  int `json:"kept"`
+}
+
+// EnvImport is what a document's environments did to the list: the environments it had to make,
+// by name, and the variables it added or found already there.
+type EnvImport struct {
+	Created []string `json:"created"`
+	Added   int      `json:"added"`
+	Kept    int      `json:"kept"`
+	State   EnvState `json:"state"`
+}
+
+// Imported is the tree after an import, and the collection each of the file's collections now
+// answers to in the environments: itself at the top level, the collection it went into otherwise.
+type Imported struct {
+	Tree    []Collection
+	Targets []string
 }
 
 // Resolution is what a `{{token}}` resolves to, with where it came from so the tooltip can say it.
 type Resolution struct {
 	Value  string       `json:"value,omitempty"`
-	Source string       `json:"source"` // "env" | "global"
+	Source string       `json:"source"` // "global" | "collection" | "env" | "block"
 	Kind   VariableKind `json:"kind"`
 	// HasValue is false when the value was withheld from the answer (a secret) or is empty.
 	HasValue bool `json:"hasValue"`

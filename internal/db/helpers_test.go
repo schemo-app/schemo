@@ -110,9 +110,8 @@ func sampleDraft() domain.Draft {
 		PathParams: []domain.Row{
 			{ID: "pp1", Name: "user", Value: "{{id}}", Enabled: true, Description: "which user"},
 		},
-		Auth:          bearerAuth("{{token}}"),
-		Body:          `{"a": 1}`,
-		EnvironmentID: "env-1",
+		Auth: bearerAuth("{{token}}"),
+		Body: `{"a": 1}`,
 	}
 }
 

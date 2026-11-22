@@ -156,8 +156,7 @@ type SendInput struct {
 	Protocol      domain.Protocol `json:"-"`
 	rpc           rpcCall
 	message       messageResolver
-	EnvironmentID string                `json:"-"`
-	Variables     []domain.Variable     `json:"-"`
+	Levels        domain.VarLevels      `json:"-"`
 	RecordOptions *domain.ReplayOptions `json:"-"`
 	Method        string                `json:"method"`
 	URL           string                `json:"url"`

@@ -1,13 +1,24 @@
-import type { VariableKind } from '../../bindings/schemo/internal/domain'
+import type { Variable, VariableKind } from '../../bindings/schemo/internal/domain'
 
 export type VarKind = VariableKind
 
-/** Resolution metadata for environment variables used in UI tooltips. */
+/** Where a value came from, in resolution order: the last one to hold a name wins. */
+export type VarSource = 'global' | 'collection' | 'env' | 'block'
+
+/** What a name resolves to, for tooltips and "open the source". */
 export interface VarResolution {
   value: string
-  source: 'env' | 'global'
+  source: VarSource
   kind: VarKind
 }
+
+/** The request's side of resolution: its top-level collection and the variables of its levels. */
+export interface VarContext {
+  collection: string
+  variables: Variable[]
+}
+
+export const NO_VAR_CONTEXT: VarContext = { collection: '', variables: [] }
 
 /** Token positional metadata and raw substring. */
 export interface Token {

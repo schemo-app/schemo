@@ -204,6 +204,8 @@ export enum Code {
     CodeSkippedBinaryFile = "skippedBinaryFile",
     CodeSkippedSecretValue = "skippedSecretValue",
     CodeSkippedAuthScheme = "skippedAuthScheme",
+    CodeSkippedTemplateTag = "skippedTemplateTag",
+    CodeSkippedVariableClash = "skippedVariableClash",
     CodeRunInProgress = "runInProgress",
     CodeNodeHasNoRequests = "nodeHasNoRequests",
     CodeNoEnvironment = "noEnvironment",
@@ -283,10 +285,6 @@ export interface Collection {
     "children": Collection[] | null;
     "auth"?: Auth | null;
     "variables"?: Variable[] | null;
-
-    /**
-     * Scripts is written only with whole trees (import, duplicate); shallow saves would erase it.
-     */
     "scripts"?: Scripts | null;
 }
 
@@ -306,15 +304,9 @@ export interface CollectionNode {
     "bodyKind"?: BodyKind;
     "form"?: FormRow[] | null;
     "bodyFile"?: string;
-    "environmentId"?: string;
     "auth"?: Auth | null;
     "scripts"?: Scripts | null;
     "description"?: string;
-
-    /**
-     * Responses are example answers carried by a file (a Postman example, a declared response).
-     * They are read-only: a request sent from the app composes its own answer.
-     */
     "responses"?: ResponseExample[] | null;
     "createdAt": number;
     "updatedAt": number;
@@ -453,7 +445,6 @@ export interface Draft {
     "bodyKind": BodyKind;
     "form": FormRow[] | null;
     "bodyFile"?: string;
-    "environmentId"?: string;
 
     /**
      * InactiveProtocols holds the editor's previous inputs in this draft when the protocol changes.
@@ -501,13 +492,19 @@ export interface EnvEntry {
 }
 
 /**
- * EnvScope names where a variable lives: one environment, or the globals that always apply.
+ * EnvScope names where a variable lives: one environment, one collection's block in it, or the
+ * globals that always apply.
  */
 export interface EnvScope {
     /**
      * Environment is the environment's id; empty means the globals scope.
      */
     "environment"?: string;
+
+    /**
+     * Collection narrows an environment to its block for one collection; it means nothing without one.
+     */
+    "collection"?: string;
 }
 
 /**
@@ -534,6 +531,7 @@ export interface Environment {
     "readonly": boolean;
     "position": number;
     "vars": Variable[] | null;
+    "collections": { [_ in string]?: Variable[] | null } | null;
 }
 
 /**
@@ -1971,6 +1969,15 @@ export enum UpdateChannel {
     ChannelStable = "stable",
     ChannelBeta = "beta",
 };
+
+/**
+ * VarImport is what bringing variables into a set did: names added, and names it already held,
+ * whose values were left as they were.
+ */
+export interface VarImport {
+    "added": number;
+    "kept": number;
+}
 
 /**
  * VarScope names one of the three places a script's variables live, by the name the script uses. It

@@ -311,37 +311,6 @@ func TestSaveNodeUpdatesInPlace(t *testing.T) {
 	}
 }
 
-// A card's pin on an environment of its own survives the round trip like the rest of its request,
-// and a card that never touched the pin reads back as unpinned rather than as any particular
-// string.
-func TestNodeRoundTripKeepsTheEnvironmentPin(t *testing.T) {
-	store := newMigratedStore(t)
-	ctx := context.Background()
-	seedTree(t, store)
-
-	unpinned, err := store.Node(ctx, "r-1")
-	if err != nil {
-		t.Fatalf("Node: %v", err)
-	}
-	if unpinned.EnvironmentID != "" {
-		t.Errorf("environmentID = %q, want unpinned for a node that never set one",
-			unpinned.EnvironmentID)
-	}
-
-	pinned := unpinned
-	pinned.EnvironmentID = "env-1"
-	if err := store.SaveNode(ctx, pinned); err != nil {
-		t.Fatalf("SaveNode: %v", err)
-	}
-	after, err := store.Node(ctx, "r-1")
-	if err != nil {
-		t.Fatalf("Node: %v", err)
-	}
-	if after.EnvironmentID != "env-1" {
-		t.Errorf("environmentID = %q, want the pin it was saved with", after.EnvironmentID)
-	}
-}
-
 func TestNextPositionCountsTheWholeLevel(t *testing.T) {
 	store := newMigratedStore(t)
 	ctx := context.Background()

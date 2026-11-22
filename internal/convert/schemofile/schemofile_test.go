@@ -180,3 +180,41 @@ func TestReadRefusesWhatIsNotASchemoFile(t *testing.T) {
 		}
 	}
 }
+
+// Blocks travel with their collection's index, name and color, and their secrets only when asked.
+func TestWriteAndReadKeepBlocks(t *testing.T) {
+	doc := sample()
+	doc.Environments = []domain.EnvironmentDraft{{
+		Name:  "Prod",
+		Color: "red",
+		Blocks: []domain.BlockDraft{{Collection: 0, Variables: []domain.Variable{
+			{Name: "baseUrl", Value: "https://prod.example", Kind: domain.VariableText, Enabled: true, Position: 1},
+			{Name: "token", Value: "p-1", Kind: domain.VariableSecret, Enabled: true, Position: 2},
+		}}},
+	}}
+	for _, secrets := range []bool{false, true} {
+		data, err := Write(doc, secrets)
+		if err != nil {
+			t.Fatalf("Write: %v", err)
+		}
+		back, err := Read(data)
+		if err != nil {
+			t.Fatalf("Read: %v", err)
+		}
+		if len(back.Environments) != 1 || back.Environments[0].Name != "Prod" ||
+			back.Environments[0].Color != "red" || len(back.Environments[0].Blocks) != 1 {
+			t.Fatalf("environments = %+v, want Prod with its block", back.Environments)
+		}
+		block := back.Environments[0].Blocks[0]
+		if block.Collection != 0 || len(block.Variables) != 2 || block.Variables[0].Value != "https://prod.example" {
+			t.Fatalf("block = %+v, want the collection's baseUrl", block)
+		}
+		want := ""
+		if secrets {
+			want = "p-1"
+		}
+		if token := block.Variables[1]; token.Kind != domain.VariableSecret || token.Value != want {
+			t.Errorf("secrets %v: token = %+v, want value %q", secrets, token, want)
+		}
+	}
+}

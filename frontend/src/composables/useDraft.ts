@@ -67,7 +67,6 @@ export function useDraft(target: DraftTarget) {
   const headers = computed(() => current.value?.headers ?? [])
   const pathParams = computed(() => current.value?.pathParams ?? [])
   const auth = computed<Auth>(() => current.value?.auth ?? NO_AUTH)
-  const environmentId = computed(() => current.value?.environmentId ?? '')
   const bodyKind = computed(() => current.value?.bodyKind ?? BodyKind.BodyRaw)
   const form = computed(() => current.value?.form ?? [])
   const bodyFile = computed(() => current.value?.bodyFile ?? '')
@@ -118,7 +117,6 @@ export function useDraft(target: DraftTarget) {
         headers: d.headers,
         pathParams: d.pathParams,
         auth: [d.auth?.type, fields],
-        environmentId: d.environmentId,
       }),
       url: d.url,
       body: d.body,
@@ -238,7 +236,6 @@ export function useDraft(target: DraftTarget) {
     edit(draft => ({ ...draft, options: { ...draft.options, ...patch } }))
   }
   const setAuth = async (value: Auth) => edit((d) => ({ ...d, auth: value }))
-  const setEnvironmentOverride = async (env: string) => edit((d) => ({ ...d, environmentId: env.trim() }))
   const setBodyKind = async (kind: BodyKind) => edit((d) => ({ ...d, bodyKind: kind }))
   const setBodyFile = async (path: string) => edit((d) => ({ ...d, bodyFile: path.trim() }))
 
@@ -258,10 +255,11 @@ export function useDraft(target: DraftTarget) {
     return kind === RowKind.RowParams ? writeParams(next) : next
   }
 
-  async function addRow(kind: RowKind): Promise<string> {
-    if (kind === RowKind.RowPathParams || !current.value) return ''
+  async function addRow(kind: RowKind, name: string, value = ''): Promise<string> {
+    name = name.trim()
+    if (!name || kind === RowKind.RowPathParams || !current.value) return ''
     const id = mintRowId()
-    edit((d) => withList(d, kind, [...(d[listOf[kind]] ?? []), { id, name: '', value: '', enabled: true }]))
+    edit((d) => withList(d, kind, [...(d[listOf[kind]] ?? []), { id, name, value, enabled: true }]))
     return id
   }
 
@@ -314,7 +312,7 @@ export function useDraft(target: DraftTarget) {
     if (!pasted) return null
     const d = current.value
     if (pasted.draft && d) {
-      apply(followUrl({ ...pasted.draft, id: d.id, environmentId: d.environmentId }))
+      apply(followUrl({ ...pasted.draft, id: d.id }))
       openChip.value = firstChip(pasted.draft.protocol)
       target.filled?.()
     }
@@ -517,7 +515,6 @@ export function useDraft(target: DraftTarget) {
     headers,
     pathParams,
     auth,
-    environmentId,
     bodyKind,
     form,
     bodyFile,
@@ -539,7 +536,6 @@ export function useDraft(target: DraftTarget) {
     setMethod,
     setOptions,
     setAuth,
-    setEnvironmentOverride,
     obtainAuth,
     forgetAuth,
     setBodyKind,

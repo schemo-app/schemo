@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"schemo/internal/domain"
@@ -78,19 +79,23 @@ type writtenBody struct {
 	Params   []writtenField `json:"params,omitempty"`
 }
 
-// writtenEnvironment is one draft as the file keeps it. Insomnia orders `data` itself and says
-// whether the values are private; this app has neither to hand it, so both are written empty.
+// writtenEnvironment is the base or a sub environment. Insomnia orders `data` itself, so the order
+// is left to it.
 type writtenEnvironment struct {
 	writtenRow
-	Name              string            `json:"name"`
-	Data              map[string]string `json:"data"`
-	DataPropertyOrder any               `json:"dataPropertyOrder"`
-	Private           bool              `json:"isPrivate"`
-	SortKey           int               `json:"metaSortKey"`
+	Name              string         `json:"name"`
+	Color             *string        `json:"color"`
+	Data              map[string]any `json:"data"`
+	DataPropertyOrder any            `json:"dataPropertyOrder"`
+	Private           bool           `json:"isPrivate"`
+	SortKey           int            `json:"metaSortKey"`
 }
 
-// Export writes a collection and the environments beside it as an Insomnia v4 export. Scripts are
-// not carried: Insomnia runs its own, and a translation is not this app's to guess at.
+// baseID is the base environment every sub environment hangs off.
+const baseID = "env_base"
+
+// Export writes a collection as an Insomnia v4 export: its variables as the base environment and
+// each draft, already merged for this collection, as a sub environment. Scripts are not carried.
 func Export(
 	collection domain.Collection,
 	environments []domain.EnvironmentDraft,
@@ -112,6 +117,11 @@ func Export(
 	tree := &writer{}
 	tree.walk(&collection, workspaceID)
 	file.Resources = append(file.Resources, tree.rows...)
+	file.Resources = append(file.Resources, writtenEnvironment{
+		writtenRow: writtenRow{ID: baseID, Type: "environment", ParentID: parentID(workspaceID)},
+		Name:       "Base Environment",
+		Data:       nested(collection.Variables, secrets),
+	})
 	file.Resources = append(file.Resources, exportedEnvironments(environments, secrets)...)
 
 	data, err := json.MarshalIndent(file, "", "  ")
@@ -266,31 +276,68 @@ func exportedBody(node domain.CollectionNode) *writtenBody {
 	}
 }
 
-// exportedEnvironments writes the drafts in the order they were given, each hanging off the one
-// workspace an export holds.
+// exportedEnvironments writes the drafts in the order they were given, under the base.
 func exportedEnvironments(drafts []domain.EnvironmentDraft, secrets bool) []any {
 	out := []any{}
 	for index, draft := range drafts {
-		data := map[string]string{}
-		for _, variable := range draft.Variables {
-			name := strings.TrimSpace(variable.Name)
-			if name == "" {
-				continue
-			}
-			data[name] = exportedValue(variable, secrets)
+		var color *string
+		if draft.Color != "" {
+			color = &draft.Color
 		}
 		out = append(out, writtenEnvironment{
 			writtenRow: writtenRow{
 				ID:       fmt.Sprintf("env_%d", index+1),
 				Type:     "environment",
-				ParentID: parentID(workspaceID),
+				ParentID: parentID(baseID),
 			},
 			Name:    draft.Name,
-			Data:    data,
+			Color:   color,
+			Data:    nested(draft.Variables, secrets),
 			SortKey: index,
 		})
 	}
 	return out
+}
+
+// nested writes `a.b` as `{"a": {"b": ...}}`, which `{{ _.a.b }}` reads; a name that cannot nest
+// stays flat. Disabled variables are left out: Insomnia would apply them.
+func nested(vars []domain.Variable, secrets bool) map[string]any {
+	data := map[string]any{}
+	for _, variable := range vars {
+		name := strings.TrimSpace(variable.Name)
+		if name == "" || !variable.Enabled {
+			continue
+		}
+		value := exportedValue(variable, secrets)
+		if _, held := data[name]; !nestInto(data, strings.Split(name, "."), value) && !held {
+			data[name] = value
+		}
+	}
+	return data
+}
+
+func nestInto(data map[string]any, path []string, value string) bool {
+	if slices.Contains(path, "") {
+		return false
+	}
+	for _, part := range path[:len(path)-1] {
+		next, held := data[part]
+		if !held {
+			next = map[string]any{}
+			data[part] = next
+		}
+		level, ok := next.(map[string]any)
+		if !ok {
+			return false
+		}
+		data = level
+	}
+	last := path[len(path)-1]
+	if _, held := data[last]; held {
+		return false
+	}
+	data[last] = value
+	return true
 }
 
 // exportedValue is what the file may hold of a variable: a secret travels as nothing until the

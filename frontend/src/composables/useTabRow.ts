@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { clamp, useResizeObserver } from '@vueuse/core'
 
 const MIN_W = 120
@@ -12,9 +12,10 @@ const OVERFLOW_ROOM = 56
 export function useTabRow(opts: {
   tabs: () => { id: string; compact: boolean }[]
   activeId: () => string
+  /** The strip whose width the tabs share. */
+  strip: Readonly<Ref<HTMLElement | null>>
 }) {
-  const stripEl = ref<HTMLElement | null>(null)
-  const scrollEl = ref<HTMLElement | null>(null)
+  const stripEl = opts.strip
   const stripW = ref(0)
   const frozenW = ref(0)
   const recent = ref<string[]>([])
@@ -62,5 +63,5 @@ export function useTabRow(opts: {
   const hold = () => (frozenW.value = tabW.value)
   const release = () => (frozenW.value = 0)
 
-  return { stripEl, scrollEl, tabW, tiny, compact, visibleIds, hiddenCount, hold, release }
+  return { tabW, tiny, compact, visibleIds, hiddenCount, hold, release }
 }

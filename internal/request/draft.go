@@ -198,21 +198,20 @@ func (s *Drafts) SaveAsNode(
 	d domain.Draft,
 ) (domain.CollectionNode, error) {
 	return s.collections.CreateNode(ctx, workspace.RequestDraft{
-		CollectionID:  collectionID,
-		Name:          name,
-		Protocol:      d.Protocol,
-		Options:       d.Options,
-		Method:        d.Method,
-		URL:           d.URL,
-		Params:        d.Params,
-		Headers:       d.Headers,
-		PathParams:    d.PathParams,
-		Body:          d.Body,
-		BodyKind:      d.BodyKind,
-		Form:          d.Form,
-		BodyFile:      d.BodyFile,
-		Auth:          &d.Auth,
-		EnvironmentID: d.EnvironmentID,
+		CollectionID: collectionID,
+		Name:         name,
+		Protocol:     d.Protocol,
+		Options:      d.Options,
+		Method:       d.Method,
+		URL:          d.URL,
+		Params:       d.Params,
+		Headers:      d.Headers,
+		PathParams:   d.PathParams,
+		Body:         d.Body,
+		BodyKind:     d.BodyKind,
+		Form:         d.Form,
+		BodyFile:     d.BodyFile,
+		Auth:         &d.Auth,
 	})
 }
 
@@ -239,8 +238,8 @@ func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 	if err != nil {
 		return Preview{}, err
 	}
-	missing, err := s.vars.Missing(ctx, above.Variables,
-		partsOf(d, above.Auth, cookie).texts(), d.EnvironmentID)
+	missing, err := s.vars.Missing(ctx, above.Levels,
+		partsOf(d, above.Auth, cookie).texts())
 	if err != nil {
 		return Preview{}, err
 	}
@@ -248,7 +247,7 @@ func (s *Drafts) Preview(ctx context.Context, d domain.Draft) (Preview, error) {
 	if err != nil {
 		return Preview{}, err
 	}
-	auto, err := s.autoRows(ctx, d, above.Auth, above.Variables, cookie)
+	auto, err := s.autoRows(ctx, d, above.Auth, above.Levels, cookie)
 	if err != nil {
 		return Preview{}, err
 	}
@@ -269,12 +268,12 @@ func (s *Drafts) Send(ctx context.Context, d domain.Draft) (string, error) {
 		return "", err
 	}
 	above := s.above(ctx, d.ID)
-	prepared, err := s.prepare(ctx, workspace, d, above.Auth, above.Variables)
+	prepared, err := s.prepare(ctx, workspace, d, above.Auth, above.Levels)
 	if err != nil {
 		return "", err
 	}
 	prepared.Node = string(d.ID)
-	prepared.EnvironmentID, prepared.Variables = d.EnvironmentID, above.Variables
+	prepared.Levels = above.Levels
 	return s.records.send(ctx, workspace, prepared)
 }
 
@@ -291,11 +290,10 @@ func (s *Drafts) SendSeed(ctx context.Context, seed Seed) (string, error) {
 		return "", err
 	}
 	draft := s.draftOfSeed(seed)
-	prepared, err := s.prepare(ctx, workspace, draft, nil, nil)
+	prepared, err := s.prepare(ctx, workspace, draft, nil, domain.VarLevels{})
 	if err != nil {
 		return "", err
 	}
-	prepared.EnvironmentID = draft.EnvironmentID
 	return s.records.send(ctx, workspace, prepared)
 }
 
@@ -307,7 +305,7 @@ func (s *Drafts) CopyAs(ctx context.Context, d domain.Draft, format command.Form
 	if err != nil {
 		return Copy{}, err
 	}
-	return s.renderCommand(ctx, d, above.Auth, above.Variables, format, cookie, true)
+	return s.renderCommand(ctx, d, above.Auth, above.Levels, format, cookie, true)
 }
 
 // Paste reads a pasted text as a command. The request it holds comes without an id: it replaces
@@ -345,7 +343,7 @@ func (s *Drafts) liveAuth(ctx context.Context, d domain.Draft, above workspace.A
 	if err != nil {
 		return domain.Auth{}, err
 	}
-	resolve, err := s.vars.Resolver(ctx, workspace, above.Variables, d.EnvironmentID)
+	resolve, err := s.vars.Resolver(ctx, workspace, above.Levels)
 	if err != nil {
 		return domain.Auth{}, err
 	}
@@ -392,20 +390,19 @@ func FromNode(node domain.CollectionNode) domain.Draft {
 		auth = *node.Auth
 	}
 	return domain.Draft{
-		ID:            domain.DraftID(node.ID),
-		Protocol:      node.Protocol,
-		Options:       node.Options,
-		Method:        node.Method,
-		URL:           node.URL,
-		Params:        domain.OrEmpty(node.Params),
-		Headers:       domain.OrEmpty(node.Headers),
-		PathParams:    domain.OrEmpty(node.PathParams),
-		Body:          node.Body,
-		BodyKind:      domain.KindOf(node.BodyKind),
-		Form:          domain.OrEmpty(node.Form),
-		BodyFile:      node.BodyFile,
-		Auth:          auth,
-		EnvironmentID: node.EnvironmentID,
+		ID:         domain.DraftID(node.ID),
+		Protocol:   node.Protocol,
+		Options:    node.Options,
+		Method:     node.Method,
+		URL:        node.URL,
+		Params:     domain.OrEmpty(node.Params),
+		Headers:    domain.OrEmpty(node.Headers),
+		PathParams: domain.OrEmpty(node.PathParams),
+		Body:       node.Body,
+		BodyKind:   domain.KindOf(node.BodyKind),
+		Form:       domain.OrEmpty(node.Form),
+		BodyFile:   node.BodyFile,
+		Auth:       auth,
 	}
 }
 
@@ -423,7 +420,6 @@ func nodeFromDraft(node domain.CollectionNode, d domain.Draft) domain.Collection
 	node.Form = d.Form
 	node.BodyFile = d.BodyFile
 	node.Auth = d.Auth.Stored()
-	node.EnvironmentID = d.EnvironmentID
 	return node
 }
 
@@ -477,34 +473,30 @@ type FileSource interface {
 }
 
 type VariableSource interface {
-	Resolver(ctx context.Context, workspace string, above []domain.Variable, envID string) (func(string) (string, string), error)
+	Resolver(ctx context.Context, workspace string, above domain.VarLevels) (func(string) (string, string), error)
 	Missing(
 		ctx context.Context,
-		above []domain.Variable,
+		above domain.VarLevels,
 		texts []string,
-		envID string,
 	) ([]string, error)
 	SubstituteTexts(
 		ctx context.Context,
-		above []domain.Variable,
+		above domain.VarLevels,
 		texts []string,
 		mask bool,
-		envID string,
 	) ([]string, error)
 	// ReferenceTexts is the same substitution for an export that leaves secret values out: a secret
 	// resolves to a reference to itself, its `{{name}}` standing where the value would.
 	ReferenceTexts(
 		ctx context.Context,
-		above []domain.Variable,
+		above domain.VarLevels,
 		texts []string,
-		envID string,
 	) ([]string, error)
 	MaskTextsIn(
 		ctx context.Context,
 		workspace string,
-		above []domain.Variable,
+		above domain.VarLevels,
 		texts []string,
-		envID string,
 	) ([]string, error)
 }
 

@@ -15,7 +15,7 @@
       "parentId": "wrk_storefront",
       "name": "Products",
       "description": "",
-      "environment": {},
+      "environment": { "base_url": "https://folder.example", "page_size": 25 },
       "_type": "request_group"
     },
     {
@@ -98,15 +98,56 @@
       "name": "Base Environment",
       "data": {
         "base_url": "https://api.storefront.example/v1",
-        "api_key": "sk_live_1"
+        "api_key": "sk_live_1",
+        "auth": { "token": "{{ _.api_key }}", "retries": 3 },
+        "debug": true,
+        "nothing": null,
+        "request_id": "{% uuid 'v4' %}"
       },
       "_type": "environment"
     },
     {
       "_id": "env_dev",
-      "parentId": "wrk_storefront",
+      "parentId": "env_base",
       "name": "Dev",
+      "color": "#7d69cb",
       "data": { "dev_token": "tok_dev" },
+      "_type": "environment"
+    },
+    {
+      "_id": "env_private",
+      "parentId": "env_base",
+      "name": "Mine",
+      "isPrivate": true,
+      "data": { "password": "hunter2" },
+      "_type": "environment"
+    },
+    {
+      "_id": "wrk_admin",
+      "parentId": null,
+      "name": "Admin",
+      "_type": "workspace"
+    },
+    {
+      "_id": "req_admin",
+      "parentId": "wrk_admin",
+      "name": "Users",
+      "url": "{{ _.base_url }}/users",
+      "method": "GET",
+      "_type": "request"
+    },
+    {
+      "_id": "env_admin_base",
+      "parentId": "wrk_admin",
+      "name": "Base Environment",
+      "data": { "base_url": "https://admin.example" },
+      "_type": "environment"
+    },
+    {
+      "_id": "env_admin_dev",
+      "parentId": "env_admin_base",
+      "name": "Dev",
+      "data": { "base_url": "https://admin.dev.example" },
       "_type": "environment"
     }
   ]

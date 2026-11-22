@@ -2,11 +2,11 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
-	"schemo/internal/convert/dotenv"
 	"schemo/internal/db"
 	"schemo/internal/domain"
 	"schemo/internal/platform"
@@ -33,12 +33,19 @@ func (s *Environments) InWorkspace(workspace string) *Environments {
 	return NewEnvironments(s.store, domain.WorkspaceScope(workspace), s.ids)
 }
 
-// EnvironmentInput is what a new environment is asked for. StartFrom names an environment to copy the
-// variables of, empty for a blank one.
-type EnvironmentInput struct {
-	Name      string `json:"name"`
-	Color     string `json:"color,omitempty"`
-	StartFrom string `json:"startFrom,omitempty"`
+// EnvironmentPatch changes metadata without reading or resending variables.
+type EnvironmentPatch struct {
+	Name     *string `json:"name,omitempty"`
+	Color    *string `json:"color,omitempty"`
+	Readonly *bool   `json:"readonly,omitempty"`
+}
+
+// VariablePatch changes an individual value without resending its entire scope.
+type VariablePatch struct {
+	Name    *string              `json:"name,omitempty"`
+	Value   *string              `json:"value,omitempty"`
+	Kind    *domain.VariableKind `json:"kind,omitempty"`
+	Enabled *bool                `json:"enabled,omitempty"`
 }
 
 // State is every environment and the globals, with secret values withheld: a secret says whether
@@ -51,104 +58,222 @@ func (s *Environments) State(ctx context.Context) (domain.EnvState, error) {
 	return hideSecretValues(state), nil
 }
 
-// Save writes an environment as edited. A secret with hasValue but no value keeps the stored one; a
-// closed environment takes variable changes only when the same save opens it.
-func (s *Environments) Save(ctx context.Context, env domain.Environment) error {
+// Update changes only the supplied environment metadata.
+func (s *Environments) Update(ctx context.Context, id string, patch EnvironmentPatch) error {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
 		return err
 	}
-	held, ok := state.Find(env.ID)
+	env, ok := state.Find(id)
 	if !ok {
-		return environmentNotFound(env.ID)
+		return environmentNotFound(id)
 	}
-	if env.Name, err = domain.CleanName(env.Name, maxEnvironmentName); err != nil {
+	if patch.Name != nil {
+		env.Name, err = domain.CleanName(*patch.Name, maxEnvironmentName)
+		if err != nil {
+			return err
+		}
+		if nameTaken(state.Environments, id, env.Name) {
+			return domain.NameTaken()
+		}
+	}
+	if patch.Color != nil {
+		env.Color = *patch.Color
+	}
+	if patch.Readonly != nil {
+		env.Readonly = *patch.Readonly
+	}
+	return s.store.SaveEnvironment(ctx, workspace, env)
+}
+
+// SaveVariables replaces one scope's variables, preserving withheld secret values.
+func (s *Environments) SaveVariables(ctx context.Context, scope domain.EnvScope, vars []domain.Variable) error {
+	workspace, state, err := s.writable(ctx, scope)
+	if err != nil {
 		return err
 	}
-	if nameTaken(state.Environments, env.ID, env.Name) {
+	saved, err := savedVariables(state.Variables(scope), vars)
+	if err != nil {
+		return err
+	}
+	return s.saveScope(ctx, workspace, scope, saved)
+}
+
+// UpdateVariable edits one variable, preserving every other value in its scope.
+func (s *Environments) UpdateVariable(ctx context.Context, scope domain.EnvScope, id string, patch VariablePatch) error {
+	workspace, state, err := s.writable(ctx, scope)
+	if err != nil {
+		return err
+	}
+	vars := state.Variables(scope)
+	at := slices.IndexFunc(vars, func(variable domain.Variable) bool { return variable.ID == id })
+	if at < 0 {
+		return fmt.Errorf("variable %s: %w", id, domain.ErrNotFound)
+	}
+	variable := vars[at]
+	if patch.Name != nil {
+		variable.Name = strings.TrimSpace(*patch.Name)
+		if variable.Name != "" && !domain.IsVariableName(variable.Name) {
+			return fmt.Errorf("variable name %q: %w", variable.Name, domain.ErrNotAllowed)
+		}
+	}
+	if patch.Value != nil {
+		variable.Value = *patch.Value
+	}
+	if patch.Kind != nil {
+		variable.Kind = kindFor(*patch.Kind == domain.VariableSecret)
+	}
+	if patch.Enabled != nil {
+		variable.Enabled = *patch.Enabled
+	}
+	err = s.store.SaveVariable(ctx, workspace, scope, variable)
+	if errors.Is(err, domain.ErrConflict) {
 		return domain.NameTaken()
 	}
-	vars, err := savedVariables(held.Vars, env.Vars)
-	if err != nil {
-		return err
-	}
-	before, _ := savedVariables(held.Vars, held.Vars)
-	if held.Readonly && env.Readonly && !slices.Equal(before, vars) {
-		return domain.Refuse(domain.CodeEnvironmentReadOnly, domain.ErrNotAllowed, nil)
-	}
-	env.Position, env.Vars = held.Position, nil
-	return s.store.SaveScope(ctx, workspace, &env, domain.EnvScope{Environment: env.ID}, vars)
+	return err
 }
 
-// SaveGlobals writes the whole list of global variables, by the same rules as Save. An empty list
-// clears them.
-func (s *Environments) SaveGlobals(ctx context.Context, vars []domain.Variable) error {
+// Reorder puts the environments in the order given; ids it does not name keep their place after
+// them. The switcher in the titlebar lists them the same way.
+func (s *Environments) Reorder(ctx context.Context, ids []string) error {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
 		return err
 	}
-	saved, err := savedVariables(state.Globals, vars)
-	if err != nil {
-		return err
+	at := map[string]int{}
+	for i, id := range ids {
+		at[id] = i
 	}
-	return s.store.SaveScope(ctx, workspace, nil, domain.EnvScope{}, saved)
+	ordered := slices.Clone(state.Environments)
+	slices.SortStableFunc(ordered, func(a, b domain.Environment) int {
+		ia, oka := at[a.ID]
+		ib, okb := at[b.ID]
+		switch {
+		case oka && okb:
+			return ia - ib
+		case oka:
+			return -1
+		case okb:
+			return 1
+		}
+		return 0
+	})
+	changed := []domain.Environment{}
+	for i, env := range ordered {
+		if env.Position != i+1 {
+			env.Position = i + 1
+			changed = append(changed, env)
+		}
+	}
+	if len(changed) == 0 {
+		return nil
+	}
+	return s.store.SaveEnvironments(ctx, workspace, changed)
 }
 
-// Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
-func (s *Environments) Create(ctx context.Context, draft EnvironmentInput) (string, error) {
+// Duplicate copies an environment under a name of the window's wording, writable whatever the
+// original is, blocks included. Secret values are copied too: the copy is on the same device.
+func (s *Environments) Duplicate(ctx context.Context, id, name string) (string, error) {
 	workspace, state, err := s.load(ctx)
 	if err != nil {
 		return "", err
 	}
-	name, err := domain.CleanName(draft.Name, maxEnvironmentName)
+	from, ok := state.Find(id)
+	if !ok {
+		return "", environmentNotFound(id)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", domain.Refuse(domain.CodeNameEmpty, domain.ErrNotAllowed, nil)
+	}
+	env := domain.Environment{ID: s.ids(), Name: freeName(name, state.Environments), Color: from.Color,
+		Position: nextEnvironmentPosition(state.Environments)}
+	writes := []db.ScopeWrite{{Scope: domain.EnvScope{Environment: env.ID}, Vars: s.copyVariables(from.Vars)}}
+	for collection, block := range from.Collections {
+		if len(block) > 0 {
+			writes = append(writes, db.ScopeWrite{
+				Scope: domain.EnvScope{Environment: env.ID, Collection: collection},
+				Vars:  s.copyVariables(block)})
+		}
+	}
+	return env.ID, s.store.SaveScopes(ctx, workspace, db.ScopeChanges{Environment: &env, Scopes: writes})
+}
+
+// Merge moves what one environment holds into another and deletes it: the shared values into the
+// shared ones, a block into the block of the same collection. A name both hold keeps the target's
+// value. The selection follows the values when the source was the active one.
+func (s *Environments) Merge(ctx context.Context, from, into string) error {
+	workspace, state, err := s.load(ctx)
+	if err != nil {
+		return err
+	}
+	source, ok := state.Find(from)
+	if !ok {
+		return environmentNotFound(from)
+	}
+	target, ok := state.Find(into)
+	if !ok || from == into {
+		return environmentNotFound(into)
+	}
+	if source.Readonly || target.Readonly {
+		return domain.Refuse(domain.CodeEnvironmentReadOnly, domain.ErrNotAllowed, nil)
+	}
+	writes := []db.ScopeWrite{{Scope: domain.EnvScope{Environment: into},
+		Vars: s.addMissing(target.Vars, source.Vars, nil)}}
+	for collection, block := range source.Collections {
+		writes = append(writes, db.ScopeWrite{
+			Scope: domain.EnvScope{Environment: into, Collection: collection},
+			Vars:  s.addMissing(target.Block(collection), block, nil)})
+	}
+	if err := s.store.SaveScopes(ctx, workspace, db.ScopeChanges{Scopes: writes, DeleteEnv: from}); err != nil {
+		return err
+	}
+	if state.ActiveID == from {
+		return s.store.SetActiveEnvironment(ctx, workspace, into)
+	}
+	return nil
+}
+
+// copyVariables is a list under new ids, values and all.
+func (s *Environments) copyVariables(from []domain.Variable) []domain.Variable {
+	out := make([]domain.Variable, len(from))
+	for i, v := range from {
+		v.ID, v.HasValue, v.Position = s.ids(), false, i+1
+		out[i] = v
+	}
+	return out
+}
+
+// findByName is the environment worn under a name, case and surrounding spaces aside.
+func findByName(all []domain.Environment, name string) (domain.Environment, bool) {
+	for _, env := range all {
+		if sameName(env.Name, name) {
+			return env, true
+		}
+	}
+	return domain.Environment{}, false
+}
+
+func sameName(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+// Create appends an empty environment without changing the active selection.
+func (s *Environments) Create(ctx context.Context, name, color string) (string, error) {
+	workspace, state, err := s.load(ctx)
+	if err != nil {
+		return "", err
+	}
+	name, err = domain.CleanName(name, maxEnvironmentName)
 	if err != nil {
 		return "", err
 	}
 	if nameTaken(state.Environments, "", name) {
 		return "", domain.NameTaken()
 	}
-	base := domain.Environment{}
-	if draft.StartFrom != "" {
-		found, ok := state.Find(draft.StartFrom)
-		if !ok {
-			return "", environmentNotFound(draft.StartFrom)
-		}
-		base = found
-	}
-	env := domain.Environment{ID: s.ids(), Name: name, Color: draft.Color,
-		Position: nextPosition(state.Environments, func(e domain.Environment) int { return e.Position })}
-	vars := make([]domain.Variable, len(base.Vars))
-	for i, v := range base.Vars {
-		vars[i] = domain.Variable{ID: s.ids(), Name: v.Name, Kind: v.Kind, Enabled: v.Enabled, Position: i + 1}
-		if v.Kind != domain.VariableSecret {
-			vars[i].Value = v.Value
-		}
-	}
-	if err := s.store.SaveScope(ctx, workspace, &env, domain.EnvScope{Environment: env.ID}, vars); err != nil {
-		return "", err
-	}
-	return env.ID, s.store.SetActiveEnvironment(ctx, workspace, env.ID)
-}
-
-// Import writes an environment from a file without activating it; a taken name gets a number.
-//
-//wails:ignore
-func (s *Environments) Import(ctx context.Context, draft domain.EnvironmentDraft) (string, error) {
-	workspace, state, err := s.load(ctx)
-	if err != nil {
-		return "", err
-	}
-	name := strings.TrimSpace(draft.Name)
-	if name == "" {
-		return "", domain.Refuse(domain.CodeNameEmpty, domain.ErrNotAllowed, nil)
-	}
-	if runes := []rune(name); len(runes) > maxEnvironmentName {
-		name = string(runes[:maxEnvironmentName])
-	}
-	env := domain.Environment{ID: s.ids(), Name: freeName(name, state.Environments), Color: draft.Color,
-		Position: nextPosition(state.Environments, func(e domain.Environment) int { return e.Position })}
-	vars := importedVariables(s.ids, draft.Variables)
-	return env.ID, s.store.SaveScope(ctx, workspace, &env, domain.EnvScope{Environment: env.ID}, vars)
+	env := domain.Environment{ID: s.ids(), Name: name, Color: color,
+		Position: nextEnvironmentPosition(state.Environments)}
+	return env.ID, s.store.SaveEnvironment(ctx, workspace, env)
 }
 
 // Delete removes an environment and its variables. If it was the active one, the selection falls
@@ -217,33 +342,6 @@ func (s *Environments) Reveal(ctx context.Context, id string) (string, error) {
 	return s.store.VariableValue(ctx, workspace, id)
 }
 
-// ParseDotenv reads a .env file into entries for the import dialog.
-func (s *Environments) ParseDotenv(text string) []dotenv.Entry {
-	return dotenv.Parse(text)
-}
-
-// ImportEntries merges parsed .env entries into a scope: a name already there is replaced, a new one
-// is appended.
-func (s *Environments) ImportEntries(ctx context.Context, scope domain.EnvScope, entries []dotenv.Entry) error {
-	workspace, state, err := s.writable(ctx, scope)
-	if err != nil {
-		return err
-	}
-	vars := slices.Clone(scopeVariables(state, scope))
-	for _, entry := range entries {
-		if strings.TrimSpace(entry.Name) == "" {
-			continue
-		}
-		at := slices.IndexFunc(vars, func(v domain.Variable) bool { return v.Name == entry.Name })
-		if at < 0 {
-			vars = append(vars, domain.Variable{ID: s.ids(), Name: entry.Name})
-			at = len(vars) - 1
-		}
-		vars[at].Value, vars[at].Kind, vars[at].Enabled = entry.Value, kindFor(entry.Secret), true
-	}
-	return s.saveScope(ctx, workspace, state, scope, vars)
-}
-
 // Capture writes a response value into a variable of the active environment or the globals, adding
 // it when it is new. A secret stays secret when overwritten.
 func (s *Environments) Capture(ctx context.Context, scope domain.VarScope, name, value string, secret bool) error {
@@ -271,12 +369,14 @@ func (s *Environments) Variable(ctx context.Context, scope domain.VarScope, name
 	default:
 		return "", false, fmt.Errorf("scope %q: %w", scope, domain.ErrNotAllowed)
 	}
-	for _, v := range vars {
-		if v.Enabled && v.Name == name {
-			return v.Value, true, nil
-		}
+	if at := indexOf(vars, name); at >= 0 && vars[at].Enabled {
+		return vars[at].Value, true, nil
 	}
 	return "", false, nil
+}
+
+func indexOf(vars []domain.Variable, name string) int {
+	return slices.IndexFunc(vars, func(v domain.Variable) bool { return v.Name == name })
 }
 
 // SetVariable writes a variable for a script, even into a closed environment.
@@ -327,8 +427,8 @@ func (s *Environments) write(ctx context.Context, scope domain.VarScope, name, v
 
 func (s *Environments) setByName(ctx context.Context, workspace string, state domain.EnvState,
 	scope domain.EnvScope, name, value string, secret bool) (string, error) {
-	vars := slices.Clone(scopeVariables(state, scope))
-	at := slices.IndexFunc(vars, func(v domain.Variable) bool { return v.Name == name })
+	vars := slices.Clone(state.Variables(scope))
+	at := indexOf(vars, name)
 	if at < 0 {
 		vars = append(vars, domain.Variable{ID: s.ids(), Name: name, Kind: domain.VariableText, Enabled: true})
 		at = len(vars) - 1
@@ -337,20 +437,13 @@ func (s *Environments) setByName(ctx context.Context, workspace string, state do
 	if secret {
 		vars[at].Kind = domain.VariableSecret
 	}
-	return vars[at].ID, s.saveScope(ctx, workspace, state, scope, vars)
+	return vars[at].ID, s.saveScope(ctx, workspace, scope, vars)
 }
 
-// saveScope writes a scope's full list, numbering positions in order.
-func (s *Environments) saveScope(ctx context.Context, workspace string, state domain.EnvState,
-	scope domain.EnvScope, vars []domain.Variable) error {
-	for i := range vars {
-		vars[i].Position = i + 1
-	}
-	if scope.Environment == "" {
-		return s.store.SaveScope(ctx, workspace, nil, scope, vars)
-	}
-	if _, ok := state.Find(scope.Environment); !ok {
-		return environmentNotFound(scope.Environment)
+// saveScope numbers variables in display order before persisting them.
+func (s *Environments) saveScope(ctx context.Context, workspace string, scope domain.EnvScope, vars []domain.Variable) error {
+	for index := range vars {
+		vars[index].Position = index + 1
 	}
 	return s.store.SaveScope(ctx, workspace, nil, scope, vars)
 }
@@ -368,23 +461,25 @@ func (s *Environments) load(ctx context.Context) (string, domain.EnvState, error
 
 // writable is load for a write into a scope a person may have closed. The globals never close.
 func (s *Environments) writable(ctx context.Context, scope domain.EnvScope) (string, domain.EnvState, error) {
+	if scope.Environment == "" && scope.Collection != "" {
+		return "", domain.EnvState{}, fmt.Errorf("variable scope %+v: %w", scope, domain.ErrNotAllowed)
+	}
 	workspace, state, err := s.load(ctx)
-	if err != nil {
-		return "", domain.EnvState{}, err
+	if err != nil || scope.Environment == "" {
+		return workspace, state, err
 	}
-	if env, ok := state.Find(scope.Environment); ok && env.Readonly {
+	env, ok := state.Find(scope.Environment)
+	if !ok {
+		return "", domain.EnvState{}, environmentNotFound(scope.Environment)
+	}
+	if env.Readonly {
 		return "", domain.EnvState{}, domain.Refuse(domain.CodeEnvironmentReadOnly, domain.ErrNotAllowed, nil)
-	}
-	if scope.Environment != "" {
-		if _, ok := state.Find(scope.Environment); !ok {
-			return "", domain.EnvState{}, environmentNotFound(scope.Environment)
-		}
 	}
 	return workspace, state, nil
 }
 
-// savedVariables validates the sent list: usable trimmed names, unique names and ids, text or secret
-// kinds, ordered positions, and withheld secrets kept from storage.
+// savedVariables validates the sent list: usable trimmed names unique in the set, unique ids, text
+// or secret kinds, ordered positions, and withheld secrets kept from storage.
 func savedVariables(held, sent []domain.Variable) ([]domain.Variable, error) {
 	stored := map[string]domain.Variable{}
 	for _, v := range held {
@@ -412,30 +507,6 @@ func savedVariables(held, sent []domain.Variable) ([]domain.Variable, error) {
 		out = append(out, v)
 	}
 	return out, nil
-}
-
-// importedVariables is what a file's variables become: ids minted here, the file's order, and a
-// name listed twice written once with the last value, the way a file of exports reads.
-func importedVariables(ids platform.IDGen, from []domain.Variable) []domain.Variable {
-	out := []domain.Variable{}
-	at := map[string]int{}
-	for _, one := range from {
-		name := strings.TrimSpace(one.Name)
-		if name == "" {
-			continue
-		}
-		if index, seen := at[name]; seen {
-			out[index].Value, out[index].Kind, out[index].Enabled = one.Value, kindFor(one.Kind == domain.VariableSecret), one.Enabled
-			continue
-		}
-		at[name] = len(out)
-		out = append(out, domain.Variable{ID: ids(), Name: name, Value: one.Value,
-			Kind: kindFor(one.Kind == domain.VariableSecret), Enabled: one.Enabled})
-	}
-	for i := range out {
-		out[i].Position = i + 1
-	}
-	return out
 }
 
 // freeName is the file's name, numbered beside it when the workspace already holds one.
@@ -474,6 +545,11 @@ func hideSecretValues(state domain.EnvState) domain.EnvState {
 	}
 	for i := range state.Environments {
 		state.Environments[i].Vars = hide(state.Environments[i].Vars)
+		blocks := map[string][]domain.Variable{}
+		for collection, block := range state.Environments[i].Collections {
+			blocks[collection] = hide(block)
+		}
+		state.Environments[i].Collections = blocks
 	}
 	state.Globals = hide(state.Globals)
 	return state
@@ -486,29 +562,17 @@ func kindFor(secret bool) domain.VariableKind {
 	return domain.VariableText
 }
 
-// scopeVariables lists what a scope holds; an empty scope is the globals.
-func scopeVariables(state domain.EnvState, scope domain.EnvScope) []domain.Variable {
-	if scope.Environment == "" {
-		return state.Globals
+func nextEnvironmentPosition(environments []domain.Environment) int {
+	position := 0
+	for _, env := range environments {
+		position = max(position, env.Position)
 	}
-	env, _ := state.Find(scope.Environment)
-	return env.Vars
-}
-
-// nextPosition is one past the highest position in a list, so a new row goes last.
-func nextPosition[T any](items []T, position func(T) int) int {
-	out := 0
-	for _, item := range items {
-		if at := position(item); at >= out {
-			out = at + 1
-		}
-	}
-	return out
+	return position + 1
 }
 
 func nameTaken(all []domain.Environment, except, name string) bool {
 	return slices.ContainsFunc(all, func(env domain.Environment) bool {
-		return env.ID != except && env.Name == name
+		return env.ID != except && sameName(env.Name, name)
 	})
 }
 
@@ -526,14 +590,4 @@ func (s *Environments) ActiveName(ctx context.Context) (string, error) {
 	}
 	active, _ := state.Find(state.ActiveID)
 	return active.Name, nil
-}
-
-// ImportState imports an environment and answers with the whole list.
-//
-//wails:ignore
-func (s *Environments) ImportState(ctx context.Context, draft domain.EnvironmentDraft) (domain.EnvState, error) {
-	if _, err := s.Import(ctx, draft); err != nil {
-		return domain.EnvState{}, err
-	}
-	return s.State(ctx)
 }

@@ -1,7 +1,9 @@
 package openapi
 
 import (
+	"cmp"
 	"maps"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -136,11 +138,7 @@ func (r *reader) baseURL() (value, server string) {
 		if len(r.doc.Servers) == 0 {
 			return "", baseVariable
 		}
-		address := r.doc.Servers[0].URL
-		for name, variable := range r.doc.Servers[0].Variables {
-			address = strings.ReplaceAll(address, "{"+name+"}", variable.Default)
-		}
-		return splitServer(address)
+		return splitServer(r.doc.Servers[0].address())
 	}
 
 	if r.doc.Host == "" {
@@ -151,6 +149,32 @@ func (r *reader) baseURL() (value, server string) {
 		scheme = r.doc.Schemes[0]
 	}
 	return splitServer(scheme + "://" + r.doc.Host + r.doc.BasePath)
+}
+
+// servers is every server after the first as an environment holding its baseUrl for this
+// collection, named by its description or else its host.
+func (r *reader) servers() []domain.EnvironmentDraft {
+	if r.doc2 || len(r.doc.Servers) < 2 {
+		return nil
+	}
+	out := []domain.EnvironmentDraft{}
+	for _, one := range r.doc.Servers[1:] {
+		address := one.address()
+		if address == "" || holeServer.MatchString(address) {
+			continue
+		}
+		name := strings.TrimSpace(one.Description)
+		if parsed, err := url.Parse(address); name == "" && err == nil {
+			name = parsed.Host
+		}
+		out = append(out, domain.EnvironmentDraft{
+			Name: cmp.Or(name, address),
+			Blocks: []domain.BlockDraft{{Variables: []domain.Variable{{
+				Name: domain.BaseURLVariable, Value: address, Kind: domain.VariableText, Enabled: true, Position: 1,
+			}}}},
+		})
+	}
+	return out
 }
 
 func splitServer(address string) (value, server string) {

@@ -9,6 +9,7 @@ export {
 export type {
     Preview,
     Summary,
+    VariablesImport,
     Workspace,
     WorkspaceCollection
 } from "./models.js";

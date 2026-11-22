@@ -126,7 +126,7 @@ func TestASavedRequestSendsWithASecretAndExportsWithoutIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	summary, err := device.Transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := device.Transfer.Apply(ctx, preview.Token, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

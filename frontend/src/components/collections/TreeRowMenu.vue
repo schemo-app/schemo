@@ -145,19 +145,21 @@ const head = computed(() =>
         <span class="menu-label-text cap-line">{{ t('collections.moveTo') }}</span>
         <Icon name="ChevronRight" :size="8" :stroke-width="2.8" class="menu-caret" />
       </ContextMenuSubTrigger>
-      <ContextMenuSubContent class="menu tree-submenu">
-        <ContextMenuItem
-          v-for="target in otherCollections"
-          :key="target.id"
-          @select="emit('moveTo', target.id)"
-        >
-          <span class="menu-mark"><Icon name="Folder" :size="14" :stroke-width="1.8" /></span>
-          <span class="menu-label-text cap-line">{{ target.name }}</span>
-        </ContextMenuItem>
-        <ContextMenuItem v-if="otherCollections.length === 0" disabled>
-          <span class="menu-mark"></span>
-          <span class="menu-label-text cap-line">{{ t('collections.noOtherCollections') }}</span>
-        </ContextMenuItem>
+      <ContextMenuSubContent class="menu tree-submenu" :collision-padding="8">
+        <div class="menu-options">
+          <ContextMenuItem
+            v-for="target in otherCollections"
+            :key="target.id"
+            @select="emit('moveTo', target.id)"
+          >
+            <span class="menu-mark"><Icon name="Folder" :size="14" :stroke-width="1.8" /></span>
+            <span class="menu-label-text cap-line">{{ target.name }}</span>
+          </ContextMenuItem>
+          <ContextMenuItem v-if="otherCollections.length === 0" disabled>
+            <span class="menu-mark"></span>
+            <span class="menu-label-text cap-line">{{ t('collections.noOtherCollections') }}</span>
+          </ContextMenuItem>
+        </div>
       </ContextMenuSubContent>
     </ContextMenuSub>
 

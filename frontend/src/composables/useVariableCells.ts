@@ -1,167 +1,148 @@
-import { nextTick, ref, type ComponentPublicInstance } from 'vue'
+import { nextTick, onScopeDispose, ref, type ComponentPublicInstance } from 'vue'
+import { CancelError } from '@wailsio/runtime/cancellable'
 import { VariableKind, type Variable } from '../../bindings/schemo/internal/domain'
-import type { useEnvironmentsStore } from '../stores/environments'
+import { useEnvironmentsStore } from '../stores/environments'
 import { useSheetNotice } from './useSheetNotice'
 import { describeFailure, t } from '../i18n'
 import { isVariableName } from '../lib/vars'
-import { CancelError } from '@wailsio/runtime/cancellable'
 
-/** The cell being written: the row, the field, the scope the row lives in, and what it opened on. */
-type Editing = { scope: string | null; varId: string; field: 'name' | 'value'; seed: string }
+type Field = 'name' | 'value'
+export type VariableEntry = { scope: string | null; variable: Variable }
+type Editing = { scope: string | null; id: string; field: Field; seed: string }
 
-// The cell editor of a variables table: Enter commits and moves on, Escape puts the old value back,
-// Tab walks down the names. A refusal leaves the row as it was and is said in the table's notice.
-export function useVariableCells(
-  environments: ReturnType<typeof useEnvironmentsStore>,
-  opts: {
-    vars: () => Variable[]
-    scope: () => string | null
-    locked: () => boolean
-  }
-) {
-  const { setNotice, clearNotice } = useSheetNotice()
+export function useVariableCells(options: {
+    rows: () => VariableEntry[]
+    vars: (scope: string | null) => Variable[]
+    locked: (scope: string | null) => boolean
+    save: (scope: string | null, id: string, patch: Partial<Variable>) => Promise<unknown>
+}) {
+    const environments = useEnvironmentsStore()
+    const { setNotice, clearNotice } = useSheetNotice()
+    const editing = ref<Editing | null>(null)
+    const draft = ref('')
+    const input = ref<HTMLInputElement | null>(null)
+    // A delayed secret read must not reopen a cell after another click or disposal.
+    let opening = 0
 
-  const editing = ref<Editing | null>(null)
-  const draft = ref('')
-  const cellInput = ref<HTMLInputElement | null>(null)
-
-  // The cell asked for last is the one that opens: a value an earlier click fetched must not
-  // reopen a cell the pointer — or Escape — has since left.
-  let opening = 0
-
-  function setCellInput(el: Element | ComponentPublicInstance | null) {
-    cellInput.value = (el as HTMLInputElement | null) ?? null
-  }
-
-  function isEditingCell(v: Variable, field: 'name' | 'value', scope: string | null): boolean {
-    const ed = editing.value
-    return Boolean(ed && ed.varId === v.id && ed.field === field && ed.scope === scope)
-  }
-
-  async function start(v: Variable, field: 'name' | 'value', scope: string | null = opts.scope()) {
-    // Input clicks bubble to the cell; reopening it would replace its draft with the stored value.
-    if (opts.locked() || isEditingCell(v, field, scope)) return
-    const myTurn = ++opening
-
-    let seed: string
-    if (field === 'name') {
-      seed = v.name
-    } else if (v.kind === VariableKind.VariableSecret && !environments.isRevealed(v.id)) {
-      // A masked secret's value is not in the row — the DTO withholds it — and a cell opened on
-      // nothing would write that nothing back. So the cell opens only once the value is in hand.
-      try {
-        seed = await environments.valueForEdit(v.id)
-      } catch (error) {
-        if (myTurn === opening && !(error instanceof CancelError)) setNotice(describeFailure(error))
-        return
-      }
-      if (myTurn !== opening) return
-    } else {
-      seed = environments.effectiveValue(v)
+    function setCellInput(element: Element | ComponentPublicInstance | null) {
+        input.value = element as HTMLInputElement | null
     }
 
-    editing.value = { scope, varId: v.id, field, seed }
-    draft.value = seed
-    clearNotice()
-    nextTick(() => cellInput.value?.focus())
-  }
-
-  function cancel() {
-    opening++
-    editing.value = null
-    clearNotice()
-  }
-
-  // Only the row being written commits on blur; another row's input is a stale event by then.
-  function commitFrom(v: Variable, field: 'name' | 'value') {
-    const ed = editing.value
-    if (!ed || ed.varId !== v.id || ed.field !== field) return
-    commit()
-  }
-
-  function commit(): boolean {
-    const ed = editing.value
-    if (!ed) return false
-    const scopeVars = environments.varsOf(ed.scope)
-    const v = scopeVars.find((variable) => variable.id === ed.varId)
-    if (!v) {
-      editing.value = null
-      return false
+    function isEditingCell(variable: Variable, field: Field, scope: string | null): boolean {
+        const cell = editing.value
+        return cell?.id === variable.id && cell.field === field && cell.scope === scope
     }
-    // A cell left as it opened writes nothing: a click in and out of a secret's value must not
-    // count as typing in it.
-    if (draft.value === ed.seed) {
-      editing.value = null
-      clearNotice()
-      return true
+
+    async function start(variable: Variable, field: Field, scope: string | null) {
+        if (options.locked(scope) || isEditingCell(variable, field, scope)) return
+        const turn = ++opening
+        let seed = variable.name
+        if (field === 'value') {
+            if (variable.kind === VariableKind.VariableSecret && !environments.isRevealed(variable.id)) {
+                try {
+                    seed = await environments.valueForEdit(variable.id)
+                } catch (error) {
+                    if (turn === opening) refused(error)
+                    return
+                }
+                if (turn !== opening) return
+            } else {
+                seed = environments.effectiveValue(variable)
+            }
+        }
+        editing.value = { scope, id: variable.id, field, seed }
+        draft.value = seed
+        clearNotice()
+        void nextTick(() => input.value?.focus())
     }
-    if (ed.field === 'name') {
-      const name = draft.value.trim()
-      if (!name) {
-        setNotice(t('environments.nameRequired'))
-        return false
-      }
-      if (!isVariableName(name)) {
-        setNotice(t('environments.nameInvalid'))
-        return false
-      }
-      if (scopeVars.some((variable) => variable.id !== v.id && variable.name === name)) {
-        setNotice(ed.scope === null ? t('environments.nameTakenGlobals') : t('environments.nameTakenHere'))
-        return false
-      }
-      // Duplicate names are caught by the write, so Go's refusal is shown like a local one.
-      void environments.updateVar(ed.scope, v.id, { name }).catch(refused)
-    } else {
-      void environments.updateVar(ed.scope, v.id, { value: draft.value }).catch(refused)
+
+    function cancel() {
+        opening++
+        editing.value = null
+        clearNotice()
     }
-    editing.value = null
-    clearNotice()
-    return true
-  }
 
-  function refused(error: unknown) {
-    if (error instanceof CancelError) return
-    setNotice(describeFailure(error))
-  }
+    onScopeDispose(cancel)
 
-  // Where Tab leaves the caret: down the names, and the last value ends the walk.
-  function moveTo(v: Variable, field: 'name' | 'value') {
-    const at = opts.vars().indexOf(v)
-    const next = opts.vars()[at + 1]
-    if (field === 'value' && next) void start(next, 'name')
-    else if (field === 'value') cancel()
-    else void start(v, 'value')
-  }
-
-  function onCellKeydown(e: KeyboardEvent, v: Variable, field: 'name' | 'value', scope: string | null) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      if (commit() && field === 'name') void start(v, 'value', scope)
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      cancel()
-    } else if (e.key === 'Tab' && scope !== null) {
-      e.preventDefault()
-      if (commit()) moveTo(v, field)
+    function commit(): boolean {
+        const cell = editing.value
+        if (!cell) return false
+        if (options.locked(cell.scope)) {
+            cancel()
+            return false
+        }
+        const variables = options.vars(cell.scope)
+        if (!variables.some(variable => variable.id === cell.id)) {
+            cancel()
+            return false
+        }
+        // Focusing and leaving a masked secret must not count as replacing its value.
+        if (draft.value === cell.seed) {
+            editing.value = null
+            clearNotice()
+            return true
+        }
+        const value = cell.field === 'name' ? draft.value.trim() : draft.value
+        if (cell.field === 'name') {
+            let error = ''
+            if (!value) error = t('environments.nameRequired')
+            else if (!isVariableName(value)) error = t('environments.nameInvalid')
+            // A collection row can receive its environment after its name has been entered.
+            else if (cell.scope !== '' && variables.some(variable => variable.id !== cell.id && variable.name === value)) {
+                error = t(cell.scope === null ? 'environments.nameTakenGlobals' : 'environments.nameTakenHere')
+            }
+            if (error) {
+                setNotice(error)
+                return false
+            }
+        }
+        void options.save(cell.scope, cell.id, { [cell.field]: value }).catch(refused)
+        editing.value = null
+        clearNotice()
+        return true
     }
-  }
 
-  // Escape belongs to the cell being written before the window.
-  function cancelTop(): boolean {
-    if (editing.value) {
-      cancel()
-      return true
+    function commitFrom(variable: Variable, field: Field) {
+        const cell = editing.value
+        if (cell?.id === variable.id && cell.field === field) commit()
     }
-    return false
-  }
 
-  return {
-    draft,
-    setCellInput,
-    isEditingCell,
-    start,
-    commitFrom,
-    onCellKeydown,
-    cancelTop,
-  }
+    function refused(error: unknown) {
+        if (!(error instanceof CancelError)) setNotice(describeFailure(error))
+    }
+
+    function onCellKeydown(event: KeyboardEvent, variable: Variable, field: Field, scope: string | null) {
+        switch (event.key) {
+            case 'Escape':
+                event.preventDefault()
+                cancel()
+                break
+            case 'Enter':
+                event.preventDefault()
+                if (commit() && field === 'name') void start(variable, 'value', scope)
+                break
+            case 'Tab': {
+                if (event.shiftKey) return
+                event.preventDefault()
+                if (!commit()) return
+                if (field === 'name') {
+                    void start(variable, 'value', scope)
+                    return
+                }
+                const rows = options.rows()
+                const index = rows.findIndex(row => row.scope === scope && row.variable.id === variable.id)
+                const next = rows[index + 1]
+                if (next) void start(next.variable, 'name', next.scope)
+                break
+            }
+        }
+    }
+
+    function cancelTop(): boolean {
+        if (!editing.value) return false
+        cancel()
+        return true
+    }
+
+    return { draft, setCellInput, isEditingCell, start, commitFrom, onCellKeydown, cancelTop, cancel }
 }

@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, useTemplateRef, toValue
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import Icon from '../ui/Icon.vue'
 import Spinner from '../ui/Spinner.vue'
-import RequestEnvironment from './RequestEnvironment.vue'
 import RequestPane from './RequestPane.vue'
 import SaveRequestPopover from '../collections/SaveRequestPopover.vue'
 import CopyRequestMenu from './CopyRequestMenu.vue'
@@ -28,7 +27,7 @@ import { textOf, t, describeFailure } from '../../i18n'
 import type { RequestSource } from '../../lib/requestSource'
 import { missingPlace } from '../../lib/missingPlace'
 import { useEnvironmentsStore } from '../../stores/environments'
-import { useRequestEnvironment } from '../../composables/useRequestEnvironment'
+import { provideVarContext } from '../../composables/useVarContext'
 
 // Shell prompt prefixes (PowerShell, bash, zsh) and a sudo wrapper.
 const PROMPT = /^(?:PS[^>\n]*>|>|\$|❯)\s+/
@@ -69,6 +68,8 @@ const {
   mayAdd,
   add,
 } = useMissingVars(source)
+
+provideVarContext(() => source.nodeId)
 
 const { label: sendLabel, key: sendKey, disabled: sendDisabled, messaging, onSend } = useRequestSend(source)
 
@@ -192,27 +193,27 @@ function useMissingVars(source: RequestSource) {
   )
 
   watch(
-    () => [environments.envState, source.environmentId],
+    () => environments.envState,
     () => void source.refreshPreview()
   )
 
-  const { stale, scopeId, scopeReadonly } = useRequestEnvironment(source)
+  // Missing names are added to the active environment, for every collection.
+  const active = computed(() => environments.activeEnvironment)
 
   const title = computed(() => {
-    if (stale.value) return t('request.pinGone')
-    if (scopeId.value === null) return t('request.chooseEnvFirst')
-    if (scopeReadonly.value) return t('request.envReadOnly')
+    if (!active.value) return t('request.chooseEnvFirst')
+    if (active.value.readonly) return t('request.envReadOnly')
     return undefined
   })
 
-  const mayAdd = computed(() => scopeId.value !== null && !scopeReadonly.value && !stale.value)
+  const mayAdd = computed(() => Boolean(active.value && !active.value.readonly))
 
   function add(names: string[]) {
-    const envId = scopeId.value
-    if (envId === null) return
-    if (!scopeReadonly.value) {
+    const envId = active.value?.id
+    if (!envId) return
+    if (mayAdd.value) {
       for (const name of names) {
-        void environments.addVar(envId, { name }).catch((error) => {
+        void environments.addVar(envId, name).catch((error) => {
           toast.show(t('request.createFailed', { error: describeFailure(error) }), 'error')
         })
       }
@@ -263,7 +264,7 @@ function useMissingVars(source: RequestSource) {
         <div class="url-text">
           <input
             ref="urlInputRef"
-            v-var-peek="source.environmentId"
+            v-var-peek
             :value="source.url"
             class="url-input mono"
             :class="{ 'url-input-veiled': showUrlDisplay }"
@@ -287,7 +288,6 @@ function useMissingVars(source: RequestSource) {
                 v-if="piece.tokenName"
                 :name="piece.tokenName"
                 :text="piece.text"
-                :env-id="source.environmentId"
               />
               <span v-else :class="[piece.kind, { unfilled: isUnfilled(piece) }]">{{ piece.text }}</span>
             </template>
@@ -341,7 +341,6 @@ function useMissingVars(source: RequestSource) {
           </PopoverContent>
         </Popover>
         <div v-if="hasOperations" ref="methodSlot" class="operation-slot"></div>
-        <RequestEnvironment :source="source" />
       </div>
 
       <span class="save-anchor">
@@ -621,7 +620,7 @@ function useMissingVars(source: RequestSource) {
 .var-mark {
   @apply flex-none inline-flex items-center justify-center w-6 h-6 rounded-[0.25rem] cursor-pointer
          border-0 bg-transparent;
-  margin-left: 0.3125rem;
+  margin: 0 0.5rem;
   color: var(--red-text);
   --wails-draggable: no-drag;
 }

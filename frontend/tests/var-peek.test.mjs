@@ -7,6 +7,7 @@ globalThis.document = { createElement: () => ({}) }
 
 const load = await vite({
   '/src/stores/environments.ts': 'export function useEnvironmentsStore() { throw new Error("Unexpected environment interaction") }',
+  '/src/stores/collections.ts': 'export function useCollectionsStore() { throw new Error("Unexpected collection interaction") }',
 })
 const { nextTick } = await import('vue')
 const { vVarPeek, hoveredVar } = await load('/src/lib/varPeek.ts')

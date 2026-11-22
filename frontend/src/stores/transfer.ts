@@ -129,30 +129,26 @@ export const useTransferStore = defineStore('transfer', () => {
   function apply(token: string, parentID: string, name: string): Promise<boolean> {
     return whileBusy(async () => {
       const summary = await callOrToast(
-        collections.applyTree(Transfer.Apply(token, parentID, name)),
+        collections.applyTree(Transfer.Apply(token, parentID, name, t('transfer.importedSuffix'))),
         'transfer.importFailed'
       )
       if (!summary) return false
       markStep('import')
       if (summary.envState) await environments.applyState(summary.envState)
-      // A file that held only environments wrote no collection: there is no tree to draw, and a
-      // toast about requests would be counting something that never happened.
+      // One toast: what was imported, then the environments it created.
+      let said: string
       if (summary.collections === 0) {
-        toast.show(
-          t('transfer.importedCount', { n: t('counts.environments', summary.environments) })
-        )
-        return true
+        said = t('transfer.importedCount', { n: t('counts.environments', summary.environments) })
+      } else if (summary.collections > 1) {
+        said = t('transfer.importedCount', { n: t('counts.collections', summary.collections) })
+      } else {
+        said = t('transfer.imported', { n: t('counts.requests', summary.requests), name: summary.name || name })
       }
-      if (summary.collections > 1) {
-        toast.show(t('transfer.importedCount', { n: t('counts.collections', summary.collections) }))
-        return true
+      const created = summary.createdEnvironments ?? []
+      if (summary.collections > 0 && created.length > 0) {
+        said += ' · ' + t('transfer.createdEnvironments', { names: created.join(', '), count: created.length })
       }
-      toast.show(
-        t('transfer.imported', {
-          n: t('counts.requests', summary.requests),
-          name: summary.name || name,
-        })
-      )
+      toast.show(said)
       return true
     })
   }

@@ -51,6 +51,8 @@ export const useCollectionsStore = defineStore('collections', () => {
   // the page a menu asked to open — the page holds its section itself, so it answers when told.
   const pendingRemove = ref<string | null>(null)
   const pendingSection = ref<CollectionSection | null>(null)
+  // The environment the Variables section filters by when it opens; '' shows every set.
+  const varsFilter = ref('')
 
   // The strip drives the tree highlight, never the other way round.
   const collectionTabId = computed<string | null>(() =>
@@ -170,7 +172,12 @@ export const useCollectionsStore = defineStore('collections', () => {
   const rename = (id: string, name: string) => update(id, { name })
   const setDescription = (id: string, description: string) => update(id, { description })
   // Go refuses a secret: a collection is what gets exported and handed on.
-  const saveVariables = (id: string, variables: Variable[]) => update(id, { variables })
+  async function saveVariables(id: string, variables: Variable[]) {
+    const signal = snapshot.signal()
+    await Collections.Update(id, { variables })
+    signal.throwIfAborted()
+    await snapshot.take(Collections.Tree(), tree => tree ?? [])
+  }
   // The level's own auth, which everything inside inherits; "None" is an empty auth.
   const saveAuth = (id: string, auth: Auth) => update(id, { auth })
   const duplicate = (id: string) =>
@@ -243,6 +250,13 @@ export const useCollectionsStore = defineStore('collections', () => {
       await tabs.openNode(id, keep, background)
     }
     return true
+  }
+
+  /** Opens a collection's Variables section, filtered by an environment. */
+  async function openVariables(id: string, envId = '') {
+    await select(id)
+    varsFilter.value = envId
+    pendingSection.value = 'vars'
   }
 
   const running = ref<{ done: number; total: number; name: string } | null>(null)
@@ -338,6 +352,8 @@ export const useCollectionsStore = defineStore('collections', () => {
     pendingCreate,
     pendingRemove,
     pendingSection,
+    varsFilter,
+    openVariables,
     trail,
     selected,
     collectionId,

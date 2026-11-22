@@ -1,7 +1,6 @@
 package workspace
 
-// Duplicating a subtree. A copy is written a whole level at a time: a tree row is shallow, and a
-// copy of the row would have no address and no headers.
+// Duplicating a subtree.
 
 import (
 	"context"
@@ -28,8 +27,6 @@ func (s *Collections) Duplicate(
 		return s.duplicateCollection(ctx, workspace, collection, suffix)
 	}
 
-	// The copy starts from the tree row and reads the request whole on the way: a copy is the request
-	// and not just its name.
 	tree, err := s.store.Collections(ctx, workspace)
 	if err != nil {
 		return err
@@ -71,7 +68,13 @@ func (s *Collections) duplicateCollection(
 	if err != nil {
 		return err
 	}
-	return s.saveTree(ctx, workspace, copied)
+	if err := s.saveTree(ctx, workspace, copied); err != nil {
+		return err
+	}
+	if collection.ParentID != "" {
+		return nil
+	}
+	return s.store.CopyBlocks(ctx, workspace, collection.ID, copied[0].collection.ID, s.ids)
 }
 
 // copyCollection builds the copy in memory first so a failure leaves nothing half-written, reading

@@ -176,12 +176,6 @@ export interface Seed {
      * Auth travels resolved: whoever builds a seed knows where the request came from.
      */
     "auth"?: domain$0.Auth | null;
-
-    /**
-     * EnvironmentID is the environment this one request resolves its `{{tokens}}` in, when it is
-     * not the window's own: a run sends requests saved with a pin.
-     */
-    "environmentId"?: string;
 }
 
 export interface StreamSnapshot {

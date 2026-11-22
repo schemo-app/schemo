@@ -78,7 +78,6 @@ type RequestFields struct {
 	Params      *[]Header    `json:"params,omitempty" jsonschema:"replace query parameters"`
 	Body        *string      `json:"body,omitempty"`
 	BodyKind    *string      `json:"bodyKind,omitempty" jsonschema:"raw, json or xml; file bodies are not accepted"`
-	Environment *string      `json:"environment,omitempty" jsonschema:"environment id to pin; empty clears the pin"`
 	Auth        *domain.Auth `json:"auth,omitempty" jsonschema:"replace saved authorization; omit to preserve it; use variable references for protected credentials"`
 }
 
@@ -108,12 +107,14 @@ type EnvironmentPatch struct {
 type VariableIDInput struct {
 	WorkspaceInput
 	Environment string `json:"environment,omitempty" jsonschema:"environment id; omit for workspace globals"`
+	Collection  string `json:"collection,omitempty" jsonschema:"collection id: the variable is in the environment's block for that collection"`
 	ID          string `json:"id"`
 }
 
 type VariableInput struct {
 	WorkspaceInput
 	Environment string `json:"environment,omitempty" jsonschema:"environment id; omit for workspace globals"`
+	Collection  string `json:"collection,omitempty" jsonschema:"collection id: write the environment's value for that collection only"`
 	Name        string `json:"name"`
 	Value       string `json:"value"`
 	Secret      bool   `json:"secret,omitempty" jsonschema:"store as a secret; its value is never returned to MCP"`
@@ -171,9 +172,9 @@ func (s *MCP) setWriteTools(allowed bool) {
 	addWorkspaceTool(s, "update_request", "Edit a saved HTTP request and its authorization without sending it. Omitted fields and scripts are preserved. Never send masked values back.", true, false, s.tools.UpdateRequest)
 	addWorkspaceTool(s, "delete_request", "Delete a saved HTTP request.", true, true, s.tools.DeleteRequest)
 	addWorkspaceTool(s, "move_request", "Move or reorder a saved request in a collection of the same workspace.", true, false, s.tools.MoveRequest)
-	addWorkspaceTool(s, "create_environment", "Create an environment in a workspace; it becomes that workspace's active environment.", true, false, s.tools.CreateEnvironment)
+	addWorkspaceTool(s, "create_environment", "Create an environment in a workspace.", true, false, s.tools.CreateEnvironment)
 	addWorkspaceTool(s, "update_environment", "Rename an environment or change its color. Does not replace variables.", true, false, s.tools.UpdateEnvironment)
 	addWorkspaceTool(s, "delete_environment", "Delete an environment and its variables.", true, true, s.tools.DeleteEnvironment)
-	addWorkspaceTool(s, "set_variable", "Create or replace a variable by name in an environment or workspace globals. Existing secret variables remain secret.", true, false, s.tools.SetVariable)
+	addWorkspaceTool(s, "set_variable", "Create or replace a variable by name in workspace globals, an environment, or an environment's block for one collection. Existing secret variables remain secret.", true, false, s.tools.SetVariable)
 	addWorkspaceTool(s, "delete_variable", "Delete a variable from an environment or workspace globals.", true, true, s.tools.DeleteVariable)
 }

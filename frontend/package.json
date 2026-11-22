@@ -27,7 +27,7 @@
     "@prettier/plugin-xml": "^3.4.2",
     "@tailwindcss/vite": "^4.3.3",
     "@vueuse/core": "14.4.0",
-    "@wailsio/runtime": "3.0.0",
+    "@wailsio/runtime": "3.1.0",
     "cm6-graphql": "^0.2.2",
     "dompurify": "^3.4.16",
     "graphql": "^16.15.0",
@@ -43,6 +43,9 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "typescript": "^5.6.3",
     "vite": "^7.0.0",
-    "vue-tsc": "^2.1.0"
+    "vue-tsc": "^3.3.14"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

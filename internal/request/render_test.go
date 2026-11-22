@@ -150,7 +150,7 @@ func TestAutoIsTheRowsTheAppAdds(t *testing.T) {
 		ID: "cmd", Method: "POST", URL: "https://api.example.com/users",
 		Body: `{"name":"ok"}`, BodyKind: domain.BodyJSON,
 	}
-	rows, err := r.autoRows(context.Background(), draft, nil, nil, r.jar.header)
+	rows, err := r.autoRows(context.Background(), draft, nil, domain.VarLevels{}, r.jar.header)
 	if err != nil {
 		t.Fatalf("autoRows: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestAutoLeavesOutTheBodyOnlyASendCanRead(t *testing.T) {
 		ID: "cmd", Method: "POST", URL: "/upload", BodyKind: domain.BodyBinary,
 		BodyFile: "/tmp/logo.png",
 	}
-	rows, err := r.autoRows(context.Background(), draft, nil, nil, r.jar.header)
+	rows, err := r.autoRows(context.Background(), draft, nil, domain.VarLevels{}, r.jar.header)
 	if err != nil {
 		t.Fatalf("autoRows: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestAutoCountsAFormBody(t *testing.T) {
 		ID: "cmd", Method: "POST", URL: "https://api.example.com/form", BodyKind: domain.BodyForm,
 		Form: []domain.FormRow{{Name: "a", Value: "1", Enabled: true}},
 	}
-	rows, err := r.autoRows(context.Background(), draft, nil, nil, r.jar.header)
+	rows, err := r.autoRows(context.Background(), draft, nil, domain.VarLevels{}, r.jar.header)
 	if err != nil {
 		t.Fatalf("autoRows: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestAutoMasksWhatTheAddressCarries(t *testing.T) {
 	draft := domain.Draft{
 		ID: "cmd", Method: "GET", URL: "https://{{token}}.example.com/x",
 	}
-	rows, err := r.autoRows(context.Background(), draft, nil, nil, r.jar.header)
+	rows, err := r.autoRows(context.Background(), draft, nil, domain.VarLevels{}, r.jar.header)
 	if err != nil {
 		t.Fatalf("autoRows: %v", err)
 	}
@@ -445,7 +445,7 @@ func TestAMissingFileFailsTheSend(t *testing.T) {
 	replaced(t, drafts, domain.BodyBinary, "")
 	ctx := context.Background()
 	drafts.d.BodyFile = "/tmp/gone.bin"
-	if _, err := drafts.Prepared(ctx, drafts.d, nil, nil); !errors.Is(err,
+	if _, err := drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{}); !errors.Is(err,
 		domain.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
@@ -491,7 +491,7 @@ func TestASeedCarriesItsKind(t *testing.T) {
 
 	out, err := drafts.Prepare(ctx, Seed{
 		Method: "POST", URL: "https://api.example.com/a", Body: "{}", BodyKind: domain.BodyJSON,
-	}, nil)
+	}, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -500,7 +500,7 @@ func TestASeedCarriesItsKind(t *testing.T) {
 	}
 
 	plain, err := drafts.Prepare(ctx,
-		Seed{Method: "POST", URL: "https://api.example.com/a", Body: "{}"}, nil)
+		Seed{Method: "POST", URL: "https://api.example.com/a", Body: "{}"}, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -561,7 +561,7 @@ func TestTheAuthFieldsReachTheSchemeResolved(t *testing.T) {
 	}
 	authWith(t, drafts, domain.NewAuth(domain.AuthBearer).With("token", "{{token}}"))
 
-	prepared, err := drafts.Prepared(ctx, drafts.d, nil, nil)
+	prepared, err := drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestAWrittenAuthorizationHeaderWins(t *testing.T) {
 	})
 	authWith(t, drafts, domain.NewAuth(domain.AuthBearer).With("token", "abc123"))
 
-	prepared, err := drafts.Prepared(ctx, drafts.d, nil, nil)
+	prepared, err := drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -624,7 +624,7 @@ func TestAQueryParameterGoesOnTheAddressAndNotInTheRows(t *testing.T) {
 	})
 	authWith(t, drafts, domain.NewAuth(domain.AuthAPIKey).With("key", "X-API-Key"))
 
-	prepared, err := drafts.Prepared(ctx, drafts.d, nil, nil)
+	prepared, err := drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestAWrittenParameterWins(t *testing.T) {
 	})
 	authWith(t, drafts, domain.NewAuth(domain.AuthAPIKey).With("key", "X-API-Key"))
 
-	prepared, err := drafts.Prepared(ctx, drafts.d, nil, nil)
+	prepared, err := drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -672,7 +672,7 @@ func TestACredentialTheRequestCannotCarryGoesToTheEngine(t *testing.T) {
 		Digest: &domain.DigestCredentials{Username: "user", Password: "pass"},
 	}
 
-	prepared, err := line.Prepared(ctx, line.d, nil, nil)
+	prepared, err := line.Prepared(ctx, line.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -698,7 +698,7 @@ func TestAWrittenAuthorizationHeaderTakesTheChallengeAway(t *testing.T) {
 		Headers: []domain.HeaderPair{{Name: "Authorization", Value: "Token hand-written"}},
 	})
 
-	prepared, err := line.Prepared(ctx, line.d, nil, nil)
+	prepared, err := line.Prepared(ctx, line.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -724,7 +724,7 @@ func TestInheritedAuthIsWhatTheCallerResolved(t *testing.T) {
 	authWith(t, drafts, domain.NewAuth(domain.AuthInherit))
 
 	inherited := domain.NewAuth(domain.AuthBearer).With("token", "from-the-collection")
-	prepared, err := drafts.Prepared(ctx, drafts.d, &inherited, nil)
+	prepared, err := drafts.Prepared(ctx, drafts.d, &inherited, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -738,7 +738,7 @@ func TestInheritedAuthIsWhatTheCallerResolved(t *testing.T) {
 
 	// Nothing above is not "None" written down somewhere: the request simply goes out with nothing.
 	auth.answer = domain.AuthOutput{}
-	prepared, err = drafts.Prepared(ctx, drafts.d, nil, nil)
+	prepared, err = drafts.Prepared(ctx, drafts.d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -751,23 +751,20 @@ func TestInheritedAuthIsWhatTheCallerResolved(t *testing.T) {
 	}
 }
 
-// A run sends saved requests, and a request that names a variable nothing answers goes out with the
-// name left empty: the window is what marks the names — in its own language, and about the row they
-// stand in — and a `{{token}}` carried to a server is a path of braces.
-func TestPrepareSendsWithANameNothingAnswersEmpty(t *testing.T) {
+// A name nothing answers does not stop the send; it goes out as written.
+func TestPrepareSendsAnUnknownNameAsWritten(t *testing.T) {
 	ctx := context.Background()
 	drafts := newLine(t)
 
 	prepared, err := drafts.Prepare(ctx, Seed{
 		Method: "GET",
 		URL:    "https://{{host}}/{{var3}}/{{other}}",
-	}, nil)
+	}, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepare = %v, want the request to go out", err)
 	}
-	if prepared.URL != "https://api.example.com//" {
-		t.Errorf("url = %q, want the unanswered names empty and the known one filled in",
-			prepared.URL)
+	if prepared.URL != "https://api.example.com/{{var3}}/{{other}}" {
+		t.Errorf("url = %q, want unknown names as written and the known one filled in", prepared.URL)
 	}
 }
 
@@ -781,7 +778,7 @@ func TestPrepareAsksWithTheNamesTheLevelsAboveAnswer(t *testing.T) {
 		{Name: "var3", Value: "three", Kind: domain.VariableText, Enabled: true},
 	}
 	seed := Seed{Method: "GET", URL: "https://{{host}}/{{var3}}"}
-	prepared, err := drafts.Prepare(ctx, seed, above)
+	prepared, err := drafts.Prepare(ctx, seed, domain.VarLevels{Variables: above})
 	if err != nil {
 		t.Fatalf("Prepare = %v, want a request the collection answers for to go out", err)
 	}

@@ -404,14 +404,15 @@ html.window-translucent.dark body {
 }
 
 .menu.pane-select-menu {
-  width: 17.5rem;
-  padding: 0.25rem;
-  border-radius: 0.75rem;
+  width: 15rem;
+  max-height: var(--reka-dropdown-menu-content-available-height);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .pane-select-menu .menu-item {
   @apply gap-2 text-13;
-  height: 2rem;
+  height: 1.75rem;
   padding: 0 0.5rem;
   border-radius: 0.3125rem;
 }
@@ -738,7 +739,8 @@ html.window-translucent.dark body {
   }
 }
 
-.menu.env-menu,
+.menu.environment-menu,
+.menu.pane-select-menu,
 .menu.tree-menu,
 .menu.tree-submenu,
 .menu.tab-menu,
@@ -751,41 +753,6 @@ html.window-translucent.dark body {
   backdrop-filter: blur(40px) saturate(170%);
   -webkit-backdrop-filter: blur(40px) saturate(170%);
   box-shadow: var(--menushadow);
-}
-
-.popover.bar-env-pop {
-  @apply rounded-[0.625rem] p-[0.3125rem];
-  border: 0;
-}
-
-.menu.env-menu,
-.bar-env-pop {
-  width: 15.625rem;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  gap: 1px;
-}
-
-.menu.env-menu {
-  min-width: 0;
-  max-height: min(20rem, var(--reka-dropdown-menu-content-available-height, 100vh));
-}
-
-.bar-env-pop {
-  max-height: min(20rem, var(--reka-popover-content-available-height, 100vh));
-}
-
-.env-options {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-}
-
-.bar-env-pop .env-options {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
 }
 
 .menu.copy-menu {
@@ -841,86 +808,6 @@ html.window-translucent.dark body {
   padding: 0.875rem;
 }
 
-.env-menu .env-row,
-.bar-env-pop .env-row {
-  @apply flex flex-none items-center w-full border-none bg-transparent text-text text-left cursor-pointer;
-  gap: 0.5625rem;
-  height: 1.875rem;
-  padding: 0 0.5rem;
-  border-radius: 0.4375rem;
-  font: inherit;
-  --wails-draggable: no-drag;
-}
-
-.env-menu .env-row:hover,
-.env-menu .env-row[data-highlighted],
-.bar-env-pop .env-row:hover {
-  @apply bg-bg-hover;
-  outline: none;
-}
-
-.env-menu .env-row.active,
-.bar-env-pop .env-row.active {
-  @apply bg-bg-hover font-medium;
-}
-
-.env-row-mark {
-  @apply flex items-center justify-center flex-none;
-  width: 1.25rem;
-}
-
-.env-row-dot {
-  width: 0.4375rem;
-  height: 0.4375rem;
-  border-radius: 999px;
-}
-
-.env-row-name {
-  @apply flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-13;
-}
-
-.env-row-name.none {
-  @apply text-text-secondary;
-}
-
-.env-row-lock {
-  @apply flex-none text-text-tertiary;
-}
-
-.env-row-count {
-  @apply flex-none text-text-tertiary;
-  font-size: var(--text-12);
-  font-variant-numeric: tabular-nums;
-}
-
-.env-row-check {
-  @apply flex justify-center flex-none text-text-secondary;
-  width: 0.875rem;
-}
-
-.env-row-hint {
-  @apply flex-none text-text-tertiary;
-  font-size: var(--text-12);
-}
-
-.env-divider {
-  height: 1px;
-  flex-shrink: 0;
-  margin: 0.25rem 0.3125rem;
-  background: var(--border);
-}
-
-.env-row-action .env-row-name {
-  @apply text-text;
-}
-
-.bar-env-pop .env-head {
-  @apply flex items-center flex-none text-text-tertiary;
-  height: 1.625rem;
-  padding: 0 0.5rem 0.125rem;
-  font-size: var(--text-12);
-}
-
 .dialog.search-palette {
   width: 38.75rem;
   overflow: hidden;
@@ -933,8 +820,15 @@ html.window-translucent.dark body {
   line-height: normal;
 }
 
+.menu-options {
+  max-height: min(16rem, calc(var(--reka-popper-available-height) - 0.75rem));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
 .menu-item {
   @apply flex items-center gap-2 w-full text-left py-1.5 px-2.5 border-none bg-transparent text-text rounded-md cursor-pointer;
+  height: 1.75rem;
 }
 
 .menu-item:hover,
@@ -1834,11 +1728,6 @@ button:focus-visible,
 
 .kv-add:hover {
   background: var(--bg-hover);
-}
-
-.kv-ghost {
-  padding: 0 0.5rem;
-  font-size: var(--text-13);
 }
 
 @utility section-label {

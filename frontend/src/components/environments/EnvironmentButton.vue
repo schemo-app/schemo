@@ -12,11 +12,9 @@ const environments = useEnvironmentsStore()
 
 const activeEnvName = computed(() => environments.activeEnvironment?.name ?? t('titlebar.noEnvironment'))
 
-// The colour is the palette's word, and which mark it turns into is the palette's business: the dot
-// this chip draws and the avatar the sheet draws are one answer to one name.
 const envDotStyle = computed(() => {
   const env = environments.activeEnvironment
-  if (!env) return { background: 'var(--text-tertiary)' }
+  if (!env) return { boxShadow: 'inset 0 0 0 1.5px var(--text-tertiary)' }
   return { background: dotOf(env.color ?? '') }
 })
 </script>
@@ -27,11 +25,15 @@ const envDotStyle = computed(() => {
       <DropdownMenuTrigger as-child>
         <button type="button" class="env-btn" :title="t('titlebar.environment', { name: activeEnvName })">
           <span class="env-dot" :style="envDotStyle"></span>
-          <span>{{ activeEnvName }}</span>
-          <Icon name="ChevronDown" :size="10" :stroke-width="2.6" class="env-caret" />
+          <span class="cap-line">{{ activeEnvName }}</span>
+          <Icon name="ChevronDown" :size="9" :stroke-width="2.8" class="env-caret" />
         </button>
       </DropdownMenuTrigger>
-      <EnvironmentMenu />
+      <EnvironmentMenu
+        :selected="environments.activeId"
+        :none-label="t('titlebar.noEnvironment')"
+        @select="environments.setActive($event)"
+      />
     </DropdownMenu>
   </div>
 </template>
@@ -41,17 +43,20 @@ const envDotStyle = computed(() => {
 
 .env-btn {
   @apply flex items-center flex-none cursor-pointer border-0;
-  height: 1.75rem;
-  padding: 0 0.625rem;
-  gap: 0.5rem;
-  border-radius: 0.4375rem;
+  height: 28px;
+  max-width: 200px;
+  padding: 0 8px 0 10px;
+  gap: 7px;
+  border-radius: 7px;
   background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
   color: var(--text);
   font: inherit;
   font-size: var(--text-13);
 }
 
-.env-btn:hover {
+.env-btn:hover,
+.env-btn[data-state='open'] {
   background: var(--bg-hover);
 }
 

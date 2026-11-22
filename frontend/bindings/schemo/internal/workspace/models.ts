@@ -40,13 +40,12 @@ export interface Created {
 }
 
 /**
- * EnvironmentInput is what a new environment is asked for. StartFrom names an environment to copy the
- * variables of, empty for a blank one.
+ * EnvironmentPatch changes metadata without reading or resending variables.
  */
-export interface EnvironmentInput {
-    "name": string;
-    "color"?: string;
-    "startFrom"?: string;
+export interface EnvironmentPatch {
+    "name"?: string | null;
+    "color"?: string | null;
+    "readonly"?: boolean | null;
 }
 
 /**
@@ -107,12 +106,16 @@ export interface RequestDraft {
     "form"?: domain$0.FormRow[] | null;
     "bodyFile"?: string;
     "auth"?: domain$0.Auth | null;
+}
 
-    /**
-     * EnvironmentID carries a command-line request's pin into the node "Save" makes of it — a
-     * request that was pointed at a particular environment stays pointed at it once saved.
-     */
-    "environmentId"?: string;
+/**
+ * VariablePatch changes an individual value without resending its entire scope.
+ */
+export interface VariablePatch {
+    "name"?: string | null;
+    "value"?: string | null;
+    "kind"?: domain$0.VariableKind | null;
+    "enabled"?: boolean | null;
 }
 
 /**

@@ -1,164 +1,225 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
 import Icon from '../ui/Icon.vue'
-import TokenField from '../ui/TokenField.vue'
-import IconButton from '../ui/IconButton.vue'
-import Checkbox from '../ui/Checkbox.vue'
+import Input from '../ui/Input.vue'
+import Modal from '../ui/Modal.vue'
+import DialogButton from '../ui/DialogButton.vue'
+import VariableRow from '../environments/VariableRow.vue'
+import RowCreate from '../ui/RowCreate.vue'
+import EnvironmentMenu from '../environments/EnvironmentMenu.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { useEnvironmentsStore } from '../../stores/environments'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { useVariableCells } from '../../composables/useVariableCells'
+import { useSheetNotice } from '../../composables/useSheetNotice'
+import { useToast } from '../../composables/useToast'
 import { findCollection } from '../../lib/collectionTree'
-import { SECRET_MASK } from '../../lib/layout'
+import { dotOf } from '../../lib/environmentPalette'
+import { isVariableName } from '../../lib/vars'
 import { t } from '../../i18n'
 import { VariableKind, type Variable } from '../../../bindings/schemo/internal/domain'
 
-// What the collection keeps between its requests, and what the environment says about the same name
-// — a value the environment overrides is shown beside the one written here.
 const collections = useCollectionsStore()
 const environments = useEnvironmentsStore()
-
-type EditorRow = { key: number; variable: Variable }
-
-// The level the page is about: the same answer the header names and the tree highlights by.
+const workspaces = useWorkspacesStore()
+const toast = useToast()
+const { notice, setNotice, clearNotice, withNotice } = useSheetNotice()
 const level = computed(() => findCollection(collections.tree, collections.collectionId))
+const hasBlocks = computed(() => Boolean(level.value && !level.value.parentId))
+const query = ref('')
+const filter = ref(collections.varsFilter)
+const replacement = ref<{ set: string; variable: Variable; target: string | null } | null>(null)
+const filterEnv = computed(() => environments.envOf(filter.value))
+const locked = (set: string | null) => !workspaces.canWrite || Boolean(set && environments.envOf(set)?.readonly)
+const varsOf = (set: string | null, collection = level.value?.id ?? null) => set
+  ? environments.envOf(set)?.collections[collection ?? ''] ?? []
+  : findCollection(collections.tree, collection)?.variables ?? []
+const rowOrder = new Map<string, number>()
+const rows = computed(() => {
+  const entries = [
+    ...varsOf('').map(variable => ({ set: '', variable })),
+    ...(hasBlocks.value ? environments.environments.flatMap(env =>
+      varsOf(env.id).map(variable => ({ set: env.id, variable }))
+    ) : []),
+  ]
+  // Keep new rows at the end while this collection is open, including after a reload.
+  for (const { variable } of entries) {
+    if (!rowOrder.has(variable.id)) rowOrder.set(variable.id, rowOrder.size)
+  }
+  return entries.sort((a, b) => rowOrder.get(a.variable.id)! - rowOrder.get(b.variable.id)!)
+})
+const shown = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  return rows.value.filter(({ set, variable }) =>
+    (!filterEnv.value || !set || set === filterEnv.value.id) &&
+    (!needle || variable.name.toLowerCase().includes(needle) ||
+      (variable.kind !== VariableKind.VariableSecret && (variable.value ?? '').toLowerCase().includes(needle)))
+  )
+})
 
-const rows = ref<EditorRow[]>([])
-let nextKey = 1
+let writing: Promise<unknown> = Promise.resolve()
+let closed = false
 
-function fromStore(): EditorRow[] {
-  return (level.value?.variables ?? []).map((variable) => ({
-    key: nextKey++,
-    variable: { ...variable },
+function write(change: (id: string) => Promise<unknown>) {
+  const id = level.value?.id
+  const workspace = workspaces.activeId
+  const run = () => id && workspaces.activeId === workspace && findCollection(collections.tree, id)
+    ? change(id)
+    : Promise.resolve()
+  const saved = writing.then(run, run)
+  writing = saved
+  return saved
+}
+
+function save(set: string | null, change: (vars: Variable[]) => Variable[]) {
+  return write(async id => {
+    if (locked(set)) return
+    const vars = change(varsOf(set, id))
+    if (set) await environments.saveScope(set, vars, id)
+    else await collections.saveVariables(id, vars)
+  })
+}
+
+function patch(set: string | null, id: string, change: Partial<Variable>) {
+  if (set) return write(collection => locked(set) ? Promise.resolve() : environments.updateVar(set, id, change, collection))
+  return save(set, vars => vars.map(variable => variable.id === id ? { ...variable, ...change } : variable))
+}
+
+const editor = useVariableCells({
+  rows: () => shown.value.map(({ set, variable }) => ({ scope: set, variable })),
+  vars: varsOf,
+  locked,
+  save: patch,
+})
+
+watch(() => collections.varsFilter, value => { filter.value = value })
+watch(() => level.value?.id, () => {
+  replacement.value = null
+  rowOrder.clear()
+  query.value = ''
+  filter.value = collections.varsFilter
+  editor.cancel()
+}, { flush: 'sync' })
+watch(filter, () => editor.cancel())
+onBeforeUnmount(() => {
+  closed = true
+  clearNotice()
+})
+
+async function add(name: string, value: string): Promise<boolean> {
+  const id = level.value?.id
+  const set = filterEnv.value?.id ?? ''
+  if (locked(set) || !name.trim()) return false
+  const variable = { ...environments.blankVar(name), value }
+  const saved = await withNotice(() => save(set, vars => [...vars, variable]))
+  if (saved && !closed && level.value?.id === id) {
+    await nextTick()
+    void editor.start(variable, 'value', set)
+  }
+  return saved
+}
+
+async function move(set: string, variable: Variable, target: string | null, replace = false) {
+  const id = level.value?.id
+  if (!id || set === (target ?? '') || locked(set) || locked(target)) return
+  await withNotice(() => write(async collection => {
+    const current = varsOf(set, collection).find(item => item.id === variable.id)
+    if (!current) return
+    if (!replace && current.name && varsOf(target, collection).some(item => item.name === current.name)) {
+      replacement.value = { set, variable: current, target }
+      return
+    }
+    const replaced = await environments.moveVariable(collection, current.id, set, target ?? '')
+    await collections.load()
+    if (replaced) toast.show(t('collections.varReplaced', {
+      name: current.name,
+      where: environments.envOf(target)?.name ?? t('collections.varsAll'),
+    }))
   }))
 }
 
-watch(
-  () => level.value?.variables,
-  () => {
-    rows.value = fromStore()
-  },
-  { immediate: true, deep: true }
-)
-
-const envName = computed(() => environments.activeEnvironment?.name ?? '')
-
-/** What the environment holds under the same name, if anything: the value that would go out. */
-const envByName = computed(() => {
-  const map = new Map<string, Variable>()
-  for (const variable of environments.activeEnvironment?.vars ?? []) {
-    if (variable.enabled === false) continue
-    map.set(variable.name, variable)
-  }
-  return map
-})
-
-function currentOf(row: EditorRow): { text: string; overridden: boolean } {
-  const fromEnv = envByName.value.get(row.variable.name)
-  if (fromEnv) return { text: shown(fromEnv), overridden: true }
-  return { text: shown(row.variable), overridden: false }
-}
-
-function shown(variable: Variable): string {
-  if (variable.value) return variable.value
-  return variable.hasValue ? SECRET_MASK : ''
-}
-
-function isSecret(variable: Variable): boolean {
-  return variable.kind === VariableKind.VariableSecret
-}
-
-async function commit() {
-  if (!level.value) return
-  await collections.saveVariables(
-    level.value.id,
-    rows.value.map((row) => row.variable)
-  )
-}
-
-function patch(row: EditorRow, change: Partial<Variable>) {
-  rows.value = rows.value.map((it) =>
-    it.key === row.key ? { ...it, variable: { ...it.variable, ...change } } : it
-  )
-}
-
-function toggle(row: EditorRow) {
-  patch(row, { enabled: !row.variable.enabled })
-  void commit()
-}
-
-function remove(row: EditorRow) {
-  rows.value = rows.value.filter((it) => it.key !== row.key)
-  void commit()
-}
-
-function addVariable() {
-  rows.value = [
-    ...rows.value,
-    {
-      key: nextKey++,
-      variable: {
-        id: '',
-        name: '',
-        value: '',
-        kind: VariableKind.VariableText,
-        enabled: true,
-        position: rows.value.length + 1,
-        hasValue: false,
-      },
-    },
-  ]
+function confirmMove() {
+  const pending = replacement.value
+  replacement.value = null
+  if (pending) void move(pending.set, pending.variable, pending.target, true)
 }
 </script>
 
 <template>
   <div class="vars">
-    <!-- A collection with no variables of its own is the button alone, the way an environment's
-         empty set is: a table nobody has filled yet says nothing with its headings. -->
-    <div v-if="rows.length" class="head">
-      <span></span>
-      <span>{{ t('collections.varName') }}</span>
-      <span>{{ t('collections.inCollection') }}</span>
-      <span>{{ envName ? t('collections.varsCurrent', { env: envName }) : t('collections.varsCurrentBare') }}</span>
-      <span></span>
+    <div class="tools">
+      <div class="search">
+        <Icon name="Search" :size="13" />
+        <Input v-model="query" variant="bare" size="sm" :placeholder="t('collections.varsSearch')" />
+      </div>
+      <DropdownMenuRoot v-if="hasBlocks">
+        <DropdownMenuTrigger as-child>
+          <button type="button" class="filter">
+            <span v-if="filterEnv" class="dot" :style="{ background: dotOf(filterEnv.color ?? '') }"></span>
+            <span class="cap-line">{{ filterEnv?.name ?? t('collections.varsAllEnvironments') }}</span>
+            <Icon name="ChevronDown" :size="9" :stroke-width="2.8" class="caret" />
+          </button>
+        </DropdownMenuTrigger>
+        <EnvironmentMenu :selected="filterEnv?.id ?? null" :none-label="t('collections.varsAllEnvironments')" align="start" @select="filter = $event ?? ''" />
+      </DropdownMenuRoot>
     </div>
-
-    <div v-for="row in rows" :key="row.key" class="row" :class="{ off: row.variable.enabled === false }">
-      <Checkbox
-        :model-value="row.variable.enabled !== false"
-        @update:model-value="toggle(row)"
-      />
-
-      <input
-        :value="row.variable.name"
-        class="kv-input name"
-        spellcheck="false"
-        @input="patch(row, { name: ($event.target as HTMLInputElement).value })"
-        @blur="commit"
-      />
-      <TokenField
-        variant="cell"
-        :value="row.variable.value ?? ''"
-        @change="patch(row, { value: $event })"
-        @focusout="commit"
-      />
-      <span class="cur-cell">
-        <span class="cur" :class="{ over: currentOf(row).overridden }">{{ currentOf(row).text }}</span>
-      </span>
-      <span class="tail">
-        <Icon v-if="isSecret(row.variable)" name="Lock" :size="14" :stroke-width="1.8" class="lock" />
-        <IconButton variant="danger" size="md" class="drop" :hint="t('common.delete')" @click="remove(row)">
-          <Icon name="X" :size="14" :stroke-width="2.2" />
-        </IconButton>
-      </span>
+    <div class="variable-table" :class="{ blocks: hasBlocks }">
+      <div class="grid head">
+        <span></span><span>{{ t('collections.varName') }}</span><span>{{ t('collections.varValue') }}</span>
+        <span v-if="hasBlocks">{{ t('collections.varEnvironment') }}</span><span></span>
+      </div>
+      <VariableRow
+        v-for="{ set, variable } in shown"
+        :key="`${set}/${variable.id}`"
+        :variable
+        :scope="set"
+        :editor
+        :locked="locked(set)"
+        :allow-secret="Boolean(set)"
+        @patch="withNotice(() => patch(set, variable.id, $event))"
+        @remove="withNotice(() => save(set, vars => vars.filter(item => item.id !== variable.id)))"
+      >
+        <span v-if="hasBlocks" class="scope-cell">
+          <DropdownMenuRoot>
+            <DropdownMenuTrigger as-child :disabled="locked(set)">
+              <button type="button" class="scope" :class="{ all: !set }">
+                <span v-if="set" class="dot" :style="{ background: dotOf(environments.envOf(set)?.color ?? '') }"></span>
+                <span class="cap-line">{{ environments.envOf(set)?.name ?? t('collections.varsAll') }}</span>
+                <Icon v-if="locked(set)" name="Lock" :size="11" class="caret" />
+              </button>
+            </DropdownMenuTrigger>
+            <EnvironmentMenu :selected="set" :none-label="t('collections.varsAllEnvironments')" writable-only :manage="false" align="start" @select="move(set, variable, $event)" />
+          </DropdownMenuRoot>
+        </span>
+      </VariableRow>
+      <RowCreate
+        v-if="!query && !locked(filterEnv?.id ?? '')"
+        :key="`${level?.id}/${filterEnv?.id ?? ''}`"
+        :create="add"
+        :name-placeholder="t('collections.varName')"
+        :value-placeholder="t('collections.varValue')"
+        :validate-name="name => isVariableName(name) ? '' : t('environments.nameInvalid')"
+        @invalid="setNotice"
+      >
+        <span v-if="hasBlocks">{{ filterEnv?.name ?? t('collections.varsAll') }}</span>
+      </RowCreate>
+      <span v-if="query && !shown.length" class="note">{{ t('common.nothingFound') }}</span>
+      <span v-if="notice" class="note bad">{{ notice }}</span>
     </div>
-
-    <button type="button" class="add" @click="addVariable">
-      <Icon name="Plus" :size="14" :stroke-width="2.2" />
-      <span class="cap-line">{{ t('collections.addVariable') }}</span>
-    </button>
-
-    <p class="foot">
-      {{ t('collections.varsFoot') }}
-    </p>
+    <Modal
+      v-if="replacement"
+      :open="true"
+      :title="t('collections.varReplaceTitle', { name: replacement.variable.name, where: environments.envOf(replacement.target)?.name ?? t('collections.varsAll') })"
+      variant="ask"
+      @close="replacement = null"
+    >
+      <p class="replacement-note">{{ t('collections.varReplaceSub') }}</p>
+      <template #foot>
+        <DialogButton @click="replacement = null">{{ t('common.cancel') }}</DialogButton>
+        <DialogButton danger @click="confirmMove">{{ t('common.replace') }}</DialogButton>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -166,98 +227,128 @@ function addVariable() {
 @reference "../../style.css";
 
 .vars {
-  @apply flex flex-col flex-1 min-h-0 overflow-y-auto;
-  padding: 1rem 1.5rem;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 24px 24px;
 }
 
-.head,
-.row {
-  display: grid;
-  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 1.75rem;
+.replacement-note {
+  @apply text-13 text-text-secondary;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.tools {
+  display: flex;
   align-items: center;
-  padding: 0 0.625rem;
+  gap: 8px;
+  height: 36px;
+  margin-bottom: 4px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  flex: 0 1 240px;
+  gap: 7px;
+  min-width: 120px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-tertiary);
+}
+
+.search :deep(input) {
+  width: 100%;
+  min-width: 0;
+  font-size: var(--text-13);
+}
+
+.filter,
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-13);
+  cursor: default;
+}
+
+.filter {
+  flex: none;
+  height: 28px;
+  padding-left: 10px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.scope {
+  height: 26px;
+  margin-left: -8px;
+}
+
+.filter:hover,
+.filter[data-state='open'],
+.scope:hover:not(:disabled),
+.scope[data-state='open'] {
+  background: var(--bg-hover);
+}
+
+.scope.all,
+.caret {
+  color: var(--text-tertiary);
+}
+
+.scope-cell {
+  min-width: 0;
+}
+
+.dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.variable-table {
+  --row-columns: 28px minmax(120px, 200px) minmax(160px, 1fr) 80px;
+  min-width: 430px;
+}
+
+.variable-table.blocks {
+  --row-columns: 28px minmax(120px, 200px) minmax(160px, 1fr) minmax(130px, 190px) 80px;
+  min-width: 600px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: var(--row-columns);
+  align-items: center;
 }
 
 .head {
-  height: 1.875rem;
+  height: 28px;
   font-size: var(--text-12);
   color: var(--text-tertiary);
-  border-bottom: 1px solid var(--border);
 }
 
-.head > span {
-  padding: 0 0.5rem;
-}
-
-.row {
-  height: 2.5rem;
-  border-bottom: 1px solid var(--line2);
-  font-family: var(--mono);
+.note {
+  display: block;
+  padding: 14px 0;
   font-size: var(--text-13);
-}
-
-.row.off {
-  opacity: 0.45;
-}
-
-.name {
-  color: var(--accent);
-}
-
-.cur-cell {
-  @apply min-w-0 truncate;
-  padding: 0 1rem 0 0.5rem;
-}
-
-.cur {
-  color: var(--text-secondary);
-}
-
-.cur.over {
-  padding: 0.125rem 0.3125rem;
-  border-radius: 0.3125rem;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.tail {
-  @apply flex items-center justify-end;
   color: var(--text-tertiary);
 }
 
-.lock {
-  @apply flex-none;
-}
-
-.row :deep(.drop) {
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.row:hover :deep(.drop) {
-  opacity: 1;
-}
-
-.add {
-  @apply flex items-center gap-1.5 self-start cursor-pointer border-0 bg-transparent text-accent;
-  margin-top: 0.75rem;
-  padding: 0 0.625rem;
-  height: 1.875rem;
-  border-radius: 0.3125rem;
-  font-family: inherit;
-  font-size: var(--text-13);
-  font-weight: 500;
-}
-
-.add:hover {
-  background: var(--accent-soft);
-}
-
-.foot {
-  @apply text-text-secondary;
-  margin-top: 0.875rem;
-  padding: 0 0.625rem;
-  max-width: 42.5rem;
-  line-height: 1.55;
+.note.bad {
+  color: var(--red);
 }
 </style>

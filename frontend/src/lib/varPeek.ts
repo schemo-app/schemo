@@ -2,6 +2,7 @@ import type { Directive } from 'vue'
 import { effectScope, onScopeDispose, shallowRef } from 'vue'
 import { useEventListener, useTimeoutFn } from '@vueuse/core'
 import { useEnvironmentsStore } from '../stores/environments'
+import { useCollectionsStore } from '../stores/collections'
 import { parseTokens } from './vars'
 
 export const hoveredVar = shallowRef<HTMLElement | null>(null)
@@ -16,20 +17,30 @@ function tokenAt(field: HTMLElement, e: MouseEvent): HTMLElement | null {
   )
 }
 
-function open(name: string, envId: string | undefined) {
+// Alt-click opens where the value lives; an unknown name opens the active environment to add it.
+function open(token: HTMLElement) {
   const environments = useEnvironmentsStore()
-  const scope = envId || environments.activeId
-  const own = environments.resolveVariable(name, envId)?.source !== 'global' && scope !== null
-  environments.openSheet({ envId: own ? scope : null, varName: name })
+  const varName = token.dataset.var ?? ''
+  const collection = token.dataset.collection ?? ''
+  switch (token.dataset.source) {
+    case 'global':
+      environments.openSheet({ envId: null, varName })
+      return
+    case 'collection':
+    case 'block':
+      if (collection) {
+        const envId = token.dataset.source === 'block' ? (environments.activeId ?? '') : ''
+        void useCollectionsStore().openVariables(collection, envId)
+        return
+      }
+  }
+  environments.openSheet({ envId: environments.activeId, varName })
 }
 
-const scopes = new WeakMap<HTMLElement, string | undefined>()
 const detach = new WeakMap<HTMLElement, () => void>()
 
-export const vVarPeek: Directive<HTMLElement, string | undefined> = {
-  mounted(field, { value }) {
-    scopes.set(field, value)
-
+export const vVarPeek: Directive<HTMLElement> = {
+  mounted(field) {
     const lifetime = effectScope()
     lifetime.run(() => {
       let under: HTMLElement | null = null
@@ -46,7 +57,7 @@ export const vVarPeek: Directive<HTMLElement, string | undefined> = {
         const token = e.altKey ? tokenAt(field, e) : null
         if (!token) return
         e.preventDefault()
-        open(token.dataset.var ?? '', scopes.get(field))
+        open(token)
       }
 
       // A double click takes the name between the braces; the variable is the braces as well.
@@ -67,12 +78,8 @@ export const vVarPeek: Directive<HTMLElement, string | undefined> = {
     })
     detach.set(field, () => lifetime.stop())
   },
-  updated(field, { value }) {
-    scopes.set(field, value)
-  },
   unmounted(field) {
     detach.get(field)?.()
     detach.delete(field)
-    scopes.delete(field)
   },
 }

@@ -140,7 +140,7 @@ async function undo() {
       kind: savedVariable.prior.secret ? VariableKind.VariableSecret : VariableKind.VariableText,
     })
   } else {
-    await environments.removeVar(savedVariable.envId, savedVariable.varId)
+    await environments.removeVar(savedVariable.envId, savedVariable.varId, false)
   }
   if (savedVariable.ruleAdded && host) {
     const rest = host.captures.filter((rule) => rule.name !== savedVariable.name)

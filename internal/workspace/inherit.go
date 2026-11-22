@@ -24,6 +24,7 @@ func (s *Collections) Above(ctx context.Context, id domain.DraftID) (Above, erro
 	}
 	for _, collection := range tree {
 		if found, ok := aboveUnder([]domain.Collection{collection}, string(id), nil, nil); ok {
+			found.Levels.Collection = collection.ID
 			return found, nil
 		}
 	}
@@ -43,7 +44,7 @@ func aboveUnder(
 
 		for _, node := range collection.Items {
 			if node.ID == id {
-				return Above{Auth: effectiveAuth(node.Auth, at), Variables: variables}, true
+				return Above{Auth: effectiveAuth(node.Auth, at), Levels: domain.VarLevels{Variables: variables}}, true
 			}
 		}
 		if found, ok := aboveUnder(collection.Children, id, at, variables); ok {
@@ -78,6 +79,16 @@ type runnable struct {
 	// What the levels above answer for `{{tokens}}`, outermost first: the walk down the tree is where
 	// it is collected, and the sender is handed it because by then the tree is out of reach.
 	variables []domain.Variable
+}
+
+// rootOf is the top-level collection holding a level: the one environments keep a block for.
+func rootOf(tree []domain.Collection, id string) string {
+	for _, top := range tree {
+		if _, ok := findCollection([]domain.Collection{top}, id); ok {
+			return top.ID
+		}
+	}
+	return ""
 }
 
 // runnablesUnder lists the requests to run. Walking from the root keeps the auth and variables of

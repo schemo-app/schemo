@@ -38,7 +38,7 @@ const emit = defineEmits<{ select: [key: string] }>()
           @select="emit('select', option.key)"
         >
           <span class="pane-select-check">
-            <Icon v-if="option.key === current" name="Check" :size="14" :stroke-width="1.75" />
+            <Icon v-if="option.key === current" name="Check" :size="13" :stroke-width="1.75" />
           </span>
           <span class="pane-select-label cap-line">{{ option.label }}</span>
           <span v-if="option.hint" class="pane-select-hint">{{ option.hint }}</span>

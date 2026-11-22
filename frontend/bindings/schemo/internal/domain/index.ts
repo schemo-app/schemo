@@ -144,6 +144,7 @@ export type {
     SyncWorkspace,
     Tab,
     TestResult,
+    VarImport,
     Variable,
     Workspace,
     WorkspaceAccess,

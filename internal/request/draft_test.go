@@ -69,7 +69,7 @@ func (r *rig) preview(t *testing.T, d domain.Draft) Preview {
 
 func (r *rig) prepared(t *testing.T, d domain.Draft) SendInput {
 	t.Helper()
-	prepared, err := r.Prepared(context.Background(), d, nil, nil)
+	prepared, err := r.Prepared(context.Background(), d, nil, domain.VarLevels{})
 	if err != nil {
 		t.Fatalf("Prepared: %v", err)
 	}
@@ -89,12 +89,12 @@ type fakeVars struct {
 
 // known is what both calls answer from: the fake's values plus the levels above, nearest winning.
 // The list arrives outermost first, and both calls read the same map, so they cannot disagree.
-func (f fakeVars) known(above []domain.Variable) map[string]string {
+func (f fakeVars) known(above domain.VarLevels) map[string]string {
 	values := map[string]string{}
 	for name, value := range f.values {
 		values[name] = value
 	}
-	for _, v := range above {
+	for _, v := range above.Variables {
 		if v.Enabled && v.Name != "" {
 			values[v.Name] = v.Value
 		}
@@ -104,9 +104,8 @@ func (f fakeVars) known(above []domain.Variable) map[string]string {
 
 func (f fakeVars) Missing(
 	_ context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	_ string,
 ) ([]string, error) {
 	values := f.known(above)
 	out, seen := []string{}, map[string]bool{}
@@ -124,10 +123,9 @@ func (f fakeVars) Missing(
 
 func (f fakeVars) SubstituteTexts(
 	_ context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
 	mask bool,
-	_ string,
 ) ([]string, error) {
 	values := f.known(above)
 	out := make([]string, len(texts))
@@ -138,20 +136,16 @@ func (f fakeVars) SubstituteTexts(
 			}
 			text = strings.ReplaceAll(text, "{{"+name+"}}", value)
 		}
-		// A name nothing answers goes out as nothing — the same rule the real resolver keeps.
-		for _, name := range f.mentioned(text) {
-			text = strings.ReplaceAll(text, "{{"+name+"}}", "")
-		}
 		out[i] = text
 	}
 	return out, nil
 }
 
-func (f fakeVars) Resolver(ctx context.Context, _ string, above []domain.Variable, envID string) (func(string) (string, string), error) {
+func (f fakeVars) Resolver(ctx context.Context, _ string, above domain.VarLevels) (func(string) (string, string), error) {
 	return func(text string) (string, string) {
 		values := []string{text}
-		live, _ := f.SubstituteTexts(ctx, above, values, false, envID)
-		masked, _ := f.SubstituteTexts(ctx, above, values, true, envID)
+		live, _ := f.SubstituteTexts(ctx, above, values, false)
+		masked, _ := f.SubstituteTexts(ctx, above, values, true)
 		return live[0], masked[0]
 	}, nil
 }
@@ -160,9 +154,8 @@ func (f fakeVars) Resolver(ctx context.Context, _ string, above []domain.Variabl
 // under rather than to its value, and a value the text spells out is masked, as the resolver does.
 func (f fakeVars) ReferenceTexts(
 	_ context.Context,
-	above []domain.Variable,
+	above domain.VarLevels,
 	texts []string,
-	_ string,
 ) ([]string, error) {
 	values := f.known(above)
 	out := make([]string, len(texts))
@@ -172,9 +165,6 @@ func (f fakeVars) ReferenceTexts(
 				value = "$SCHEMO_" + strings.ToUpper(name)
 			}
 			text = strings.ReplaceAll(text, "{{"+name+"}}", value)
-		}
-		for _, name := range f.mentioned(text) {
-			text = strings.ReplaceAll(text, "{{"+name+"}}", "")
 		}
 		for name, value := range f.values {
 			if f.secret[name] && value != "" {
@@ -191,9 +181,8 @@ func (f fakeVars) ReferenceTexts(
 func (f fakeVars) MaskTextsIn(
 	_ context.Context,
 	_ string,
-	_ []domain.Variable,
+	_ domain.VarLevels,
 	texts []string,
-	_ string,
 ) ([]string, error) {
 	out := make([]string, len(texts))
 	for i, text := range texts {
@@ -413,7 +402,7 @@ func TestATabDraftIsKeptUntilDiscarded(t *testing.T) {
 	}
 
 	d := r.request(Seed{Method: "POST", URL: "/a", Headers: []domain.HeaderPair{{Name: "A", Value: "1"}}})
-	d.ID, d.EnvironmentID = "tab:x", "env-1"
+	d.ID = "tab:x"
 	d.Params = []domain.Row{{Name: "page", Value: "2", Enabled: true}}
 	if err := r.Save(ctx, d); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -422,7 +411,7 @@ func TestATabDraftIsKeptUntilDiscarded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if read.Method != "POST" || read.URL != "/a" || read.EnvironmentID != "env-1" ||
+	if read.Method != "POST" || read.URL != "/a" ||
 		len(read.Headers) != 1 {
 		t.Errorf("read = %+v, want what was saved", read)
 	}
@@ -492,7 +481,7 @@ func (l *line) setAuth(t *testing.T, auth domain.Auth) {
 }
 
 // copyAs is a copy of the draft in hand, with what the levels above answer handed in.
-func (l *line) copyAs(inherits *domain.Auth, above []domain.Variable, format command.Format) (Copy, error) {
+func (l *line) copyAs(inherits *domain.Auth, above domain.VarLevels, format command.Format) (Copy, error) {
 	ctx := context.Background()
 	cookie, err := l.jarCookies(ctx, l.d)
 	if err != nil {

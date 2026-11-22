@@ -75,7 +75,7 @@ func skipped(doc domain.Document, code domain.Code) int {
 // A workspace is a collection: its groups become folders, its requests become requests, and both
 // keep the order the export wrote them in.
 func TestImportReadsAWorkspaceAsACollection(t *testing.T) {
-	collection := only(t, read(t, "export_v4.json"))
+	collection := first(t, read(t, "export_v4.json"))
 	if collection.Name != "Storefront" || collection.Description != "The shop's own API." {
 		t.Errorf("collection = %+v, want the workspace's own name", collection)
 	}
@@ -119,7 +119,7 @@ func TestImportReadsAWorkspaceAsACollection(t *testing.T) {
 // and a file field keeps its name while the file itself stays out and is counted.
 func TestImportReadsBodiesByTheirMediaType(t *testing.T) {
 	doc := read(t, "export_v4.json")
-	collection := only(t, doc)
+	collection := first(t, doc)
 
 	created := node(t, collection, "Create a product")
 	if created.BodyKind != domain.BodyJSON || created.Body != "{\n  \"name\": \"{{product}}\"\n}" {
@@ -146,7 +146,7 @@ func TestImportReadsBodiesByTheirMediaType(t *testing.T) {
 // file asked for it, and inheriting would send credentials it never named.
 func TestImportReadsAuthorization(t *testing.T) {
 	doc := read(t, "export_v4.json")
-	collection := only(t, doc)
+	collection := first(t, doc)
 
 	created := node(t, collection, "Create a product")
 	if created.Auth == nil || created.Auth.Type != domain.AuthBearer ||
@@ -172,7 +172,7 @@ func TestImportReadsAuthorization(t *testing.T) {
 // A path parameter is the request's own: the address keeps its `:name`, and what the file kept
 // beside the url is the value of the row that fills it. It is no variable.
 func TestImportReadsPathParametersAsTheRequestsRows(t *testing.T) {
-	collection := only(t, read(t, "export_v4.json"))
+	collection := first(t, read(t, "export_v4.json"))
 	one := node(t, collection, "One item")
 	if one.URL != "{{base_url}}/items/:item_id" {
 		t.Errorf("url = %q, want the path parameter kept as a `:name`", one.URL)
@@ -185,42 +185,6 @@ func TestImportReadsPathParametersAsTheRequestsRows(t *testing.T) {
 		if one.Name == "item_id" {
 			t.Errorf("variable = %+v, want no variable for a path parameter", one)
 		}
-	}
-}
-
-// Environments come with their collections. Insomnia's base environment applies beside whichever
-// one is selected, and this app has no such second scope — so its values are also folded into every
-// environment that does not set them, and the base itself is written too.
-func TestImportReadsEnvironments(t *testing.T) {
-	doc := read(t, "export_v4.json")
-	if len(doc.Environments) != 2 {
-		t.Fatalf("environments = %+v, want the base and Dev", doc.Environments)
-	}
-
-	base := doc.Environments[0]
-	if base.Name != "Base Environment" {
-		t.Fatalf("first = %q, want the base environment", base.Name)
-	}
-	url := variable(t, base.Variables, "base_url")
-	if url.Value != "https://api.storefront.example/v1" {
-		t.Errorf("base_url = %+v, want the address", url)
-	}
-
-	dev := doc.Environments[1]
-	if dev.Name != "Dev" {
-		t.Fatalf("second = %q, want Dev", dev.Name)
-	}
-	if token := variable(t, dev.Variables, "dev_token"); token.Value != "tok_dev" ||
-		token.Kind != domain.VariableSecret {
-		t.Errorf("dev_token = %+v, want the environment's own value", token)
-	}
-	inherited := variable(t, dev.Variables, "base_url")
-	if inherited.Value != "https://api.storefront.example/v1" {
-		t.Errorf("base_url = %+v, want the base's value folded in", inherited)
-	}
-	// Insomnia does not mark a variable as a secret; the name is the only thing left to read.
-	if key := variable(t, dev.Variables, "api_key"); key.Kind != domain.VariableSecret {
-		t.Errorf("api_key = %+v, want a secret by its name", key)
 	}
 }
 

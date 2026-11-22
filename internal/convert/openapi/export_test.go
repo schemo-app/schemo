@@ -13,7 +13,7 @@ import (
 // reimport is one collection through the document and back, as the collection the reader builds.
 func reimport(t *testing.T, collection domain.Collection) domain.Collection {
 	t.Helper()
-	data, err := Export(collection)
+	data, err := Export(collection, nil)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestExportRoundTripsAuthorization(t *testing.T) {
 // A collection with nothing in it writes a document all the same — its name, its version — and
 // importing that document back is refused: there would be no request to write.
 func TestExportOfAnEmptyCollection(t *testing.T) {
-	data, err := Export(domain.Collection{Name: "Storefront"})
+	data, err := Export(domain.Collection{Name: "Storefront"}, nil)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestExportWritesTheVersionAndTheSuccessTheFormatDemands(t *testing.T) {
 			{Name: "List products", Method: "GET", URL: "{{baseUrl}}/products"},
 		},
 	}
-	data, err := Export(collection)
+	data, err := Export(collection, nil)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestExportLeavesHeadersTheDocumentStatesElsewhereOut(t *testing.T) {
 			},
 		},
 	}
-	data, err := Export(collection)
+	data, err := Export(collection, nil)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestExportNamesARequestsSchemeAfterItsBaseName(t *testing.T) {
 				Auth: &domain.Auth{Type: domain.AuthAPIKey, Fields: map[string]string{}}},
 		},
 	}
-	data, err := Export(collection)
+	data, err := Export(collection, nil)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}

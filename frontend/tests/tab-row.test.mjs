@@ -11,7 +11,7 @@ function rowOf(count, pins = 0) {
   const tabs = ref(Array.from({ length: count }, (_, i) => ({ id: String(i), compact: i < pins })))
   const active = ref(String(count - 1))
   const scope = effectScope()
-  const row = scope.run(() => useTabRow({ tabs: () => tabs.value, activeId: () => active.value }))
+  const row = scope.run(() => useTabRow({ tabs: () => tabs.value, activeId: () => active.value, strip: ref(null) }))
   return { tabs, active, row, stop: () => scope.stop() }
 }
 

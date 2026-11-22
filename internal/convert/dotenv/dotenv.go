@@ -14,9 +14,8 @@ type Entry struct {
 
 var secretHint = regexp.MustCompile(`(?i)(TOKEN|SECRET|PASSWORD|KEY|AUTH)`)
 
-// SecretName guesses from a name whether what it holds is a secret. A file of another tool does not
-// say so — Postman does, Insomnia does not — and the name is the only thing left to read.
-func SecretName(name string) bool { return secretHint.MatchString(name) }
+// secretName guesses from a name whether what it holds is a secret: a .env file does not say.
+func secretName(name string) bool { return secretHint.MatchString(name) }
 
 func Parse(text string) []Entry {
 	var out []Entry
@@ -50,7 +49,7 @@ func Parse(text string) []Entry {
 			}
 		}
 
-		out = append(out, Entry{Name: name, Value: value, Secret: SecretName(name)})
+		out = append(out, Entry{Name: name, Value: value, Secret: secretName(name)})
 	}
 
 	return out

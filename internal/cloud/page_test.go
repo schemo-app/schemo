@@ -31,7 +31,7 @@ func catalogue() domain.Collection {
 
 // addressed is the one variable every environment has: the address its requests stand on.
 func addressed(base string) []domain.Variable {
-	return []domain.Variable{{Name: domain.BaseURLVariable, Value: base}}
+	return []domain.Variable{{Name: domain.BaseURLVariable, Value: base, Enabled: true}}
 }
 
 // expanded is the document a publish carried, opened: a page is stored compressed, and a test that
@@ -707,10 +707,11 @@ func TestTheAddressesOfAPageComeBackAsEnvironments(t *testing.T) {
 	if first.Name != "Production" {
 		t.Errorf("name = %q, want the page's own name for it", first.Name)
 	}
-	if len(first.Variables) != 1 {
-		t.Fatalf("variables = %+v, want the one address an environment is", first.Variables)
+	// The address belongs to the page's one collection.
+	if len(first.Blocks) != 1 || first.Blocks[0].Collection != 0 || len(first.Blocks[0].Variables) != 1 {
+		t.Fatalf("blocks = %+v, want the one address an environment is", first.Blocks)
 	}
-	held := first.Variables[0]
+	held := first.Blocks[0].Variables[0]
 	if held.Name != domain.BaseURLVariable || held.Value != "https://api.example.com" {
 		t.Errorf("variable = %q = %q, want the base address the page named", held.Name, held.Value)
 	}

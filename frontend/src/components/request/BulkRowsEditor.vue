@@ -9,7 +9,7 @@ import VarToken from '../ui/VarToken.vue'
 import { rem } from '../../lib/units'
 import { t } from '../../i18n'
 
-const { rows, envId } = defineProps<{ rows: Row[]; envId?: string }>()
+const { rows, readonly = false } = defineProps<{ rows: Row[]; readonly?: boolean }>()
 const emit = defineEmits<{ apply: [rows: Row[]] }>()
 const { isMac, shortcut } = usePlatform()
 const hintId = useId()
@@ -31,6 +31,7 @@ onMounted(() => editor.value?.focus())
 watch(text, () => apply(false))
 
 function apply(focus = true): boolean {
+    if (readonly) return true
     if (invalid.value) {
         if (focus) editor.value?.focus()
         return false
@@ -79,12 +80,12 @@ defineExpose({ apply })
                 v-if="segment.tokenName"
                 :name="segment.tokenName"
                 :text="segment.text"
-                :env-id="envId"
               /><span v-else>{{ segment.text }}</span></template></span><span v-if="line.invalid" class="bulk-line-error">{{ t('request.pane.bulkLineError') }}</span></div>
         </div>
         <textarea
           ref="editor"
-          v-var-peek="envId"
+          :readonly
+          v-var-peek
           v-model="text"
           class="bulk-text"
           :style="{ height: rem(lineCount * 22 + 20) }"

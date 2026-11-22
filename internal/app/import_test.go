@@ -59,14 +59,14 @@ environments:
 		t.Fatal(err)
 	}
 	if preview.File != filepath.Base(path) || preview.Size != len(yaml)+len(json) ||
-		preview.Collections != 2 || preview.Folders != 1 || preview.Requests != 2 || preview.Environments != 2 {
+		preview.Collections != 2 || preview.Folders != 1 || preview.Requests != 2 || preview.Environments != 1 {
 		t.Fatalf("PreviewPath = %+v, want the two exports combined", preview)
 	}
 	tree, err := d.Collections.Tree(ctx)
 	if err != nil || len(tree) != 0 {
 		t.Fatalf("before Apply: Tree = %v, %v, want empty", tree, err)
 	}
-	summary, err := d.Transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := d.Transfer.Apply(ctx, preview.Token, "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +77,11 @@ environments:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(collection.Variables) != 1 || collection.Variables[0].Name != "base_url" ||
+	// The base environment is the collection's; a confidential value stays out of it.
+	if len(collection.Variables) != 2 || collection.Variables[0].Name != "base_url" ||
+		collection.Variables[1].Name != "credential" || collection.Variables[1].Value != "" ||
 		len(collection.Children) != 1 || len(collection.Children[0].Items) != 1 {
-		t.Fatal("Full = missing public base variable or nested request")
+		t.Fatalf("Full = %+v, want the base variables and the nested request", collection.Variables)
 	}
 	request := collection.Children[0].Items[0]
 	if request.Method != "POST" || request.Description != "Adds a product" ||
@@ -89,15 +91,21 @@ environments:
 		request.Auth.Fields["value"] != "{{credential}}" {
 		t.Errorf("Full = %+v, want the imported HTTP request and its settings", request)
 	}
-	if summary.EnvState == nil || len(summary.EnvState.Environments) != 2 {
-		t.Fatal("Apply = missing Insomnia environments")
+	// The sub environment is a workspace environment with a block for its own collection.
+	if summary.EnvState == nil || len(summary.CreatedEnvironments) != 1 || summary.CreatedEnvironments[0] != "Staging" {
+		t.Fatalf("Apply = %+v, want Staging created", summary)
 	}
 	for _, environment := range summary.EnvState.Environments {
-		if len(environment.Vars) != 2 || environment.Vars[1].Name != "credential" ||
-			environment.Vars[1].Kind != domain.VariableSecret || environment.Vars[1].Value != "" {
-			t.Errorf("environment %q: confidential data must be masked", environment.Name)
+		if environment.Name != "Staging" {
+			continue
 		}
+		block := environment.Block(summary.Tree[0].ID)
+		if len(environment.Vars) != 0 || len(block) != 1 || block[0].Value != "https://staging.example.test" {
+			t.Errorf("Staging = %+v, want its base_url in Storefront's block", environment)
+		}
+		return
 	}
+	t.Fatal("Apply = no Staging environment")
 }
 
 func TestImportHAROverEightMiB(t *testing.T) {
@@ -117,7 +125,7 @@ func TestImportHAROverEightMiB(t *testing.T) {
 	if preview.Size != len(data) || preview.Requests != 2 {
 		t.Fatalf("PreviewPath = %+v, want both requests in a %d-byte archive", preview, len(data))
 	}
-	summary, err := d.Transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := d.Transfer.Apply(ctx, preview.Token, "", "", "")
 	if err != nil || summary.Requests != 2 {
 		t.Fatalf("Apply = %d requests, %v, want two requests", summary.Requests, err)
 	}
