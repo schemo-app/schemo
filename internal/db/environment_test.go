@@ -272,3 +272,36 @@ func TestADeletedEnvironmentAndItsVariables(t *testing.T) {
 		t.Errorf("%d environments are marked, want 1", environments)
 	}
 }
+
+func TestSaveScopesRollsBackMetadataAndVariablesTogether(t *testing.T) {
+	store := newMigratedStore(t)
+	ctx := t.Context()
+	collection := domain.Collection{ID: "catalog", Name: "Catalog", Variables: []domain.Variable{
+		{ID: "own", Name: "baseUrl", Value: "original", Kind: domain.VariableText, Enabled: true},
+	}}
+	if err := store.SaveCollection(ctx, ws, collection); err != nil {
+		t.Fatal(err)
+	}
+	collection.Variables = nil
+	env := domain.Environment{ID: "local", Name: "Local"}
+	duplicate := []domain.Variable{
+		{ID: "one", Name: "baseUrl", Value: "first", Kind: domain.VariableText, Enabled: true},
+		{ID: "two", Name: "baseUrl", Value: "second", Kind: domain.VariableText, Enabled: true},
+	}
+	err := store.SaveScopes(ctx, ws, ScopeChanges{
+		Environment: &env,
+		Collection:  &collection,
+		Scopes:      []ScopeWrite{{Scope: domain.EnvScope{Environment: env.ID, Collection: collection.ID}, Vars: duplicate}},
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("SaveScopes(duplicate names) = %v; want conflict", err)
+	}
+	tree, err := store.Collections(ctx, ws)
+	if err != nil || len(tree) != 1 || len(tree[0].Variables) != 1 || tree[0].Variables[0].Value != "original" {
+		t.Errorf("Collections after refused batch = %+v, %v; want original variable", tree, err)
+	}
+	state, err := store.EnvState(ctx, ws)
+	if err != nil || len(state.Environments) != 0 {
+		t.Errorf("EnvState after refused batch = %+v, %v; want no environment", state, err)
+	}
+}

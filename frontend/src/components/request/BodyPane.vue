@@ -4,6 +4,7 @@ import IconButton from '../ui/IconButton.vue'
 import Icon from '../ui/Icon.vue'
 import FileDrop from '../ui/FileDrop.vue'
 import TokenField from '../ui/TokenField.vue'
+import RowCreate from '../ui/RowCreate.vue'
 import KvRow from './KvRow.vue'
 import PaneSelect, { type PaneOption } from './PaneSelect.vue'
 import { registerBodyEditor, type BodySpan } from '../../lib/intents'
@@ -125,12 +126,13 @@ const { press, states } = useRowOrder({
   move: (id, position) => source.moveRow(RowKind.RowForm, id, position),
 })
 
-// The empty row at the end is a place to type rather than a button, as in the parameters: pressing
-// it makes the field and puts the caret in its name.
-async function addField() {
-  const id = await source.addRow(RowKind.RowForm)
+async function addField(name: string, value: string): Promise<boolean> {
+  const current = source
+  const id = await current.addRow(RowKind.RowForm, name, value)
+  if (!id) return false
   await nextTick()
-  formEl.value?.querySelector<HTMLInputElement>(`[data-row="${id}"]`)?.focus()
+  if (source === current) formEl.value?.querySelector<HTMLInputElement>(`[data-kv="${id}"] .row-input`)?.focus()
+  return true
 }
 
 async function pickFile(row: FormRow) {
@@ -254,13 +256,15 @@ async function pickBody() {
         </template>
       </KvRow>
 
-      <button type="button" class="kv-row kv-add" @click="addField">
-        <span></span>
-        <span class="kv-check ghost"></span>
-        <span class="kv-ghost mono">{{ t('request.pane.addField') }}</span>
-        <span class="kv-ghost mono">{{ t('request.placeholderValue') }}</span>
-        <span></span>
-      </button>
+      <RowCreate
+        :key="source.draftId ?? ''"
+        class="kv-row kv-add mono"
+        :create="addField"
+        :name-placeholder="t('request.placeholderKey')"
+        :value-placeholder="t('request.placeholderValue')"
+      >
+        <template #before><span></span><span></span></template>
+      </RowCreate>
     </div>
 
     <FileDrop v-else class="drop" @files="([path]) => source.setBodyFile(path)">
@@ -277,6 +281,9 @@ async function pickBody() {
 .body {
   @apply flex flex-col gap-2;
   padding: 0.625rem 1.25rem 0.875rem;
+  --row-columns: 1rem 1.5rem minmax(8.75rem, 15rem) minmax(0, 1fr) 3.5rem;
+  --create-row-height: 2.125rem;
+  --create-cell-padding: 0 0.5rem;
 }
 
 .body-head {

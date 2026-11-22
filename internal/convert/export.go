@@ -5,6 +5,7 @@ package convert
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"schemo/internal/convert/insomnia"
@@ -33,45 +34,39 @@ func (s *Transfer) export(
 		}
 	}
 
+	var environments []domain.EnvironmentDraft
+	switch format {
+	case FormatSchemo, FormatOpenAPI, FormatInsomnia:
+		if environments, err = s.environmentsOf(ctx, collection, secrets); err != nil {
+			return Export{}, err
+		}
+	}
+
 	var data []byte
 	switch format {
 	case FormatSchemo:
-		environments, err := s.environmentsOf(ctx, secrets)
-		if err != nil {
-			return Export{}, err
+		// The file carries this collection's blocks; values for every collection stay home.
+		for index := range environments {
+			environments[index].Variables = nil
 		}
-		document := domain.Document{
+		data, err = schemofile.Write(domain.Document{
 			Collections:  []domain.Collection{collection},
 			Environments: environments,
-		}
-		data, err = schemofile.Write(document, secrets)
-		if err != nil {
-			return Export{}, err
-		}
+		}, secrets)
 	case FormatPostman:
 		data, err = postman.Export(collection)
-		if err != nil {
-			return Export{}, err
-		}
 	case FormatOpenAPI:
-		data, err = openapi.Export(collection)
-		if err != nil {
-			return Export{}, err
-		}
+		data, err = openapi.Export(collection, effective(environments))
 	case FormatInsomnia:
-		environments, err := s.environmentsOf(ctx, secrets)
-		if err != nil {
-			return Export{}, err
-		}
-		data, err = insomnia.Export(collection, environments, secrets)
-		if err != nil {
-			return Export{}, err
-		}
+		data, err = insomnia.Export(collection, effective(environments), secrets)
 	default:
 		// A command and a published page are not files this app writes: cURL is written by Curl and a
 		// page by a publish, so asking for one here is the window saying the wrong thing.
 		return Export{}, domain.Refuse(domain.CodeUnknownFormat, domain.ErrNotAllowed,
 			domain.Args{"format": string(format)})
+	}
+	if err != nil {
+		return Export{}, err
 	}
 	return Export{Data: data, Name: collection.Name}, nil
 }
@@ -93,39 +88,132 @@ func checkExportProtocol(collection domain.Collection, format Format) error {
 	return nil
 }
 
-// environmentsOf is the environments a file carries. Secret values are revealed only when asked for;
-// otherwise the file notes a value without carrying it.
+// environmentsOf is every environment with a block for the collection's top level: its values for
+// all collections and the block (as block 0). Secret values are revealed only when asked for.
 func (s *Transfer) environmentsOf(
 	ctx context.Context,
+	collection domain.Collection,
 	secrets bool,
 ) ([]domain.EnvironmentDraft, error) {
+	root, err := s.rootOf(ctx, collection)
+	if err != nil || root == "" {
+		return nil, err
+	}
 	state, err := s.environments.State(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]domain.EnvironmentDraft, 0, len(state.Environments))
+	out := []domain.EnvironmentDraft{}
 	for _, environment := range state.Environments {
-		draft := domain.EnvironmentDraft{Name: environment.Name, Color: environment.Color}
-		for _, variable := range environment.Vars {
-			item := domain.Variable{
-				Name:     variable.Name,
-				Kind:     variable.Kind,
-				Enabled:  variable.Enabled,
-				Position: variable.Position,
-			}
-			switch {
-			case variable.Kind != domain.VariableSecret:
-				item.Value = variable.Value
-			case secrets && variable.HasValue:
-				value, err := s.environments.Reveal(ctx, variable.ID)
-				if err != nil {
-					return nil, err
-				}
-				item.Value = value
-			}
-			draft.Variables = append(draft.Variables, item)
+		block := environment.Block(root)
+		if len(block) == 0 {
+			continue
 		}
-		out = append(out, draft)
+		shared, err := s.exported(ctx, environment.Vars, secrets)
+		if err != nil {
+			return nil, err
+		}
+		own, err := s.exported(ctx, block, secrets)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, domain.EnvironmentDraft{
+			Name:      environment.Name,
+			Color:     environment.Color,
+			Variables: shared,
+			Blocks:    []domain.BlockDraft{{Variables: own}},
+		})
 	}
 	return out, nil
+}
+
+// rootOf is the top-level collection an exported level or request sits in: blocks are keyed by it.
+func (s *Transfer) rootOf(ctx context.Context, collection domain.Collection) (string, error) {
+	id := collection.ID
+	if id == "" && len(collection.Items) == 1 {
+		id = collection.Items[0].CollectionID
+	}
+	if id == "" {
+		return "", nil
+	}
+	workspaces, err := s.workspaces.Snapshot(ctx)
+	if err != nil {
+		return "", err
+	}
+	tree, err := s.collections.TreeOf(ctx, workspaces.ActiveID)
+	if err != nil {
+		return "", err
+	}
+	for _, top := range tree {
+		if holds(top, id) {
+			return top.ID, nil
+		}
+	}
+	return "", nil
+}
+
+func holds(level domain.Collection, id string) bool {
+	return level.ID == id || slices.ContainsFunc(level.Children, func(child domain.Collection) bool {
+		return holds(child, id)
+	})
+}
+
+// exported copies variables for a file; a secret's value is read only when the person asked.
+func (s *Transfer) exported(ctx context.Context, vars []domain.Variable, secrets bool) ([]domain.Variable, error) {
+	out := make([]domain.Variable, 0, len(vars))
+	for _, variable := range vars {
+		item := domain.Variable{
+			Name:     variable.Name,
+			Kind:     variable.Kind,
+			Enabled:  variable.Enabled,
+			Position: variable.Position,
+		}
+		switch {
+		case variable.Kind != domain.VariableSecret:
+			item.Value = variable.Value
+		case secrets && variable.HasValue:
+			value, err := s.environments.Reveal(ctx, variable.ID)
+			if err != nil {
+				return nil, err
+			}
+			item.Value = value
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+// effective is what each environment answers for the collection: its enabled values for all
+// collections with the block's over them.
+func effective(drafts []domain.EnvironmentDraft) []domain.EnvironmentDraft {
+	out := make([]domain.EnvironmentDraft, 0, len(drafts))
+	for _, draft := range drafts {
+		vars := enabled(draft.Variables)
+		for _, block := range draft.Blocks {
+			vars = overlay(vars, enabled(block.Variables))
+		}
+		out = append(out, domain.EnvironmentDraft{Name: draft.Name, Color: draft.Color, Variables: vars})
+	}
+	return out
+}
+
+func enabled(vars []domain.Variable) []domain.Variable {
+	return slices.DeleteFunc(slices.Clone(vars), func(v domain.Variable) bool { return !v.Enabled })
+}
+
+// overlay is base with top over it: a name top holds takes top's variable.
+func overlay(base, top []domain.Variable) []domain.Variable {
+	out := slices.Clone(base)
+	for _, variable := range top {
+		at := slices.IndexFunc(out, func(held domain.Variable) bool { return held.Name == variable.Name })
+		if at < 0 {
+			out = append(out, variable)
+			continue
+		}
+		out[at] = variable
+	}
+	for index := range out {
+		out[index].Position = index + 1
+	}
+	return out
 }

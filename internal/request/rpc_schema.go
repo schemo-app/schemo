@@ -315,5 +315,5 @@ func (s *Drafts) schemaInput(ctx context.Context, draft domain.Draft) (SendInput
 	draft.Options = &options
 	draft.Body = ""
 	above := s.above(ctx, draft.ID)
-	return s.Prepared(ctx, draft, above.Auth, above.Variables)
+	return s.Prepared(ctx, draft, above.Auth, above.Levels)
 }

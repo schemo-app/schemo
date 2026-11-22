@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import { TabKind } from '../../../bindings/schemo/internal/domain'
 import { useTabsStore } from '../../stores/tabs'
 import { useRecordsStore } from '../../stores/records'
@@ -32,9 +32,11 @@ const ordered = computed(() => [
   ...tabs.tabs.filter(isCompactTab),
   ...tabs.tabs.filter((tab) => !isCompactTab(tab)),
 ])
-const { stripEl, scrollEl, tabW, tiny, compact, visibleIds, hiddenCount, hold, release } = useTabRow({
+const stripEl = useTemplateRef<HTMLElement>('stripEl')
+const { tabW, tiny, compact, visibleIds, hiddenCount, hold, release } = useTabRow({
   tabs: () => ordered.value.map((tab) => ({ id: tab.id, compact: isCompactTab(tab) })),
   activeId: () => tabs.activeId,
+  strip: stripEl,
 })
 const movable = computed(() => ordered.value.filter((tab) => !isCompactTab(tab) && visibleIds.value.has(tab.id)))
 
@@ -242,7 +244,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
 
 <template>
   <div ref="stripEl" class="tab-strip" @mouseleave="leaveStrip">
-    <div ref="scrollEl" class="tab-scroll">
+    <div class="tab-scroll">
       <ContextMenu v-for="entry in views" :key="entry.tab.id">
         <ContextMenuTrigger as-child>
           <div

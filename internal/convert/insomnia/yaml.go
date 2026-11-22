@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"io"
-	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -36,79 +35,95 @@ type yamlItem struct {
 }
 
 type yamlEnvironment struct {
-	Name             string            `yaml:"name"`
-	Color            string            `yaml:"color"`
-	Data             map[string]any    `yaml:"data"`
-	ConfidentialKeys []string          `yaml:"confidentialKeys"`
-	SubEnvironments  []yamlEnvironment `yaml:"subEnvironments"`
+	Name             string         `yaml:"name"`
+	Color            string         `yaml:"color"`
+	Data             map[string]any `yaml:"data"`
+	ConfidentialKeys []string       `yaml:"confidentialKeys"`
+	IsPrivate        bool           `yaml:"isPrivate"`
+	Meta             struct {
+		IsPrivate bool `yaml:"isPrivate"`
+	} `yaml:"meta"`
+	SubEnvironments []yamlEnvironment `yaml:"subEnvironments"`
 }
 
-func importV5(data []byte) (domain.Document, error) {
+// private is where v5 files put the flag: on the environment or in its meta.
+func (e yamlEnvironment) private() bool { return e.IsPrivate || e.Meta.IsPrivate }
+
+// environmentFile is v5's own type for environments that belong to no collection.
+const environmentFile = "environment.insomnia.rest/5.0"
+
+// decodeV5 reads a v5 document and the type it declares.
+func decodeV5(data []byte) (yamlExport, string, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	var root yaml.Node
 	if err := decoder.Decode(&root); err != nil && err != io.EOF {
-		return domain.Document{}, domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed, nil)
+		return yamlExport{}, "", domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed, nil)
 	}
 	var header struct {
 		Type string `yaml:"type"`
 	}
 	if err := root.Decode(&header); err != nil {
-		return domain.Document{}, domain.Refuse(domain.CodeNotInsomnia, domain.ErrNotAllowed, nil)
+		return yamlExport{}, "", domain.Refuse(domain.CodeNotInsomnia, domain.ErrNotAllowed, nil)
 	}
 	switch header.Type {
-	case "collection.insomnia.rest/5.0", "spec.insomnia.rest/5.0", "environment.insomnia.rest/5.0":
+	case "collection.insomnia.rest/5.0", "spec.insomnia.rest/5.0", environmentFile:
 	default:
-		return domain.Document{}, domain.Refuse(domain.CodeNotInsomnia, domain.ErrNotAllowed, nil)
+		return yamlExport{}, "", domain.Refuse(domain.CodeNotInsomnia, domain.ErrNotAllowed, nil)
 	}
 	var file yamlExport
 	if err := root.Decode(&file); err != nil || decoder.Decode(&root) != io.EOF {
-		return domain.Document{}, domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed, nil)
+		return yamlExport{}, "", domain.Refuse(domain.CodeFileUnreadable, domain.ErrNotAllowed, nil)
+	}
+	return file, header.Type, nil
+}
+
+func importV5(data []byte) (domain.Document, error) {
+	file, kind, err := decodeV5(data)
+	if err != nil {
+		return domain.Document{}, err
 	}
 
 	var out domain.Document
-	base := yamlVariables(file.Environments.Data, file.Environments.ConfidentialKeys)
-	if len(base) > 0 {
-		out.Environments = append(out.Environments, domain.EnvironmentDraft{
-			Name:      cmp.Or(strings.TrimSpace(file.Environments.Name), strings.TrimSpace(file.Name), baseEnvironment),
-			Color:     file.Environments.Color,
-			Variables: base,
-		})
-	}
-	for _, environment := range file.Environments.SubEnvironments {
-		name := strings.TrimSpace(environment.Name)
-		if name == "" {
-			continue
+	base := file.Environments
+	drafts := []domain.EnvironmentDraft{}
+	for _, sub := range base.SubEnvironments {
+		if name := strings.TrimSpace(sub.Name); name != "" {
+			drafts = append(drafts, subDraft(name, sub.Color,
+				secrets(variablesOf(sub.Data, &out), sub.ConfidentialKeys, sub.private())))
 		}
-		own := yamlVariables(environment.Data, environment.ConfidentialKeys)
-		out.Environments = append(out.Environments, domain.EnvironmentDraft{
-			Name:      name,
-			Color:     environment.Color,
-			Variables: renumber(append(own, missing(base, own)...)),
-		})
 	}
 
-	if len(file.Collection) > 0 {
+	if kind == environmentFile {
+		// No collection to hold blocks: the base always applies, the subs apply to every collection.
+		out.Globals = secrets(variablesOf(base.Data, &out), base.ConfidentialKeys, false)
+		for _, draft := range drafts {
+			out.Environments = append(out.Environments, domain.EnvironmentDraft{
+				Name: draft.Name, Color: draft.Color, Variables: draft.Blocks[0].Variables})
+		}
+	} else {
 		collection := domain.Collection{
 			Name:        cmp.Or(strings.TrimSpace(file.Name), untitledCollection),
 			Description: strings.TrimSpace(file.Meta.Description),
 			Auth:        requestAuth(file.Authentication, &out),
 		}
-		// The base supplies defaults for its own collection even when no environment is selected; its
-		// secrets already travel with the base environment.
-		collection.Variables, _ = plainVariables(base)
-		readYAMLLevel(file.Collection, &collection, &out)
-		if len(collection.Items) > 0 || len(collection.Children) > 0 {
+		vars := newValues()
+		vars.add(plain(secrets(variablesOf(base.Data, &out), base.ConfidentialKeys, false), &out), &out)
+		readYAMLLevel(file.Collection, &collection, vars, &out)
+		collection.Variables = vars.list
+		if len(collection.Items) > 0 || len(collection.Children) > 0 ||
+			len(collection.Variables) > 0 || len(drafts) > 0 {
 			out.Collections = []domain.Collection{collection}
+			out.Environments = blocksFor(0, drafts)
 		}
 	}
 	out.LeftOut(domain.CodeSkippedCookieJar, len(file.CookieJar.Cookies))
-	if len(out.Collections) == 0 && len(out.Environments) == 0 {
+	if len(out.Collections) == 0 && len(out.Environments) == 0 && len(out.Globals) == 0 {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
 	return out, nil
 }
 
-func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Document) {
+func readYAMLLevel(items []yamlItem, into *domain.Collection, vars *values, out *domain.Document) {
 	for index, item := range items {
 		item.Description = cmp.Or(item.Meta.Description, item.Description)
 		switch {
@@ -119,10 +134,9 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 				Position:    int64(index),
 				Auth:        requestAuth(item.Auth, out),
 			}
-			var secrets int
-			folder.Variables, secrets = plainVariables(yamlVariables(item.Environment, item.ConfidentialKeys))
-			out.LeftOut(domain.CodeSkippedSecretValue, secrets)
-			readYAMLLevel(item.Children, &folder, out)
+			// Folders hold no variables here; theirs join the collection's.
+			vars.add(plain(secrets(variablesOf(item.Environment, out), item.ConfidentialKeys, false), out), out)
+			readYAMLLevel(item.Children, &folder, vars, out)
 			into.Children = append(into.Children, folder)
 		case item.Method != "" || strings.HasPrefix(item.Meta.ID, "req_"):
 			node := requestNode(item.resource, out)
@@ -130,22 +144,4 @@ func readYAMLLevel(items []yamlItem, into *domain.Collection, out *domain.Docume
 			into.Items = append(into.Items, node)
 		}
 	}
-}
-
-// plainVariables drops secret values, which only environments hold, and counts what it dropped.
-func plainVariables(variables []domain.Variable) ([]domain.Variable, int) {
-	plain := slices.DeleteFunc(slices.Clone(variables), func(variable domain.Variable) bool {
-		return variable.Kind == domain.VariableSecret
-	})
-	return renumber(plain), len(variables) - len(plain)
-}
-
-func yamlVariables(data map[string]any, confidential []string) []domain.Variable {
-	variables := variablesOf(data)
-	for i := range variables {
-		if slices.Contains(confidential, variables[i].Name) {
-			variables[i].Kind = domain.VariableSecret
-		}
-	}
-	return variables
 }

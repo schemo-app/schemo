@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"schemo/internal/domain"
@@ -453,8 +454,8 @@ func compareCollection(t *testing.T, want domain.Collection, got domain.Collecti
 	}
 }
 
-// What a level answers for `{{tokens}}` travels with it both ways. A collection handed to somebody
-// else has to mean the same thing on the other side, which is why a level owns its own.
+// Collection variables travel both ways; a folder's join the collection's, since folders hold none
+// here, and the collection's own value wins a clash.
 func TestCollectionVariablesTravelBothWays(t *testing.T) {
 	original := domain.Collection{
 		Name: "Shop",
@@ -466,6 +467,7 @@ func TestCollectionVariablesTravelBothWays(t *testing.T) {
 			Name: "Users",
 			Variables: []domain.Variable{
 				{Name: "version", Value: "v2", Kind: domain.VariableText, Enabled: true},
+				{Name: "baseUrl", Value: "https://other.example.com", Kind: domain.VariableText, Enabled: true},
 			},
 		}},
 	}
@@ -474,13 +476,14 @@ func TestCollectionVariablesTravelBothWays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
-	back, err := imported(t, data)
+	doc, err := Import(data)
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
+	back := doc.Collections[0]
 
-	if len(back.Variables) != 2 {
-		t.Fatalf("level = %+v, want the collection's two", back.Variables)
+	if len(back.Variables) != 3 {
+		t.Fatalf("level = %+v, want the collection's two and the folder's", back.Variables)
 	}
 	if back.Variables[0].Name != "baseUrl" || back.Variables[0].Value != "https://api.example.com" {
 		t.Errorf("first = %+v, want the value that was written", back.Variables[0])
@@ -491,11 +494,14 @@ func TestCollectionVariablesTravelBothWays(t *testing.T) {
 		t.Errorf("second = %+v, want the disabled row kept disabled", back.Variables[1])
 	}
 
-	if len(back.Children) != 1 || len(back.Children[0].Variables) != 1 {
-		t.Fatalf("nested = %+v, want the folder's own answer", back.Children)
+	if v := back.Variables[2]; v.Name != "version" || v.Value != "v2" || v.Position != 3 {
+		t.Errorf("third = %+v, want the folder's variable after the collection's", v)
 	}
-	if v := back.Children[0].Variables[0]; v.Name != "version" || v.Value != "v2" {
-		t.Errorf("nested variable = %+v, want the one the folder answers", v)
+	if len(back.Children) != 1 || len(back.Children[0].Variables) != 0 {
+		t.Errorf("nested = %+v, want the folder without variables", back.Children)
+	}
+	if skips := doc.Skipped; len(skips) != 1 || skips[0].Code != domain.CodeSkippedVariableClash {
+		t.Errorf("skipped = %+v, want the folder's clashing baseUrl counted", skips)
 	}
 }
 
@@ -791,12 +797,50 @@ func TestImportReadsAPostmanEnvironment(t *testing.T) {
 	}
 }
 
-// The globals scope is a different thing from an environment, and reading it as one would be
-// inventing a name for a file that never had one.
-func TestImportRefusesTheGlobalsScope(t *testing.T) {
-	globals := []byte(`{"_postman_variable_scope": "globals", "values": [{"key": "a", "value": "1"}]}`)
-	if _, err := Import(globals); !errors.Is(err, domain.ErrNotAllowed) {
-		t.Errorf("Read = %v, want the globals scope refused", err)
+// A globals file becomes the workspace's globals, not an environment.
+func TestImportReadsPostmanGlobals(t *testing.T) {
+	globals := []byte(`{"name": "Globals", "_postman_variable_scope": "globals", "values": [` +
+		`{"key": "a", "value": "1", "enabled": true}, {"key": "b", "value": "x", "type": "secret", "enabled": false}]}`)
+	doc, err := Import(globals)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if len(doc.Environments) != 0 || len(doc.Collections) != 0 || len(doc.Globals) != 2 {
+		t.Fatalf("document = %+v, want two globals only", doc)
+	}
+	if b := doc.Globals[1]; b.Kind != domain.VariableSecret || b.Enabled || b.Value != "x" {
+		t.Errorf("b = %+v, want a disabled secret", b)
+	}
+}
+
+// What the environments window writes is what this package reads back; secret values stay out.
+func TestExportEnvironmentRoundTrips(t *testing.T) {
+	data, err := ExportEnvironment("Dev", false, []domain.Variable{
+		{Name: "baseUrl", Value: "https://dev.example", Kind: domain.VariableText, Enabled: true},
+		{Name: "token", Value: "held", Kind: domain.VariableSecret, Enabled: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "held") || !strings.Contains(string(data), `"_postman_variable_scope": "environment"`) {
+		t.Fatalf("export = %s, want an environment without the secret value", data)
+	}
+	doc, err := Import(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := doc.Environments[0].Variables
+	if doc.Environments[0].Name != "Dev" || len(vars) != 2 || vars[1].Kind != domain.VariableSecret ||
+		vars[1].Value != "" || vars[1].Enabled {
+		t.Errorf("environment = %+v, want Dev with the secret named and empty", doc.Environments[0])
+	}
+
+	data, err = ExportEnvironment("ignored", true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"name": "Globals"`) || !strings.Contains(string(data), `"globals"`) {
+		t.Errorf("globals export = %s", data)
 	}
 }
 

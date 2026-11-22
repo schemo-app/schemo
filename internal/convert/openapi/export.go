@@ -22,7 +22,8 @@ var schemeNames = map[domain.AuthType]string{
 }
 
 // Export writes a collection as an OpenAPI 3.1 document in YAML: paths and schemas, no scripts.
-func Export(collection domain.Collection) ([]byte, error) {
+// Servers are the collection's baseUrl, then each environment's, described by the environment's name.
+func Export(collection domain.Collection, environments []domain.EnvironmentDraft) ([]byte, error) {
 	w := &writer{
 		paths:   map[string]map[string]any{},
 		schemes: map[string]map[string]any{},
@@ -41,8 +42,17 @@ func Export(collection domain.Collection) ([]byte, error) {
 		"info":    info,
 		"paths":   w.paths,
 	}
+	servers := []any{}
 	if address := serverAddress(collection.Variables); address != "" {
-		doc["servers"] = []any{map[string]any{"url": address}}
+		servers = append(servers, map[string]any{"url": address})
+	}
+	for _, environment := range environments {
+		if address := serverAddress(environment.Variables); address != "" {
+			servers = append(servers, map[string]any{"url": address, "description": environment.Name})
+		}
+	}
+	if len(servers) > 0 {
+		doc["servers"] = servers
 	}
 	if len(w.tags) > 0 {
 		doc["tags"] = w.tags
@@ -66,7 +76,7 @@ func Export(collection domain.Collection) ([]byte, error) {
 // `baseUrl` variable, which is the variable the reader declares out of a document in turn.
 func serverAddress(variables []domain.Variable) string {
 	for _, variable := range variables {
-		if variable.Name == domain.BaseURLVariable && variable.Value != "" {
+		if variable.Name == domain.BaseURLVariable && variable.Enabled && variable.Value != "" {
 			return variable.Value
 		}
 	}

@@ -31,15 +31,14 @@ func (m *requestMask) Mask(
 		body = in.Body
 	}
 	prepared, err := m.drafts.MaskIn(ctx, workspace, request.Seed{
-		Method:        sent.Method,
-		URL:           sent.URL,
-		Body:          body,
-		BodyKind:      in.BodyKind,
-		Form:          in.Form,
-		BodyFile:      in.BodyFile,
-		Headers:       sent.Headers,
-		EnvironmentID: in.EnvironmentID,
-	}, in.Variables)
+		Method:   sent.Method,
+		URL:      sent.URL,
+		Body:     body,
+		BodyKind: in.BodyKind,
+		Form:     in.Form,
+		BodyFile: in.BodyFile,
+		Headers:  sent.Headers,
+	}, in.Levels)
 	if err != nil {
 		return request.Masked{}, err
 	}
@@ -56,5 +55,5 @@ func (m *requestMask) MaskTexts(
 	workspace string,
 	texts []string,
 ) ([]string, error) {
-	return m.environments.MaskTextsIn(ctx, workspace, nil, texts, "")
+	return m.environments.MaskTextsIn(ctx, workspace, domain.VarLevels{}, texts)
 }

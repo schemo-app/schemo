@@ -186,8 +186,8 @@ func TestRequestsCarriesTheAnswerOfEveryLevelAbove(t *testing.T) {
 	if requests[0].Auth == nil || requests[0].Auth.Type != domain.AuthBearer {
 		t.Errorf("first auth = %+v, want the collection's", requests[0].Auth)
 	}
-	if len(requests[0].Variables) != 1 || requests[0].Variables[0].Name != "version" {
-		t.Errorf("first variables = %+v, want the level's own", requests[0].Variables)
+	if len(requests[0].Levels.Variables) != 1 || requests[0].Levels.Variables[0].Name != "version" {
+		t.Errorf("first variables = %+v, want the level's own", requests[0].Levels.Variables)
 	}
 	if requests[1].Auth == nil || requests[1].Auth.Type != domain.AuthBasic {
 		t.Errorf("second auth = %+v, want the nearest level's", requests[1].Auth)

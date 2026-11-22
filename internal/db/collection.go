@@ -254,7 +254,15 @@ func (s *Store) DeleteCollection(ctx context.Context, workspaceID, id string) er
 			placeholders(len(ids))+`)`, ids...); err != nil {
 			return fmt.Errorf("deleting the runs of %s: %w", id, err)
 		}
-		return deleteEntities(ctx, tx, workspaceID, append(folders, requests...))
+		gone := map[string]bool{}
+		for _, folder := range folders {
+			gone[folder.ID] = true
+		}
+		blocks, err := blockRows(ctx, tx, workspaceID, gone)
+		if err != nil {
+			return err
+		}
+		return deleteEntities(ctx, tx, workspaceID, append(append(folders, requests...), blocks...))
 	})
 }
 

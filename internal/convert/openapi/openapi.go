@@ -55,6 +55,7 @@ func Import(data []byte) (domain.Document, error) {
 		return domain.Document{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
 	out.Collections = append(out.Collections, collection)
+	out.Environments = read.servers()
 	return out, nil
 }
 
@@ -112,8 +113,18 @@ type info struct {
 }
 
 type server struct {
-	URL       string            `json:"url,omitempty"`
-	Variables map[string]srvVar `json:"variables,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Variables   map[string]srvVar `json:"variables,omitempty"`
+}
+
+// address is the url with its `{variables}` filled from their defaults.
+func (s server) address() string {
+	address := s.URL
+	for name, variable := range s.Variables {
+		address = strings.ReplaceAll(address, "{"+name+"}", variable.Default)
+	}
+	return strings.TrimSuffix(strings.TrimSpace(address), "/")
 }
 
 type srvVar struct {

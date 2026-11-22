@@ -7,9 +7,6 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as dotenv$0 from "../convert/dotenv/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as domain$0 from "../domain/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -32,10 +29,10 @@ export function Capture(scope: domain$0.VarScope, name: string, value: string, s
 }
 
 /**
- * Create appends an environment and activates it. A base copies keys, kinds and order, without secret values.
+ * Create appends an empty environment without changing the active selection.
  */
-export function Create(draft: $models.EnvironmentInput): $CancellablePromise<string> {
-    return $Call.ByID(3007895376, draft);
+export function Create(name: string, color: string): $CancellablePromise<string> {
+    return $Call.ByID(3007895376, name, color);
 }
 
 /**
@@ -47,6 +44,14 @@ export function Delete(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * Duplicate copies an environment under a name of the window's wording, writable whatever the
+ * original is, blocks included. Secret values are copied too: the copy is on the same device.
+ */
+export function Duplicate(id: string, name: string): $CancellablePromise<string> {
+    return $Call.ByID(4164601509, id, name);
+}
+
+/**
  * EnsureDefaults gives an empty workspace its starting environment, except unpulled or read-only ones.
  */
 export function EnsureDefaults(): $CancellablePromise<void> {
@@ -54,18 +59,37 @@ export function EnsureDefaults(): $CancellablePromise<void> {
 }
 
 /**
- * ImportEntries merges parsed .env entries into a scope: a name already there is replaced, a new one
- * is appended.
+ * ImportVariables adds a file's variables to an environment, one of its blocks or the globals.
+ * Only names the set does not hold are added; a value already there is never replaced, so the same
+ * file imported twice adds nothing the second time.
  */
-export function ImportEntries(scope: domain$0.EnvScope, entries: dotenv$0.Entry[] | null): $CancellablePromise<void> {
-    return $Call.ByID(3848895263, scope, entries);
+export function ImportVariables(scope: domain$0.EnvScope, vars: domain$0.Variable[] | null): $CancellablePromise<domain$0.VarImport> {
+    return $Call.ByID(3214172422, scope, vars);
 }
 
 /**
- * ParseDotenv reads a .env file into entries for the import dialog.
+ * Merge moves what one environment holds into another and deletes it: the shared values into the
+ * shared ones, a block into the block of the same collection. A name both hold keeps the target's
+ * value. The selection follows the values when the source was the active one.
  */
-export function ParseDotenv(text: string): $CancellablePromise<dotenv$0.Entry[] | null> {
-    return $Call.ByID(1909666257, text);
+export function Merge($from: string, into: string): $CancellablePromise<void> {
+    return $Call.ByID(3741057160, $from, into);
+}
+
+/**
+ * MoveVariable moves a collection's value between its own variables and environment blocks.
+ * A matching target name is replaced. Secret values stay in Go throughout the operation.
+ */
+export function MoveVariable(collectionID: string, variableID: string, $from: string, into: string): $CancellablePromise<boolean> {
+    return $Call.ByID(931792473, collectionID, variableID, $from, into);
+}
+
+/**
+ * Reorder puts the environments in the order given; ids it does not name keep their place after
+ * them. The switcher in the titlebar lists them the same way.
+ */
+export function Reorder(ids: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(1188190967, ids);
 }
 
 /**
@@ -77,19 +101,10 @@ export function Reveal(id: string): $CancellablePromise<string> {
 }
 
 /**
- * Save writes an environment as edited. A secret with hasValue but no value keeps the stored one; a
- * closed environment takes variable changes only when the same save opens it.
+ * SaveVariables replaces one scope's variables, preserving withheld secret values.
  */
-export function Save(env: domain$0.Environment): $CancellablePromise<void> {
-    return $Call.ByID(179801057, env);
-}
-
-/**
- * SaveGlobals writes the whole list of global variables, by the same rules as Save. An empty list
- * clears them.
- */
-export function SaveGlobals(vars: domain$0.Variable[] | null): $CancellablePromise<void> {
-    return $Call.ByID(3998373115, vars);
+export function SaveVariables(scope: domain$0.EnvScope, vars: domain$0.Variable[] | null): $CancellablePromise<void> {
+    return $Call.ByID(1032165486, scope, vars);
 }
 
 /**
@@ -98,4 +113,18 @@ export function SaveGlobals(vars: domain$0.Variable[] | null): $CancellablePromi
  */
 export function State(): $CancellablePromise<domain$0.EnvState> {
     return $Call.ByID(2556458649);
+}
+
+/**
+ * Update changes only the supplied environment metadata.
+ */
+export function Update(id: string, patch: $models.EnvironmentPatch): $CancellablePromise<void> {
+    return $Call.ByID(1702191173, id, patch);
+}
+
+/**
+ * UpdateVariable edits one variable, preserving every other value in its scope.
+ */
+export function UpdateVariable(scope: domain$0.EnvScope, id: string, patch: $models.VariablePatch): $CancellablePromise<void> {
+    return $Call.ByID(236201381, scope, id, patch);
 }

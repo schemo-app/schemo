@@ -12,14 +12,18 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as domain$0 from "../domain/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
 /**
  * Apply writes what a preview read under a level and returns the updated tree and environments. The
  * name fills in when the document has none; the token is single-use.
  */
-export function Apply(token: string, parentID: string, name: string): $CancellablePromise<$models.Summary> {
-    return $Call.ByID(2803246791, token, parentID, name);
+export function Apply(token: string, parentID: string, name: string, readonlySuffix: string): $CancellablePromise<$models.Summary> {
+    return $Call.ByID(2803246791, token, parentID, name, readonlySuffix);
 }
 
 /**
@@ -46,11 +50,26 @@ export function ExportText(id: string, format: string, secrets: boolean): $Cance
 }
 
 /**
+ * ExportVariablesFile saves a scope as a Postman environment, or the globals as Postman globals, and
+ * returns the file's name; empty means cancelled. Secret values are not written.
+ */
+export function ExportVariablesFile(title: string, scope: domain$0.EnvScope): $CancellablePromise<string> {
+    return $Call.ByID(216706174, title, scope);
+}
+
+/**
  * ImportFromWorkspace copies collections of another workspace into the active one, read whole there and
  * written here: the same walk an export takes, written where the person asked for it.
  */
 export function ImportFromWorkspace(workspace: string, ids: string[] | null, parentID: string): $CancellablePromise<$models.Summary> {
     return $Call.ByID(2190119701, workspace, ids, parentID);
+}
+
+/**
+ * ImportVariablesFile adds the variables of a picked file to the scope; values already there stay.
+ */
+export function ImportVariablesFile(title: string, scope: domain$0.EnvScope): $CancellablePromise<$models.VariablesImport> {
+    return $Call.ByID(250361335, title, scope);
 }
 
 /**

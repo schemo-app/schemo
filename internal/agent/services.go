@@ -80,13 +80,13 @@ func (t appTools) Collections(ctx context.Context, workspaceID string) ([]Collec
 	for i := range out {
 		texts[i] = out[i].Description
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, workspaceID, nil, texts, "")
+	masked, err := t.environments.MaskTextsIn(ctx, workspaceID, domain.VarLevels{}, texts)
 	if err != nil {
 		return nil, err
 	}
 	for i := range out {
 		out[i].Description = masked[i]
-		out[i].Auth, err = t.agentAuth(ctx, workspaceID, out[i].Auth, "")
+		out[i].Auth, err = t.agentAuth(ctx, workspaceID, out[i].Auth)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (t appTools) Requests(ctx context.Context, collectionID string) ([]Request,
 	for i, row := range rows {
 		texts[i] = row.URL
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, workspace, nil, texts, "")
+	masked, err := t.environments.MaskTextsIn(ctx, workspace, domain.VarLevels{}, texts)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (t appTools) Request(ctx context.Context, id string) (Request, error) {
 	for _, row := range params {
 		texts = append(texts, row.Name, row.Value)
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, workspace, nil, texts, node.EnvironmentID)
+	masked, err := t.environments.MaskTextsIn(ctx, workspace, domain.VarLevels{}, texts)
 	if err != nil {
 		return Request{}, err
 	}
@@ -164,9 +164,8 @@ func (t appTools) Request(ctx context.Context, id string) (Request, error) {
 		Body:        masked[1],
 		BodyKind:    string(node.BodyKind),
 		Description: masked[2+2*len(rows)],
-		Environment: node.EnvironmentID,
 	}
-	out.Auth, err = t.agentAuth(ctx, workspace, node.Auth, node.EnvironmentID)
+	out.Auth, err = t.agentAuth(ctx, workspace, node.Auth)
 	if err != nil {
 		return Request{}, err
 	}
@@ -198,7 +197,7 @@ func (t appTools) History(
 	for _, rec := range history {
 		texts = append(texts, rec.URL, rec.Error)
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, workspaceID, nil, texts, "")
+	masked, err := t.environments.MaskTextsIn(ctx, workspaceID, domain.VarLevels{}, texts)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +235,7 @@ func (t appTools) Send(ctx context.Context, requestID, agent string) (Response, 
 	if err != nil {
 		return Response{}, err
 	}
-	// The app's own send path: inheritance, the pinned environment and masking, with the agent's name
+	// The app's own send path: inheritance, the active environment and masking, with the agent's name
 	// recorded in history.
 	rec, err := t.runs.Send(ctx, workspace, requestID, agent)
 	if err != nil {
@@ -266,7 +265,7 @@ func (t appTools) responseOf(ctx context.Context, rec domain.Record) (Response, 
 	for _, header := range rec.ResponseHeaders {
 		texts = append(texts, header.Name, header.Value)
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, rec.WorkspaceID, nil, texts, "")
+	masked, err := t.environments.MaskTextsIn(ctx, rec.WorkspaceID, domain.VarLevels{}, texts)
 	if err != nil {
 		return Response{}, err
 	}
@@ -283,7 +282,7 @@ func (t appTools) responseOf(ctx context.Context, rec domain.Record) (Response, 
 	return out, nil
 }
 
-func (t appTools) agentAuth(ctx context.Context, workspace string, auth *domain.Auth, environmentID string) (*domain.Auth, error) {
+func (t appTools) agentAuth(ctx context.Context, workspace string, auth *domain.Auth) (*domain.Auth, error) {
 	if auth == nil {
 		return nil, nil
 	}
@@ -293,7 +292,7 @@ func (t appTools) agentAuth(ctx context.Context, workspace string, auth *domain.
 	for i, key := range keys {
 		values[i] = fields[key]
 	}
-	masked, err := t.environments.MaskTextsIn(ctx, workspace, nil, values, environmentID)
+	masked, err := t.environments.MaskTextsIn(ctx, workspace, domain.VarLevels{}, values)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +401,7 @@ func (t appTools) CreateRequest(ctx context.Context, in RequestInput) (IDOutput,
 	one, err := t.collections.InWorkspace(in.Workspace).CreateNode(ctx, workspace.RequestDraft{
 		CollectionID: in.Collection, Name: node.Name, Method: node.Method, URL: node.URL,
 		Description: node.Description, Headers: node.Headers, Params: node.Params,
-		Body: node.Body, BodyKind: node.BodyKind, EnvironmentID: node.EnvironmentID, Auth: node.Auth,
+		Body: node.Body, BodyKind: node.BodyKind, Auth: node.Auth,
 	})
 	return IDOutput{ID: one.ID}, err
 }
@@ -439,19 +438,12 @@ func (t appTools) MoveRequest(ctx context.Context, in MoveInput) (IDOutput, erro
 }
 
 func (t appTools) CreateEnvironment(ctx context.Context, in EnvironmentInput) (IDOutput, error) {
-	id, err := t.environments.InWorkspace(in.Workspace).Create(ctx, workspace.EnvironmentInput{Name: in.Name, Color: in.Color})
+	id, err := t.environments.InWorkspace(in.Workspace).Create(ctx, in.Name, in.Color)
 	return IDOutput{ID: id}, err
 }
 
 func (t appTools) UpdateEnvironment(ctx context.Context, in EnvironmentPatch) (IDOutput, error) {
-	err := t.editEnvironment(ctx, in.Workspace, in.ID, func(env *domain.Environment) {
-		if in.Name != nil {
-			env.Name = *in.Name
-		}
-		if in.Color != nil {
-			env.Color = *in.Color
-		}
-	})
+	err := t.environments.InWorkspace(in.Workspace).Update(ctx, in.ID, workspace.EnvironmentPatch{Name: in.Name, Color: in.Color})
 	return IDOutput{ID: in.ID}, err
 }
 
@@ -464,57 +456,23 @@ func (t appTools) SetVariable(ctx context.Context, in VariableInput) (IDOutput, 
 	if strings.Contains(in.Value, domain.SecretMask) {
 		return IDOutput{}, errors.New("a masked value cannot replace a variable")
 	}
-	id, err := t.environments.InWorkspace(in.Workspace).SetInScope(ctx, domain.EnvScope{Environment: in.Environment}, in.Name, in.Value, in.Secret)
+	id, err := t.environments.InWorkspace(in.Workspace).SetInScope(ctx, domain.EnvScope{Environment: in.Environment, Collection: in.Collection}, in.Name, in.Value, in.Secret)
 	return IDOutput{ID: id}, err
 }
 
 func (t appTools) DeleteVariable(ctx context.Context, in VariableIDInput) (IDOutput, error) {
 	environments := t.environments.InWorkspace(in.Workspace)
-	if in.Environment == "" {
-		state, err := environments.State(ctx)
-		if err != nil {
-			return IDOutput{}, err
-		}
-		kept, found := withoutVariable(state.Globals, in.ID)
-		if !found {
-			return IDOutput{}, domain.ErrNotFound
-		}
-		return IDOutput{ID: in.ID}, environments.SaveGlobals(ctx, kept)
-	}
-	found := false
-	err := t.editEnvironment(ctx, in.Workspace, in.Environment, func(env *domain.Environment) {
-		env.Vars, found = withoutVariable(env.Vars, in.ID)
-	})
-	if err == nil && !found {
-		err = domain.ErrNotFound
-	}
-	return IDOutput{ID: in.ID}, err
-}
-
-// editEnvironment reads one environment of a workspace, lets edit change it and saves it whole. Secret
-// values stay withheld in the read; Save keeps the stored ones.
-func (t appTools) editEnvironment(ctx context.Context, workspace, id string, edit func(*domain.Environment)) error {
-	environments := t.environments.InWorkspace(workspace)
 	state, err := environments.State(ctx)
 	if err != nil {
-		return err
+		return IDOutput{}, err
 	}
-	env, ok := state.Find(id)
-	if !ok {
-		return domain.ErrNotFound
+	scope := domain.EnvScope{Environment: in.Environment, Collection: in.Collection}
+	vars := state.Variables(scope)
+	kept := slices.DeleteFunc(vars, func(variable domain.Variable) bool { return variable.ID == in.ID })
+	if len(kept) == len(vars) {
+		return IDOutput{}, domain.ErrNotFound
 	}
-	edit(&env)
-	return environments.Save(ctx, env)
-}
-
-func withoutVariable(vars []domain.Variable, id string) ([]domain.Variable, bool) {
-	kept := make([]domain.Variable, 0, len(vars))
-	for _, v := range vars {
-		if v.ID != id {
-			kept = append(kept, v)
-		}
-	}
-	return kept, len(kept) < len(vars)
+	return IDOutput{ID: in.ID}, environments.SaveVariables(ctx, scope, kept)
 }
 
 func (t appTools) patchRequest(ctx context.Context, workspace string, node *domain.CollectionNode, patch RequestFields) error {
@@ -554,18 +512,6 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 			return errors.New("bodyKind must be raw, json or xml")
 		}
 		node.BodyKind, node.BodyFile, node.Form = kind, "", nil
-	}
-	if patch.Environment != nil {
-		if *patch.Environment != "" {
-			state, err := t.environments.InWorkspace(workspace).State(ctx)
-			if err != nil {
-				return err
-			}
-			if _, ok := state.Find(*patch.Environment); !ok {
-				return domain.ErrNotFound
-			}
-		}
-		node.EnvironmentID = *patch.Environment
 	}
 	for _, rows := range []struct {
 		from *[]Header

@@ -7,8 +7,8 @@ import (
 	"schemo/internal/domain"
 )
 
-// Import reads a Postman file as the document it holds, a collection or one environment, told apart
-// by what the file says it is. A file that is neither is refused rather than guessed at.
+// Import reads a Postman file as the document it holds — a collection, an environment or the
+// globals — told apart by what the file says it is.
 func Import(data []byte) (domain.Document, error) {
 	var probe struct {
 		Scope string `json:"_postman_variable_scope"`
@@ -18,12 +18,20 @@ func Import(data []byte) (domain.Document, error) {
 	}
 
 	var doc domain.Document
-	if probe.Scope == "environment" {
+	switch probe.Scope {
+	case scopeEnvironment:
 		draft, err := readEnvironment(data)
 		if err != nil {
 			return domain.Document{}, err
 		}
 		doc.Environments = append(doc.Environments, draft)
+		return doc, nil
+	case scopeGlobals:
+		draft, err := readEnvironment(data)
+		if err != nil {
+			return domain.Document{}, err
+		}
+		doc.Globals = draft.Variables
 		return doc, nil
 	}
 
@@ -46,10 +54,11 @@ func readCollection(data []byte, doc *domain.Document) (domain.Collection, error
 	}
 
 	imported := domain.Collection{
-		Name:      file.Info.Name,
-		Variables: importedVariables(file.Variable, doc),
-		Scripts:   scriptOf(file.Event),
+		Name:    file.Info.Name,
+		Scripts: scriptOf(file.Event),
 	}
+	vars := &values{seen: map[string]string{}}
+	vars.add(importedVariables(file.Variable, doc), doc)
 	if file.Info.Description != nil {
 		imported.Description = strings.TrimSpace(file.Info.Description.Value)
 	}
@@ -59,7 +68,8 @@ func readCollection(data []byte, doc *domain.Document) (domain.Collection, error
 	if file.Auth != nil {
 		imported.Auth = authOf(*file.Auth)
 	}
-	readLevel(file.Item, &imported, doc)
+	readLevel(file.Item, &imported, vars, doc)
+	imported.Variables = domain.OrEmpty(vars.list)
 	return imported, nil
 }
 
@@ -124,7 +134,7 @@ func scriptOf(events []event) *domain.Scripts {
 	}
 }
 
-func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
+func readLevel(items []item, into *domain.Collection, vars *values, doc *domain.Document) {
 	into.Items = []domain.CollectionNode{}
 	into.Children = []domain.Collection{}
 
@@ -136,18 +146,19 @@ func readLevel(items []item, into *domain.Collection, doc *domain.Document) {
 		}
 
 		nested := domain.Collection{
-			Name:      entry.Name,
-			Position:  position,
-			Variables: importedVariables(entry.Variable, doc),
-			Scripts:   scriptOf(entry.Event),
+			Name:     entry.Name,
+			Position: position,
+			Scripts:  scriptOf(entry.Event),
 		}
+		// Folders hold no variables here; theirs join the collection's.
+		vars.add(importedVariables(entry.Variable, doc), doc)
 		if entry.Description != nil {
 			nested.Description = strings.TrimSpace(entry.Description.Value)
 		}
 		if entry.Auth != nil {
 			nested.Auth = authOf(*entry.Auth)
 		}
-		readLevel(entry.Item, &nested, doc)
+		readLevel(entry.Item, &nested, vars, doc)
 		into.Children = append(into.Children, nested)
 	}
 }
@@ -298,41 +309,22 @@ func fieldValue(rows []field, key string) string {
 	return ""
 }
 
-// readEnvironment reads an environment export, the file Postman writes from the environments tab:
-// not a collection, no requests. The globals scope is refused rather than read as an environment.
-func readEnvironment(data []byte) (domain.EnvironmentDraft, error) {
-	var file struct {
-		Name   string     `json:"name"`
-		Scope  string     `json:"_postman_variable_scope"`
-		Values []variable `json:"values"`
-	}
-	if err := json.Unmarshal(data, &file); err != nil {
-		return domain.EnvironmentDraft{}, domain.Refuse(domain.CodeNotJSON, domain.ErrNotAllowed, nil)
-	}
-	if file.Scope != "environment" || (file.Name == "" && len(file.Values) == 0) {
-		return domain.EnvironmentDraft{}, domain.Refuse(domain.CodeNotPostman, domain.ErrNotAllowed, nil)
-	}
+// values gathers a collection's variables from its levels; a name keeps its first value.
+type values struct {
+	list []domain.Variable
+	seen map[string]string
+}
 
-	draft := domain.EnvironmentDraft{Name: strings.TrimSpace(file.Name)}
-	for _, v := range file.Values {
-		name := strings.TrimSpace(v.Key)
-		if name == "" {
+func (v *values) add(vars []domain.Variable, doc *domain.Document) {
+	for _, one := range vars {
+		if held, ok := v.seen[one.Name]; ok {
+			if held != one.Value {
+				doc.LeftOut(domain.CodeSkippedVariableClash, 1)
+			}
 			continue
 		}
-		kind := domain.VariableText
-		if v.secret() {
-			kind = domain.VariableSecret
-		}
-		draft.Variables = append(draft.Variables, domain.Variable{
-			Name:     name,
-			Value:    domain.ValueText(v.Value),
-			Kind:     kind,
-			Enabled:  v.switchedOn(),
-			Position: len(draft.Variables) + 1,
-		})
+		v.seen[one.Name] = one.Value
+		one.Position = len(v.list) + 1
+		v.list = append(v.list, one)
 	}
-	if draft.Name == "" {
-		draft.Name = "Postman"
-	}
-	return draft, nil
 }

@@ -83,9 +83,9 @@ func (s *Publications) build(
 
 	// Hiding considers every variable, but only the collection's own are published: globals and
 	// environments are the reader's setup, not the collection.
-	hidden := hiddenNames(variablesOf(tree, nil), state.Globals, environment.Vars)
+	hidden := hiddenNames(variablesOf(tree, nil), state.Globals, environment.Vars, environment.Block(collectionID))
 
-	walk := &page{collection: collectionID, hidden: hidden, base: baseOf(environment)}
+	walk := &page{collection: collectionID, hidden: hidden, base: baseOf(environment, collectionID)}
 	groups, err := walk.groups(tree, 0)
 	if err != nil {
 		return snapshotv1.Snapshot{}, Report{}, err
@@ -114,7 +114,7 @@ func (s *Publications) build(
 
 	// Mask the complete document before deriving the public sections from it.
 	description := walk.cut(title, tree.Description, maxTextRunes)
-	addresses, err := listed(state, environment, hidden)
+	addresses, err := listed(state, environment, collectionID, hidden)
 	if err != nil {
 		return snapshotv1.Snapshot{}, Report{}, err
 	}
@@ -131,7 +131,7 @@ func (s *Publications) build(
 			Groups:      groups,
 			Variables:   variables,
 		},
-		Environment:  environmentOf(environment, hidden),
+		Environment:  environmentOf(environment, collectionID, hidden),
 		Environments: addresses,
 		Prose:        descriptionProse(description),
 	}
@@ -540,34 +540,37 @@ func environmentNamed(state domain.EnvState, name string) string {
 	return ""
 }
 
-// baseOf is the address an environment stands for. It is the one variable every environment has; an
-// environment written without it is one whose addresses a page cannot show.
-func baseOf(environment domain.Environment) string {
-	for _, variable := range environment.Vars {
-		if variable.Name == domain.BaseURLVariable {
-			return variable.Value
+// baseOf is the baseUrl an environment gives a collection: its block wins over the shared value.
+func baseOf(environment domain.Environment, collection string) string {
+	base := ""
+	for _, vars := range [][]domain.Variable{environment.Vars, environment.Block(collection)} {
+		for _, variable := range vars {
+			if variable.Enabled && variable.Name == domain.BaseURLVariable {
+				base = variable.Value
+			}
 		}
 	}
-	return ""
+	return base
 }
 
 // listed is the environments with an address, the page's own first; that is the address a reader gets.
 func listed(
 	state domain.EnvState,
 	chosen domain.Environment,
+	collection string,
 	hidden map[string]domain.HiddenReason,
 ) ([]snapshotv1.Environment, error) {
 	out := make([]snapshotv1.Environment, 0, len(state.Environments))
 	for _, environment := range state.Environments {
-		stands := strings.TrimSpace(baseOf(environment)) != ""
+		stands := strings.TrimSpace(baseOf(environment, collection)) != ""
 		if stands && environment.ID == chosen.ID {
-			out = append(out, environmentOf(environment, hidden))
+			out = append(out, environmentOf(environment, collection, hidden))
 		}
 	}
 	for _, environment := range state.Environments {
-		stands := strings.TrimSpace(baseOf(environment)) != ""
+		stands := strings.TrimSpace(baseOf(environment, collection)) != ""
 		if stands && environment.ID != chosen.ID {
-			out = append(out, environmentOf(environment, hidden))
+			out = append(out, environmentOf(environment, collection, hidden))
 		}
 	}
 	if err := tooMany("environments", len(out), maxEnvironments); err != nil {
@@ -580,10 +583,11 @@ func listed(
 // and nothing else of it, because nothing else of it is the reader's business.
 func environmentOf(
 	environment domain.Environment,
+	collection string,
 	hidden map[string]domain.HiddenReason,
 ) snapshotv1.Environment {
 	return snapshotv1.Environment{
 		Name:    maskText(environment.Name, hidden),
-		BaseURL: maskText(baseOf(environment), hidden),
+		BaseURL: maskText(baseOf(environment, collection), hidden),
 	}
 }

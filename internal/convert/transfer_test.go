@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strconv"
 	"testing"
 
 	snapshotv1 "github.com/schemo-app/proto/snapshot/v1"
@@ -76,6 +77,16 @@ func (f *fakeCollections) Import(_ context.Context, collections []domain.Collect
 	return f.importedTree, nil
 }
 
+func (f *fakeCollections) ImportCollections(ctx context.Context, collections []domain.Collection,
+	parentID string) (domain.Imported, error) {
+	tree, err := f.Import(ctx, collections, parentID)
+	targets := make([]string, len(collections))
+	for index := range targets {
+		targets[index] = "imported-" + strconv.Itoa(index)
+	}
+	return domain.Imported{Tree: tree, Targets: targets}, err
+}
+
 func (f *fakeCollections) Full(_ context.Context, id string) (domain.Collection, error) {
 	f.fullID = id
 	return f.full, nil
@@ -97,15 +108,26 @@ func (f *fakeCollections) Requests(_ context.Context, _, _ string) ([]domain.Res
 // values were asked for, since reading a value is the one thing an export must be asked to do.
 type fakeEnvironments struct {
 	drafts   []domain.EnvironmentDraft
+	targets  []string
+	scopes   []domain.EnvScope
+	vars     [][]domain.Variable
 	state    domain.EnvState
 	revealed []string
 	reveal   string
 }
 
-func (f *fakeEnvironments) ImportState(_ context.Context,
-	draft domain.EnvironmentDraft) (domain.EnvState, error) {
-	f.drafts = append(f.drafts, draft)
-	return f.state, nil
+func (f *fakeEnvironments) ImportDrafts(_ context.Context, drafts []domain.EnvironmentDraft,
+	targets []string, _ string) (domain.EnvImport, error) {
+	f.drafts = append(f.drafts, drafts...)
+	f.targets = targets
+	return domain.EnvImport{Created: []string{}, State: f.state}, nil
+}
+
+func (f *fakeEnvironments) ImportVariables(_ context.Context, scope domain.EnvScope,
+	vars []domain.Variable) (domain.VarImport, error) {
+	f.scopes = append(f.scopes, scope)
+	f.vars = append(f.vars, vars)
+	return domain.VarImport{Added: len(vars)}, nil
 }
 
 func (f *fakeEnvironments) State(context.Context) (domain.EnvState, error) {
@@ -166,6 +188,14 @@ type harness struct {
 	files        *fakeFiles
 	remote       *fakeRemote
 	commands     *fakeCommands
+}
+
+// ledgerTree seeds the active workspace with a Ledger collection holding an Admin folder.
+func (h *harness) ledgerTree() {
+	h.workspaces.state = domain.WorkspaceState{ActiveID: "personal"}
+	h.collections.trees = map[string][]domain.Collection{"personal": {
+		{ID: "ledger", Name: "Ledger", Children: []domain.Collection{{ID: "admin", Name: "Admin"}}},
+	}}
 }
 
 func newHarness() *harness {
@@ -271,7 +301,7 @@ func TestApplyWritesWhatThePreviewRead(t *testing.T) {
 		t.Fatalf("PreviewFile: %v", err)
 	}
 
-	summary, err := h.transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := h.transfer.Apply(ctx, preview.Token, "", "", "")
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -299,7 +329,7 @@ func TestApplyWritesWhatThePreviewRead(t *testing.T) {
 		t.Errorf("summary = %+v, want the counts of what was written", summary)
 	}
 
-	_, err = h.transfer.Apply(ctx, preview.Token, "", "")
+	_, err = h.transfer.Apply(ctx, preview.Token, "", "", "")
 	if domain.CodeOf(err) != domain.CodeImportExpired {
 		t.Errorf("second Apply = %v, want %v", err, domain.CodeImportExpired)
 	}
@@ -323,7 +353,7 @@ func TestApplyFillsTheNameTheDocumentLeftEmpty(t *testing.T) {
 		t.Fatalf("preview name = %q, want none from a paste of commands", preview.Name)
 	}
 
-	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL"); err != nil {
+	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL", ""); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if len(h.collections.imported) != 1 ||
@@ -336,7 +366,7 @@ func TestApplyFillsTheNameTheDocumentLeftEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PreviewFile: %v", err)
 	}
-	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL"); err != nil {
+	if _, err := h.transfer.Apply(ctx, preview.Token, "", "Imported from cURL", ""); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if name := h.collections.imported[0].Name; name != "Ledger" {
@@ -363,7 +393,7 @@ func TestApplyImportsEnvironmentsWithoutActivating(t *testing.T) {
 		t.Fatalf("preview = %+v, want the one environment and no collection", preview)
 	}
 
-	summary, err := h.transfer.Apply(ctx, preview.Token, "", "")
+	summary, err := h.transfer.Apply(ctx, preview.Token, "", "", "")
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -398,7 +428,7 @@ func TestApplyRefusesAnEmptyDocument(t *testing.T) {
 	h := newHarness()
 	ctx := context.Background()
 
-	if _, err := h.transfer.Apply(ctx, "never-issued", "", ""); domain.CodeOf(err) !=
+	if _, err := h.transfer.Apply(ctx, "never-issued", "", "", ""); domain.CodeOf(err) !=
 		domain.CodeImportExpired {
 		t.Errorf("unknown token = %v, want %v", err, domain.CodeImportExpired)
 	}
@@ -520,13 +550,15 @@ func TestImportFromWorkspaceCopiesTheCollectionsWhole(t *testing.T) {
 func TestExportAsksForSecretValuesOnlyWhenAsked(t *testing.T) {
 	h := newHarness()
 	h.collections.full = domain.Collection{ID: "ledger", Name: "Ledger"}
+	h.ledgerTree()
 	h.environments.state = domain.EnvState{Environments: []domain.Environment{{
 		ID:   "staging",
 		Name: "Staging",
-		Vars: []domain.Variable{
+		Vars: []domain.Variable{{ID: "v0", Name: "shared", Value: "all", Kind: domain.VariableText}},
+		Collections: map[string][]domain.Variable{"ledger": {
 			{ID: "v1", Name: "baseUrl", Value: "https://st.example.com", Kind: domain.VariableText},
 			{ID: "v2", Name: "apiKey", Kind: domain.VariableSecret, HasValue: true},
-		},
+		}},
 	}}}
 	h.environments.reveal = "revealed-key"
 	ctx := context.Background()
@@ -548,6 +580,9 @@ func TestExportAsksForSecretValuesOnlyWhenAsked(t *testing.T) {
 	}
 	if got := exportedVariable(t, export.Data, "baseUrl"); got.value != "https://st.example.com" {
 		t.Errorf("baseUrl = %+v, want a text value carried as it is", got)
+	}
+	if got := exportedVariable(t, export.Data, "shared"); got.found {
+		t.Errorf("shared = %+v, want values for all collections left home", got)
 	}
 
 	export, err = h.transfer.export(ctx, "ledger", FormatSchemo, true)
@@ -650,22 +685,30 @@ type exportedVar struct {
 func exportedVariable(t *testing.T, data []byte, name string) exportedVar {
 	t.Helper()
 
+	type variable struct {
+		Name   string `json:"name"`
+		Value  string `json:"value"`
+		Secret bool   `json:"secret"`
+	}
 	var file struct {
 		Environments []struct {
-			Variables []struct {
-				Name   string `json:"name"`
-				Value  string `json:"value"`
-				Secret bool   `json:"secret"`
-			} `json:"variables"`
+			Variables []variable `json:"variables"`
+			Blocks    []struct {
+				Variables []variable `json:"variables"`
+			} `json:"blocks"`
 		} `json:"environments"`
 	}
 	if err := json.Unmarshal(data, &file); err != nil {
 		t.Fatalf("unmarshalling the export: %v", err)
 	}
 	for _, environment := range file.Environments {
-		for _, variable := range environment.Variables {
-			if variable.Name == name {
-				return exportedVar{value: variable.Value, found: true, secret: variable.Secret}
+		all := environment.Variables
+		for _, block := range environment.Blocks {
+			all = append(all, block.Variables...)
+		}
+		for _, one := range all {
+			if one.Name == name {
+				return exportedVar{value: one.Value, found: true, secret: one.Secret}
 			}
 		}
 	}

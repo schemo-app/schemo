@@ -213,23 +213,22 @@ func (s *Collections) CreateNode(
 	}
 
 	node := domain.CollectionNode{
-		ID:            s.ids(),
-		CollectionID:  in.CollectionID,
-		Name:          name,
-		Description:   description,
-		Position:      position,
-		Protocol:      in.Protocol,
-		Options:       in.Options,
-		Method:        defaultMethod(in.Method),
-		URL:           strings.TrimSpace(in.URL),
-		Params:        domain.OrEmpty(in.Params),
-		Headers:       domain.OrEmpty(in.Headers),
-		PathParams:    domain.OrEmpty(in.PathParams),
-		Body:          in.Body,
-		BodyKind:      domain.KindOf(in.BodyKind),
-		Form:          withFormIDs(s.ids, in.Form),
-		BodyFile:      in.BodyFile,
-		EnvironmentID: in.EnvironmentID,
+		ID:           s.ids(),
+		CollectionID: in.CollectionID,
+		Name:         name,
+		Description:  description,
+		Position:     position,
+		Protocol:     in.Protocol,
+		Options:      in.Options,
+		Method:       defaultMethod(in.Method),
+		URL:          strings.TrimSpace(in.URL),
+		Params:       domain.OrEmpty(in.Params),
+		Headers:      domain.OrEmpty(in.Headers),
+		PathParams:   domain.OrEmpty(in.PathParams),
+		Body:         in.Body,
+		BodyKind:     domain.KindOf(in.BodyKind),
+		Form:         withFormIDs(s.ids, in.Form),
+		BodyFile:     in.BodyFile,
 		// Stored as the tree keeps it: a bare "None" would stop a command-line request inheriting.
 		Auth: storedAuth(in.Auth),
 	}
@@ -446,7 +445,6 @@ func (s *Collections) SaveNode(
 	stored.Form = domain.OrEmpty(edited.Form)
 	stored.BodyFile = edited.BodyFile
 	stored.Auth = edited.Auth
-	stored.EnvironmentID = edited.EnvironmentID
 	if err := s.store.SaveNode(ctx, stored); err != nil {
 		return err
 	}
@@ -525,7 +523,4 @@ type RequestDraft struct {
 	Form       []domain.FormRow `json:"form,omitempty"`
 	BodyFile   string           `json:"bodyFile,omitempty"`
 	Auth       *domain.Auth     `json:"auth,omitempty"`
-	// EnvironmentID carries a command-line request's pin into the node "Save" makes of it — a
-	// request that was pointed at a particular environment stays pointed at it once saved.
-	EnvironmentID string `json:"environmentId,omitempty"`
 }

@@ -57,7 +57,12 @@ const load = await vite({
   '/src/lib/intents.ts': 'export const focusUrlField = () => {}',
   '/src/composables/useGettingStarted.ts': 'export function markStep() {}',
   '/src/i18n/index.ts': 'export const describeFailure = error => error.message; export const t = key => key;',
-  '/src/composables/useToast.ts': 'export const useToast = () => ({ show: text => globalThis.notices.push(text) })',
+  '/src/composables/useToast.ts': `export const useToast = () => ({
+    show: (text, kind, action) => {
+      globalThis.notices.push(text);
+      globalThis.toastAction = action;
+    },
+  })`,
 })
 const { CancellablePromise, CancelError } = await load('@wailsio/runtime')
 const { VariableKind, RowKind } = await load('/bindings/schemo/internal/domain/models.ts')
@@ -951,9 +956,8 @@ test('a preview answer for a draft that has moved on is dropped', async () => {
   assert.deepEqual(draft.missing.value, ['fresh'])
 })
 
-test("a pasted command replaces the request and keeps the draft's id and environment", async () => {
+test("a pasted command replaces the request and keeps the draft's id", async () => {
   const draft = draftForTest(false)
-  await draft.setEnvironmentOverride('env-1')
   globalThis.draftServices.Paste = () => CancellablePromise.resolve({
     reading: { kind: 'ok' },
     draft: { id: '', method: 'POST', url: 'https://api.example.test/a?x=1', body: 'b', headers: [], params: [], pathParams: [], form: [] },
@@ -961,7 +965,6 @@ test("a pasted command replaces the request and keeps the draft's id and environ
   const reading = await draft.pasteCommand('curl -X POST https://api.example.test/a?x=1')
   assert.equal(reading.kind, 'ok')
   assert.equal(draft.current.value.id, 'tab:draft')
-  assert.equal(draft.environmentId.value, 'env-1')
   assert.equal(draft.method.value, 'POST')
   assert.equal(draft.params.value[0].name, 'x')
 })
@@ -1148,6 +1151,42 @@ test('closing the sheet cancels a reveal and clears secrets', async () => {
   assert.deepEqual(store.revealed, {})
 })
 
+test('unmounting a collection row cancels its pending reveal', async () => {
+  setup()
+  const read = deferred()
+  const lifetime = new AbortController()
+  globalThis.environmentServices.Reveal = () => read.promise
+  const pending = store.reveal('secret', lifetime.signal)
+  const rejected = assert.rejects(pending)
+  lifetime.abort()
+  read.resolve('test-only-value')
+  await rejected
+  assert.deepEqual(store.revealed, {})
+})
+
+test('a refused environment write leaves the stored snapshot unchanged', async () => {
+  setup()
+  globalThis.environmentServices.Update = () => CancellablePromise.reject(new Error('readonly'))
+  globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot())
+  await assert.rejects(store.updateEnv('current', { name: 'renamed' }), /readonly/)
+  assert.equal(store.envOf('current').name, 'current')
+})
+
+test('reset cancels an environment write before it can reload another workspace', async () => {
+  setup()
+  const saved = deferred()
+  let reads = 0
+  globalThis.environmentServices.Update = () => saved.promise
+  globalThis.environmentServices.State = () => { reads++; return CancellablePromise.resolve(snapshot('wrong')) }
+  const pending = store.updateEnv('current', { name: 'renamed' })
+  const rejected = assert.rejects(pending, CancelError)
+  store.reset()
+  saved.resolve()
+  await rejected
+  assert.equal(reads, 0)
+  assert.equal(store.envState, null)
+})
+
 test('closing the sheet rejects an already fulfilled reveal before it can populate the cache', async () => {
   setup()
   globalThis.environmentServices.Reveal = () => CancellablePromise.resolve('private value')
@@ -1163,9 +1202,9 @@ test('an old snapshot cannot overwrite an acknowledged edit', async () => {
   const old = deferred()
   globalThis.environmentServices.State = () => old.promise
   const previous = store.load()
-  globalThis.environmentServices.Save = () => CancellablePromise.resolve()
+  globalThis.environmentServices.Update = () => CancellablePromise.resolve()
   globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('edited'))
-  await store.renameEnv('current', 'edited')
+  await store.updateEnv('current', { name: 'edited' })
   old.resolve(snapshot('old'))
   await previous
   assert.equal(store.activeId, 'edited')
@@ -1177,7 +1216,7 @@ test('a secret save after sheet closure does not restore its revealed value', as
   globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('current', [variable]))
   await store.load()
   const edit = deferred()
-  globalThis.environmentServices.SaveGlobals = () => edit.promise
+  globalThis.environmentServices.UpdateVariable = () => edit.promise
   const pending = store.updateVar(null, 'secret', { value: 'new private value' })
   store.closeSheet()
   edit.resolve()
@@ -1210,27 +1249,44 @@ test('reset cancels a secret read for a cell editor', async () => {
   assert.deepEqual(store.revealed, {})
 })
 
-test('clearing globals drops revealed values of removed variables', async () => {
+test('emptying the globals drops revealed values of removed variables', async () => {
   setup()
   const variable = { id: 'secret', name: 'TOKEN', kind: VariableKind.VariableSecret, enabled: true }
   globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('current', [variable]))
   globalThis.environmentServices.Reveal = () => CancellablePromise.resolve('private value')
-  globalThis.environmentServices.SaveGlobals = () => {
+  globalThis.environmentServices.SaveVariables = () => {
     globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot())
     return CancellablePromise.resolve()
   }
   await store.load()
   await store.reveal('secret')
   assert.equal(store.isRevealed('secret'), true)
-  await store.clearGlobals()
+  await store.saveScope(null, [])
   assert.equal(store.isRevealed('secret'), false)
+})
+
+test('undoing a removed secret restores its value', async () => {
+  setup()
+  const variable = { id: 'secret', name: 'TOKEN', kind: VariableKind.VariableSecret, enabled: true, hasValue: true }
+  globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('current', [variable]))
+  globalThis.environmentServices.Reveal = () => CancellablePromise.resolve('private value')
+  const saved = []
+  globalThis.environmentServices.SaveVariables = (scope, vars) => {
+    saved.push(vars)
+    return CancellablePromise.resolve()
+  }
+  await store.load()
+  await store.removeVar(null, 'secret')
+  assert.deepEqual(saved.at(-1), [])
+  globalThis.toastAction.run()
+  assert.equal(saved.at(-1)[0].value, 'private value')
 })
 
 test('a delayed reveal cannot restore a secret deleted while it was being read', async () => {
   setup()
   const variable = { id: 'secret', name: 'TOKEN', kind: VariableKind.VariableSecret, enabled: true }
   globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('current', [variable]))
-  globalThis.environmentServices.SaveGlobals = () => {
+  globalThis.environmentServices.SaveVariables = () => {
     globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot())
     return CancellablePromise.resolve()
   }
@@ -1239,7 +1295,7 @@ test('a delayed reveal cannot restore a secret deleted while it was being read',
   globalThis.environmentServices.Reveal = () => old.promise
   const pending = store.reveal('secret')
   const rejected = assert.rejects(pending, CancelError)
-  await store.clearGlobals()
+  await store.saveScope(null, [])
   old.resolve('private value')
   await rejected
   assert.deepEqual(store.revealed, {})
@@ -1391,22 +1447,30 @@ test('unpublishing clears cached descendant marks and inactive pages do not warn
   }
 })
 
-test('a variable edit saves its whole scope and never sends a withheld secret as empty', async () => {
+test('a variable edit sends only changed fields and adding uses a scope write', async () => {
   setup()
   const variable = { id: 'secret', name: 'TOKEN', kind: VariableKind.VariableSecret, enabled: true, hasValue: true }
   globalThis.environmentServices.State = () => CancellablePromise.resolve(snapshot('current', [variable]))
-  const sent = []
-  globalThis.environmentServices.SaveGlobals = (vars) => {
-    sent.push(vars)
+  const patches = []
+  const lists = []
+  globalThis.environmentServices.UpdateVariable = (scope, id, patch) => {
+    patches.push({scope, id, patch})
+    return CancellablePromise.resolve()
+  }
+  globalThis.environmentServices.SaveVariables = (scope, vars) => {
+    lists.push(vars)
     return CancellablePromise.resolve()
   }
   await store.load()
   await store.updateVar(null, 'secret', { name: 'API_TOKEN' })
-  assert.equal(sent[0][0].name, 'API_TOKEN')
-  assert.equal(sent[0][0].hasValue, true)
   await store.updateVar(null, 'secret', { value: '' })
-  assert.equal(sent[1][0].hasValue, false)
-  const added = await store.addVar(null, { name: 'HOST' })
-  assert.deepEqual(sent[2].map((one) => one.name), ['TOKEN', 'HOST'])
-  assert.equal(sent[2][1].id, added)
+  assert.deepEqual(patches, [
+    {scope: {}, id: 'secret', patch: {name: 'API_TOKEN'}},
+    {scope: {}, id: 'secret', patch: {value: ''}},
+  ])
+  assert.deepEqual(lists, [])
+  const added = await store.addVar(null, 'HOST', 'api.test')
+  assert.deepEqual(lists[0].map(variable => variable.name), ['TOKEN', 'HOST'])
+  assert.equal(lists[0][1].id, added)
+  assert.equal(lists[0][1].value, 'api.test')
 })

@@ -1,296 +1,205 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { refAutoReset } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { refAutoReset, useDebounceFn } from '@vueuse/core'
 import { SECRET_MASK } from '../../lib/layout'
-import Icon from '../ui/Icon.vue'
-import IconButton from '../ui/IconButton.vue'
+import Input from '../ui/Input.vue'
+import VariableRow from './VariableRow.vue'
+import RowCreate from '../ui/RowCreate.vue'
+import BulkRowsEditor from '../request/BulkRowsEditor.vue'
 import { useEnvironmentsStore } from '../../stores/environments'
-import { VariableKind } from '../../../bindings/schemo/internal/domain'
-import type { Variable } from '../../../bindings/schemo/internal/domain'
+import { VariableKind, type Row, type Variable } from '../../../bindings/schemo/internal/domain'
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { useVariableCells } from '../../composables/useVariableCells'
+import { isVariableName } from '../../lib/vars'
 import { t } from '../../i18n'
 
-const { locked } = defineProps<{ locked: boolean }>()
-
-const emit = defineEmits<{ (e: 'import'): void }>()
+// One set of variables: an environment's own (for every collection) or the globals.
+const { envId, locked, textMode } = defineProps<{ envId: string | null; locked: boolean; textMode: boolean }>()
 
 const environments = useEnvironmentsStore()
-const { notice, withNotice } = useSheetNotice()
+let closed = false
+const { notice, setNotice, clearNotice, withNotice } = useSheetNotice()
 
-const envId = computed(() => environments.editedEnvId)
+const vars = computed(() => environments.varsOf(envId))
 
-const rows = computed(() => environments.rowsFor(envId.value))
-const vars = computed(() => rows.value.own)
+const SEARCH_FROM = 9
+const query = ref('')
+const searchable = computed(() => vars.value.length >= SEARCH_FROM)
+const shown = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!searchable.value || !needle) return vars.value
+  return vars.value.filter((v) =>
+    v.name.toLowerCase().includes(needle) || (!isSecret(v) && (v.value ?? '').toLowerCase().includes(needle))
+  )
+})
 
-function isSecret(v: Variable): boolean {
-  return v.kind === VariableKind.VariableSecret
-}
+watch(() => envId, () => {
+  query.value = ''
+  clearNotice()
+})
 
-function isRevealed(v: Variable): boolean {
-  return environments.isRevealed(v.id)
-}
-
-function toggleReveal(v: Variable) {
-  if (environments.isRevealed(v.id)) {
-    environments.hide(v.id)
-    return
-  }
-  void withNotice(() => environments.reveal(v.id))
-}
-
-function isSecretMasked(v: Variable): boolean {
-  return isSecret(v) && !isRevealed(v)
-}
+const isSecret = (v: Variable) => v.kind === VariableKind.VariableSecret
+const isRevealed = (v: Variable) => environments.isRevealed(v.id)
 
 function displayValue(v: Variable): string {
   if (!isSecret(v)) return v.value ?? ''
-  return isRevealed(v) ? environments.effectiveValue(v) : SECRET_MASK
+  if (isRevealed(v)) return environments.effectiveValue(v)
+  return v.hasValue ? SECRET_MASK : ''
 }
 
-const { draft, setCellInput, isEditingCell, start, commitFrom, onCellKeydown, cancelTop } =
-  useVariableCells(environments, {
-    vars: () => vars.value,
-    scope: () => envId.value,
-    locked: () => locked,
-  })
+const editor = useVariableCells({
+  rows: () => shown.value.map(variable => ({ scope: envId, variable })),
+  vars: environments.varsOf,
+  locked: () => locked,
+  save: environments.updateVar,
+})
 
 const flashId = refAutoReset<string | null>(null, 1200)
 
-function openGlobal(g: Variable, edit = false) {
-  environments.editEnv(null)
-  nextTick(() => {
-    document.getElementById('var-' + g.id)?.scrollIntoView({ block: 'center' })
-    if (edit) {
-      void start(g, 'name', null)
-      return
-    }
-    flashId.value = g.id
-  })
-}
-
-const pendingName = ref('')
-
-function revealName(name: string) {
-  const found = vars.value.find((variable) => variable.name === name)
-  if (!found) {
-    pendingName.value = name
-    return
-  }
-  pendingName.value = ''
-  document.getElementById('var-' + found.id)?.scrollIntoView({ block: 'center' })
-  flashId.value = found.id
-}
-
+// The sheet may open on one name: scroll to it and mark it.
 watch(
   () => environments.sheetFocus,
   (focus) => {
-    if (!focus || !focus.varName) return
+    if (!focus?.varName) return
     const wanted = environments.takeFocus()
     if (!wanted) return
-    if (wanted.envId !== envId.value) environments.editEnv(wanted.envId)
-    nextTick(() => revealName(wanted.varName))
+    if (wanted.envId !== envId) environments.editEnv(wanted.envId)
+    void nextTick(() => {
+      const found = environments.varsOf(wanted.envId).find((v) => v.name === wanted.varName)
+      if (!found) return
+      document.getElementById('var-' + found.id)?.scrollIntoView({ block: 'center' })
+      flashId.value = found.id
+    })
   },
   { immediate: true }
 )
 
-watch(vars, () => {
-  if (pendingName.value) revealName(pendingName.value)
+async function addVar(name: string, value: string): Promise<boolean> {
+  if (locked || !name.trim()) return false
+  const scope = envId
+  query.value = ''
+  return withNotice(async () => {
+    const id = await environments.addVar(scope, name, value)
+    const created = vars.value.find(variable => variable.id === id)
+    if (created && !closed && envId === scope) void editor.start(created, 'value', scope)
+  })
+}
+
+function patchVariable(variable: Variable, patch: Partial<Variable>) {
+  if (!locked) void withNotice(() => environments.updateVar(envId, variable.id, patch))
+}
+
+function removeVar(variable: Variable) {
+  if (!locked) void withNotice(() => environments.removeVar(envId, variable.id))
+}
+
+// Text mode: one line per variable. A secret is shown masked and keeps its value while the mask
+// stays; secrecy follows the name.
+const textRows = computed<Row[]>(() =>
+  vars.value.map((v) => ({ id: v.id, name: v.name, value: displayValue(v), enabled: v.enabled }))
+)
+
+function fromRows(rows: Row[]): Variable[] | null {
+  const byName = new Map(vars.value.map((v) => [v.name, v]))
+  const seen = new Set<string>()
+  const out: Variable[] = []
+  for (const row of rows) {
+    const name = row.name.trim()
+    if (!isVariableName(name)) {
+      setNotice(t('environments.nameInvalidLine', { name }))
+      return null
+    }
+    if (seen.has(name)) {
+      setNotice(t('environments.nameRepeated', { name }))
+      return null
+    }
+    seen.add(name)
+    const held = byName.get(name)
+    const secret = held !== undefined && isSecret(held)
+    const kept = secret && row.value === SECRET_MASK
+    out.push({
+      id: held?.id ?? row.id,
+      name,
+      kind: secret ? VariableKind.VariableSecret : VariableKind.VariableText,
+      value: kept ? '' : row.value,
+      hasValue: kept ? held.hasValue : false,
+      enabled: row.enabled,
+      position: out.length,
+    })
+  }
+  clearNotice()
+  return out
+}
+
+let pending: { envId: string | null; vars: Variable[] } | null = null
+const flush = () => {
+  const next = pending
+  pending = null
+  if (next) void withNotice(() => environments.saveScope(next.envId, next.vars))
+}
+const saveSoon = useDebounceFn(flush, 400)
+
+function applyText(rows: Row[]) {
+  if (locked) return
+  const next = fromRows(rows)
+  if (!next) return
+  pending = { envId, vars: next }
+  void saveSoon()
+}
+
+watch(() => [textMode, envId], () => {
+  flush()
+  editor.cancel()
+}, { flush: 'sync' })
+onBeforeUnmount(() => {
+  closed = true
+  flush()
 })
 
-async function addVar() {
-  if (locked) return
-  const id = await environments.addVar(envId.value, { name: '', value: '' })
-  const created = vars.value.find((variable) => variable.id === id)
-  if (created) void start(created, 'name')
-}
-
-function removeVar(v: Variable) {
-  if (locked) return
-  void environments.removeVar(envId.value, v.id)
-}
-
-// There is no type to pick: a value is text, and the lock is what keeps it out of the export, the
-// logs and the screen — everywhere a secret is left out.
-function toggleSecret(v: Variable) {
-  if (locked) return
-  const next = isSecret(v) ? VariableKind.VariableText : VariableKind.VariableSecret
-  void environments.updateVar(envId.value, v.id, { kind: next })
-}
-
-defineExpose({ cancelTop })
+defineExpose({ cancelTop: editor.cancelTop })
 </script>
 
 <template>
   <div class="variables">
-    <div class="section">
-      <div class="section-head">
-        <span class="section-label">{{ t('environments.variablesLabel') }}</span>
-        <span class="section-count mono">{{ vars.length }}</span>
-        <span class="head-spacer"></span>
-        <button
-          type="button"
-          class="section-action"
-          :disabled="locked"
-          :title="locked ? t('environments.locked') : undefined"
-          @click="emit('import')"
-        >
-          {{ t('environments.importEnv') }}
-        </button>
+    <template v-if="textMode">
+      <BulkRowsEditor :key="envId ?? ''" :rows="textRows" :readonly="locked" @apply="applyText" />
+    </template>
+
+    <template v-else>
+      <Input v-if="searchable" v-model="query" size="sm" class="search" :placeholder="t('environments.search')" />
+
+      <div class="grid head">
+        <span></span>
+        <span>{{ t('environments.nameColumn') }}</span>
+        <span>{{ t('environments.value') }}</span>
+        <span></span>
       </div>
 
-      <div class="card">
-        <div v-if="vars.length" class="grid card-head">
-          <div>{{ t('environments.variable') }}</div>
-          <div>{{ t('environments.value') }}</div>
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
+      <VariableRow
+        v-for="variable in shown"
+        :id="'var-' + variable.id"
+        :key="variable.id"
+        :variable
+        :scope="envId"
+        :editor
+        :locked
+        :class="{ flash: flashId === variable.id }"
+        @patch="patchVariable(variable, $event)"
+        @remove="removeVar(variable)"
+      />
 
-        <div
-          v-for="v in vars"
-          :key="v.id"
-          :id="'var-' + v.id"
-          class="grid row"
-          :class="{ flash: flashId === v.id }"
-        >
-          <div class="cell cell-name" @click="start(v, 'name')">
-            <input
-              v-if="isEditingCell(v, 'name', envId)"
-              :ref="setCellInput"
-              v-model="draft"
-              class="cell-input mono"
-              :class="{ invalid: notice }"
-              spellcheck="false"
-              @keydown="onCellKeydown($event, v, 'name', envId)"
-              @blur="commitFrom(v, 'name')"
-            />
-            <span v-else class="cell-text mono" :title="v.name">{{ v.name }}</span>
-          </div>
+      <RowCreate
+        v-if="!locked"
+        :key="envId ?? ''"
+        :create="addVar"
+        :name-placeholder="t('environments.nameColumn')"
+        :value-placeholder="t('environments.value')"
+        :validate-name="name => isVariableName(name) ? '' : t('environments.nameInvalid')"
+        @invalid="setNotice"
+      />
+    </template>
 
-          <div class="cell cell-value" @click="start(v, 'value')">
-            <input
-              v-if="isEditingCell(v, 'value', envId)"
-              :ref="setCellInput"
-              v-model="draft"
-              class="cell-input mono"
-              :type="isSecretMasked(v) ? 'password' : 'text'"
-              spellcheck="false"
-              @keydown="onCellKeydown($event, v, 'value', envId)"
-              @blur="commitFrom(v, 'value')"
-            />
-            <span v-else class="cell-text mono" :class="{ masked: isSecretMasked(v) }">{{
-              displayValue(v)
-            }}</span>
-          </div>
-
-          <!-- The eye stands with the lock, not in the value: a button coming and going inside the
-               cell would take the value's width with it and the field would jump as it hides. -->
-          <div class="cell cell-icon">
-            <IconButton
-              v-if="isSecret(v)"
-              size="xl"
-              :hint="isRevealed(v) ? t('environments.hideValue') : t('environments.showValue')"
-              @click="toggleReveal(v)"
-            >
-              <Icon :name="isRevealed(v) ? 'EyeOff' : 'Eye'" :size="14" :stroke-width="1.9" />
-            </IconButton>
-          </div>
-
-          <div class="cell cell-icon">
-            <IconButton
-              size="xl"
-              :disabled="locked"
-              :hint="
-                locked
-                  ? t('environments.locked')
-                  : isSecret(v)
-                    ? t('environments.showAsText')
-                    : t('environments.makeSecret')
-              "
-              @click="toggleSecret(v)"
-            >
-              <Icon
-                :name="isSecret(v) ? 'Lock' : 'LockOpen'"
-                :size="14"
-                :stroke-width="1.9"
-                :class="{ 'lock-on': isSecret(v) }"
-              />
-            </IconButton>
-          </div>
-
-          <div class="cell cell-icon">
-            <IconButton
-              v-if="!locked"
-              variant="danger"
-              size="xl"
-              :hint="t('common.delete')"
-              @click="removeVar(v)"
-            >
-              <Icon name="X" :size="14" :stroke-width="1.9" />
-            </IconButton>
-          </div>
-        </div>
-
-        <button class="new-row" :disabled="locked" @click="addVar">
-          <Icon name="Plus" :size="14" />
-          <span class="cap-line">{{ t('environments.newVariable') }}</span>
-        </button>
-      </div>
-
-      <span class="note" :class="{ bad: !!notice }">{{ notice || t('environments.secretsNote') }}</span>
-    </div>
-
-    <div v-if="rows.inherited.length" class="section">
-      <div class="section-head">
-        <span class="section-label">{{ t('environments.inheritedFromGlobals') }}</span>
-        <span class="section-count mono">{{ rows.inherited.length }}</span>
-        <span class="head-spacer"></span>
-        <span class="section-hint">{{ t('environments.applyEverywhere') }}</span>
-      </div>
-
-      <div class="card">
-        <button
-          v-for="g in rows.inherited"
-          :key="g.id"
-          type="button"
-          :id="'var-' + g.id"
-          class="grid row inherited"
-          :class="{ overridden: g.overridden, flash: flashId === g.id }"
-          :title="t('environments.goToGlobal')"
-          @click="openGlobal(g)"
-        >
-          <div class="cell cell-name">
-            <Icon name="CornerDownRight" :size="12" class="inherit-icon" />
-            <span
-              class="cell-text mono"
-              :title="g.overridden ? t('environments.overridden') : g.name"
-              >{{ g.name }}</span
-            >
-          </div>
-          <div class="cell cell-value">
-            <span class="cell-text mono">{{ displayValue(g) }}</span>
-          </div>
-          <span></span>
-          <div class="cell">
-            <span v-if="g.overridden" class="tag tag-overridden">{{
-              t('environments.overriddenShort')
-            }}</span>
-            <span v-else class="tag tag-global">{{ t('environments.global') }}</span>
-          </div>
-          <div class="cell cell-icon">
-            <IconButton
-              size="xl"
-              :hint="t('environments.editGlobal')"
-              @click.stop="openGlobal(g, true)"
-            >
-              <Icon name="Pencil" :size="14" />
-            </IconButton>
-          </div>
-        </button>
-      </div>
-    </div>
+    <span v-if="notice" class="note bad">{{ notice }}</span>
   </div>
 </template>
 
@@ -298,197 +207,33 @@ defineExpose({ cancelTop })
 @reference "../../style.css";
 
 .variables {
-  @apply flex flex-col gap-4.5;
+  display: flex;
+  flex-direction: column;
 }
 
-.section {
-  @apply flex flex-col gap-2;
-}
-
-.section-head {
-  @apply flex items-center gap-2.5;
-}
-
-.section-label {
-  @apply section-label;
-}
-
-.section-count {
-  @apply text-11 text-text-tertiary;
-}
-
-.section-hint {
-  @apply text-12 text-text-tertiary;
-}
-
-.section-action {
-  @apply h-6.5 px-2 border-0 rounded-md cursor-pointer bg-transparent
-         text-text-secondary;
-  font-family: inherit;
-  font-size: var(--text-13);
-  font-weight: 500;
-}
-
-.section-action:hover:not(:disabled) {
-  @apply bg-bg-hover text-text;
-}
-
-.section-action:disabled {
-  @apply opacity-50 cursor-default;
-}
-
-.card {
-  @apply overflow-hidden;
+.search {
+  margin-bottom: 8px;
 }
 
 .grid {
-  @apply grid items-stretch;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2rem 2rem 2rem;
-  padding: 0 0.75rem;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1.4fr) 80px;
+  align-items: center;
 }
 
-.card-head {
-  @apply items-center text-text-tertiary;
-  height: 1.875rem;
+.head {
+  height: 28px;
   font-size: var(--text-12);
-  border-bottom: 1px solid var(--border);
+  color: var(--text-tertiary);
 }
 
-.row {
-  @apply border-b;
-  height: 2.375rem;
-  border-color: var(--line2);
-}
-
-.row:hover {
-  @apply bg-bg-hover;
-}
-
-.cell {
-  @apply flex items-center min-w-0;
-}
-
-.cell-name,
-.cell-value {
-  padding-right: 0.75rem;
-}
-
-.cell-name {
-  gap: 0.3125rem;
-}
-
-.cell-value {
-  gap: 0.3125rem;
-}
-
-.cell-text {
-  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text;
-  font-family: var(--mono);
-  font-size: var(--text-13);
-}
-
-.cell-name .cell-text {
-  color: var(--accent);
-}
-
-.cell-text.masked {
-  @apply text-text-tertiary;
-}
-
-.cell-input {
-  @apply w-full outline-none;
-  box-sizing: border-box;
-  height: 1.875rem;
-  padding: 0 0.5rem;
-  border-radius: 0.3125rem;
-  font-family: var(--mono);
-  font-size: var(--text-13);
-  background: var(--bg-inset);
-  border: 1px solid var(--accent);
-}
-
-.cell-input.invalid {
-  border-color: color-mix(in srgb, var(--red) 45%, transparent);
-  box-shadow: 0 0 0 2px var(--red-soft);
-}
-
-.cell-icon {
-  @apply justify-center;
-}
-
-.tag {
-  @apply flex-none text-11 font-semibold cursor-pointer;
-  padding: 0.125rem 0.4375rem;
-  border-radius: 0.25rem;
-}
-
-.tag:disabled {
-  @apply cursor-default;
-}
-
-.lock-on {
-  color: var(--accent);
-}
-
-.tag-global {
-  @apply text-purple;
-  background: color-mix(in srgb, var(--purple) 13%, transparent);
-}
-
-.tag-overridden {
-  @apply text-text-tertiary bg-bg-hover;
-}
-
-.new-row {
-  @apply flex items-center w-full gap-2 border-0 border-b bg-transparent text-left
-         text-accent cursor-pointer;
-  font-family: inherit;
-  font-size: var(--text-13);
-  height: 2.25rem;
-  padding: 0.75rem 0.5rem;
-  border-color: var(--line2);
-}
-
-.new-row:hover:not(:disabled) {
-  @apply bg-bg-hover;
-}
-
-.new-row:disabled {
-  @apply opacity-50 cursor-default;
-}
-
-.row.inherited {
-  @apply w-full border-0 text-left cursor-pointer;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2rem 6.25rem 2rem;
-  font-family: inherit;
-  background: color-mix(in srgb, var(--purple) 3%, transparent);
-}
-
-.row.inherited:hover {
-  background: color-mix(in srgb, var(--purple) 7%, transparent);
-}
-
-.inherit-icon {
-  @apply flex-none text-purple;
-}
-
-.row.overridden .cell-text {
-  @apply text-text-tertiary line-through;
-}
-
-.row.overridden .inherit-icon {
-  @apply opacity-40;
-}
-
-.row.flash {
+.flash {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .note {
-  @apply text-12 text-text-tertiary;
-}
-
-.note.bad {
-  @apply text-red;
+  margin-top: 8px;
+  font-size: var(--text-12);
+  color: var(--red);
 }
 </style>

@@ -78,19 +78,19 @@ func TestVariablesAreReadOutermostFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Above: %v", err)
 	}
-	if len(above.Variables) != 3 {
+	if len(above.Levels.Variables) != 3 {
 		t.Fatalf("above = %+v, want both levels' variables", above)
 	}
-	if above.Variables[0].Name != "baseUrl" || above.Variables[0].Value != "https://outer" {
-		t.Errorf("first = %+v, want the outer collection's answer", above.Variables[0])
+	if above.Levels.Variables[0].Name != "baseUrl" || above.Levels.Variables[0].Value != "https://outer" {
+		t.Errorf("first = %+v, want the outer collection's answer", above.Levels.Variables[0])
 	}
-	if last := above.Variables[len(above.Variables)-1]; last.Name != "page" {
+	if last := above.Levels.Variables[len(above.Levels.Variables)-1]; last.Name != "page" {
 		t.Errorf("last = %+v, want the nearest level's own", last)
 	}
 	// The same name twice is the whole point: the reader takes them in order, so the second is what
 	// stands.
-	if above.Variables[1].Name != "baseUrl" || above.Variables[1].Value != "https://inner" {
-		t.Errorf("second = %+v, want the nested one over the outer", above.Variables[1])
+	if above.Levels.Variables[1].Name != "baseUrl" || above.Levels.Variables[1].Value != "https://inner" {
+		t.Errorf("second = %+v, want the nested one over the outer", above.Levels.Variables[1])
 	}
 }
 
@@ -107,8 +107,8 @@ func TestVariablesSkipLevelsTheRequestIsNotUnder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Above: %v", err)
 	}
-	if len(above.Variables) != 1 || above.Variables[0].Value != "https://outer" {
-		t.Fatalf("above = %+v, want the collection's own answer alone", above.Variables)
+	if len(above.Levels.Variables) != 1 || above.Levels.Variables[0].Value != "https://outer" {
+		t.Fatalf("above = %+v, want the collection's own answer alone", above.Levels.Variables)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestVariablesOfALevelWithNothingAboveAreNone(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Above(%s): %v", id, err)
 		}
-		if len(above.Variables) != 0 || above.Auth != nil {
+		if len(above.Levels.Variables) != 0 || above.Auth != nil {
 			t.Errorf("above(%s) = %+v, want nothing", id, above)
 		}
 	}

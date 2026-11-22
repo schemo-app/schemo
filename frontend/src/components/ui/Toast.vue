@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { useToast } from '../../composables/useToast'
 
-const { message, kind } = useToast()
+const { message, kind, action, runAction } = useToast()
 </script>
 
 <template>
   <transition name="fade">
     <div v-if="message" class="toast-layout">
-      <div class="toast" :class="kind">{{ message }}</div>
+      <div class="toast" :class="kind">
+        <span>{{ message }}</span>
+        <button v-if="action" type="button" class="toast-action" @click="runAction">{{ action.label }}</button>
+      </div>
     </div>
   </transition>
 </template>
@@ -20,7 +23,7 @@ const { message, kind } = useToast()
 }
 
 .toast {
-  @apply px-4 py-2 rounded-lg text-12 max-w-[80%] pointer-events-auto;
+  @apply flex items-center gap-3 px-4 py-2 rounded-lg text-12 max-w-[80%] pointer-events-auto;
   background: var(--glass-overlay);
   backdrop-filter: var(--blur-overlay);
   border: 1px solid var(--glass-overlay-border);
@@ -33,6 +36,15 @@ const { message, kind } = useToast()
 
 .toast.info {
   @apply text-text;
+}
+
+.toast-action {
+  @apply flex-none border-0 bg-transparent cursor-pointer p-0 text-accent font-medium;
+  font: inherit;
+}
+
+.toast-action:hover {
+  @apply underline;
 }
 
 .fade-enter-active,

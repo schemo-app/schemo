@@ -1,5 +1,4 @@
-// Package convert imports and exports collections and environments; each format lives in its own
-// subpackage (har, insomnia, openapi, postman, schemofile, command, dotenv).
+// Package convert imports and exports collections and environments.
 package convert
 
 import (
@@ -28,11 +27,8 @@ type Transfer struct {
 	commands     Commands
 	ids          platform.IDGen
 	host         *desktop.Host
-
-	mu sync.Mutex
-	// One read waits at a time: the dialog has one file card open, and a second read replaces the
-	// first rather than holding everything ever previewed for ten minutes.
-	staged *stagedRead
+	mu           sync.Mutex
+	staged       *stagedRead
 }
 
 // stagedRead is a document that was read and not yet written, under the token the window holds.
@@ -111,6 +107,7 @@ func (s *Transfer) stage(document domain.Document, size int) Preview {
 		Requests:     requests,
 		Folders:      folders,
 		Environments: len(document.Environments),
+		Globals:      len(document.Globals),
 		Skipped:      document.Skipped,
 	}
 }
@@ -122,6 +119,7 @@ func (s *Transfer) Apply(
 	token string,
 	parentID string,
 	name string,
+	readonlySuffix string,
 ) (Summary, error) {
 	document, err := s.claimStaged(token)
 	if err != nil {
@@ -134,28 +132,41 @@ func (s *Transfer) Apply(
 		}
 	}
 
-	summary := Summary{Collections: len(document.Collections)}
+	summary := Summary{Collections: len(document.Collections), CreatedEnvironments: []string{}}
+	targets := []string{}
 	if len(document.Collections) > 0 {
-		tree, err := s.collections.Import(ctx, document.Collections, parentID)
+		imported, err := s.collections.ImportCollections(ctx, document.Collections, parentID)
 		if err != nil {
 			return Summary{}, err
 		}
-		summary.Tree = tree
+		summary.Tree, targets = imported.Tree, imported.Targets
 		requests, _ := countDocument(domain.Document{Collections: document.Collections})
 		summary.Requests = requests
 	}
-	for _, draft := range document.Environments {
-		state, err := s.environments.ImportState(ctx, draft)
+	if len(document.Environments) > 0 {
+		report, err := s.environments.ImportDrafts(ctx, document.Environments, targets, readonlySuffix)
+		if err != nil {
+			return Summary{}, err
+		}
+		summary.EnvState = &report.State
+		summary.Environments = len(document.Environments)
+		summary.CreatedEnvironments = report.Created
+	}
+	if len(document.Globals) > 0 {
+		if _, err := s.environments.ImportVariables(ctx, domain.EnvScope{}, document.Globals); err != nil {
+			return Summary{}, err
+		}
+		state, err := s.environments.State(ctx)
 		if err != nil {
 			return Summary{}, err
 		}
 		summary.EnvState = &state
-		summary.Environments++
+		summary.Globals = len(document.Globals)
 	}
 	if len(document.Collections) > 0 && len(document.Collections[0].Name) > 0 {
 		summary.Name = document.Collections[0].Name
 	}
-	if summary.Collections == 0 && summary.Environments == 0 {
+	if summary.Collections == 0 && summary.Environments == 0 && summary.Globals == 0 {
 		return Summary{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
 	return summary, nil
@@ -319,27 +330,27 @@ type Preview struct {
 	Requests     int           `json:"requests"`
 	Folders      int           `json:"folders"`
 	Environments int           `json:"environments"`
+	Globals      int           `json:"globals"`
 	Skipped      []domain.Skip `json:"skipped,omitempty"`
 }
 
 // Summary is what an import wrote, for the tree to draw and the toast to count.
 type Summary struct {
-	Tree []domain.Collection `json:"tree"`
-	// EnvState is the environment list as it is now, present only when the document carried one.
-	EnvState     *domain.EnvState `json:"envState,omitempty"`
-	Name         string           `json:"name,omitempty"`
-	Collections  int              `json:"collections"`
-	Requests     int              `json:"requests"`
-	Environments int              `json:"environments"`
+	Tree                []domain.Collection `json:"tree"`
+	EnvState            *domain.EnvState    `json:"envState,omitempty"`
+	Name                string              `json:"name,omitempty"`
+	Collections         int                 `json:"collections"`
+	Requests            int                 `json:"requests"`
+	Environments        int                 `json:"environments"`
+	Globals             int                 `json:"globals"`
+	CreatedEnvironments []string            `json:"createdEnvironments"`
 }
 
 // Workspace is one workspace a copy could be taken from, with the collections it holds at the top level.
 type Workspace struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Active bool   `json:"active"`
-	// Collections is empty for a workspace nothing could be taken from only in the sense of the walk:
-	// a workspace without collections answers with an empty list, which is an answer.
+	ID          string                `json:"id"`
+	Name        string                `json:"name"`
+	Active      bool                  `json:"active"`
 	Collections []WorkspaceCollection `json:"collections"`
 }
 
@@ -371,6 +382,13 @@ type Collections interface {
 		collections []domain.Collection,
 		parentID string,
 	) ([]domain.Collection, error)
+	// ImportCollections is Import that also says which collection each of the file's collections
+	// answers to in the environments.
+	ImportCollections(
+		ctx context.Context,
+		collections []domain.Collection,
+		parentID string,
+	) (domain.Imported, error)
 	// Full is a collection — or one request, when the id names one — read whole: what an export
 	// writes down.
 	Full(ctx context.Context, id string) (domain.Collection, error)
@@ -385,9 +403,12 @@ type Collections interface {
 
 // Environments is the environment list as importing one and exporting the values reads it.
 type Environments interface {
-	// Import writes one environment a document described, variables and all, and answers with the
-	// list to draw.
-	ImportState(ctx context.Context, draft domain.EnvironmentDraft) (domain.EnvState, error)
+	// ImportDrafts writes the environments a document described into the list, by name and without
+	// replacing a value already there; a block goes to the collection its index names in targets.
+	ImportDrafts(ctx context.Context, drafts []domain.EnvironmentDraft, targets []string,
+		readonlySuffix string) (domain.EnvImport, error)
+	// ImportVariables adds the names a scope does not hold yet; values already there stay.
+	ImportVariables(ctx context.Context, scope domain.EnvScope, vars []domain.Variable) (domain.VarImport, error)
 	// State is the whole list, with secret values withheld.
 	State(ctx context.Context) (domain.EnvState, error)
 	// Reveal is the one way a secret's value leaves the database — here, into a file the person

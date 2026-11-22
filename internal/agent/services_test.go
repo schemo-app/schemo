@@ -209,7 +209,7 @@ func TestMCPAuthorizationCanBeEditedWhileSecretVariableValuesStayProtected(t *te
 	}
 	name := "Read credentials"
 	created, err := tools.CreateRequest(ctx, RequestInput{WorkspaceInput: workspace, Collection: level.ID, RequestFields: RequestFields{
-		Name: &name, Environment: &env.ID,
+		Name: &name,
 		Auth: &domain.Auth{Type: domain.AuthBearer, Fields: map[string]string{"token": "protected-value"}},
 	}})
 	if err != nil {
@@ -253,23 +253,23 @@ func TestMCPAuthorizationCanBeEditedWhileSecretVariableValuesStayProtected(t *te
 func TestMCPEnvironmentEditsNeverReturnOrDowngradeSecrets(t *testing.T) {
 	tools, _ := workspaceTools(t)
 	ctx := context.Background()
-	workspace := WorkspaceInput{Workspace: "other"}
-	created, err := tools.CreateEnvironment(ctx, EnvironmentInput{WorkspaceInput: workspace, Name: "Testing"})
+	scope := WorkspaceInput{Workspace: "other"}
+	created, err := tools.CreateEnvironment(ctx, EnvironmentInput{WorkspaceInput: scope, Name: "Testing"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	variable, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: workspace, Environment: created.ID, Name: "token", Value: "first-secret", Secret: true})
+	variable, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: scope, Environment: created.ID, Name: "token", Value: "first-secret", Secret: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: workspace, Environment: created.ID, Name: "token", Value: "replacement-secret"})
+	updated, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: scope, Environment: created.ID, Name: "token", Value: "replacement-secret"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated.ID != variable.ID {
 		t.Fatal("setting an existing variable created a duplicate")
 	}
-	state, err := tools.Environments(ctx, workspace)
+	state, err := tools.Environments(ctx, scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,19 +277,20 @@ func TestMCPEnvironmentEditsNeverReturnOrDowngradeSecrets(t *testing.T) {
 	if value.Value != "" || value.Kind != domain.VariableSecret || !value.HasValue {
 		t.Fatalf("secret metadata = %+v", value)
 	}
-	if _, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: workspace, Environment: created.ID, Name: "token", Value: domain.SecretMask}); err == nil {
+	if _, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: scope, Environment: created.ID, Name: "token", Value: domain.SecretMask}); err == nil {
 		t.Fatal("a secret mask overwrote the value")
 	}
 	if _, err := tools.DeleteVariable(ctx, VariableIDInput{WorkspaceInput: WorkspaceInput{Workspace: domain.WorkspacePersonalID}, Environment: created.ID, ID: variable.ID}); err == nil {
 		t.Fatal("a foreign variable was deleted")
 	}
-	if err := tools.editEnvironment(ctx, workspace.Workspace, created.ID, func(env *domain.Environment) { env.Readonly = true }); err != nil {
+	readonly := true
+	if err := tools.environments.InWorkspace(scope.Workspace).Update(ctx, created.ID, workspace.EnvironmentPatch{Readonly: &readonly}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: workspace, Environment: created.ID, Name: "token", Value: "blocked"}); err == nil {
+	if _, err := tools.SetVariable(ctx, VariableInput{WorkspaceInput: scope, Environment: created.ID, Name: "token", Value: "blocked"}); err == nil {
 		t.Fatal("MCP edited a read-only environment")
 	}
-	if _, err := tools.DeleteEnvironment(ctx, IDInput{WorkspaceInput: workspace, ID: created.ID}); err != nil {
+	if _, err := tools.DeleteEnvironment(ctx, IDInput{WorkspaceInput: scope, ID: created.ID}); err != nil {
 		t.Fatal(err)
 	}
 }

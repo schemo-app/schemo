@@ -5,6 +5,7 @@ import Icon from '../ui/Icon.vue'
 import KvRow from './KvRow.vue'
 import BulkRowsEditor from './BulkRowsEditor.vue'
 import TokenField from '../ui/TokenField.vue'
+import RowCreate from '../ui/RowCreate.vue'
 import type { RequestSource } from '../../lib/requestSource'
 import { RowKind, type ProjectedRow, type Row } from '../../../bindings/schemo/internal/domain'
 import { useSetting } from '../../composables/useSettings'
@@ -108,10 +109,14 @@ const { press, states } = useRowOrder({
   move: (id, position) => source.moveRow(rowKind.value, id, position),
 })
 
-async function addRow() {
-  const id = await source.addRow(rowKind.value)
+async function addRow(name: string, value: string): Promise<boolean> {
+  const current = source
+  const target = rowKind.value
+  const id = await current.addRow(target, name, value)
+  if (!id) return false
   await nextTick()
-  table.value?.querySelector<HTMLInputElement>(`[data-row="${id}"]`)?.focus()
+  if (source === current && rowKind.value === target) table.value?.querySelector<HTMLInputElement>(`[data-kv="${id}"] .row-input`)?.focus()
+  return true
 }
 
 function patchName(id: string, name: string) {
@@ -161,7 +166,7 @@ function patchValue(id: string, value: string) {
       </div>
     </template>
 
-    <BulkRowsEditor v-if="bulkEditing" ref="editor" :rows :env-id="source.environmentId" @apply="applyBulk" />
+    <BulkRowsEditor v-if="bulkEditing" ref="editor" :rows @apply="applyBulk" />
     <div ref="table" class="kv" :class="{ 'kv-text-auto': bulkEditing }" :tabindex="bulkEditing ? undefined : 0" :aria-label="t(`request.chips.${kind}`)" @paste="onPaste">
       <KvRow
         v-for="(row, index) in bulkEditing ? [] : rows"
@@ -186,15 +191,18 @@ function patchValue(id: string, value: string) {
         />
       </KvRow>
 
-      <button v-if="!bulkEditing" type="button" class="kv-row kv-add" @click="addRow">
-        <span></span>
-        <span class="kv-ghost mono">{{ t('request.placeholderKey') }}</span>
-        <span class="kv-add-value">
-          <span class="kv-ghost mono">{{ t('request.placeholderValue') }}</span>
+      <RowCreate
+        v-if="!bulkEditing"
+        :key="`${source.draftId}/${kind}`"
+        class="kv-row kv-add mono"
+        :create="addRow"
+        :name-placeholder="kind === 'headers' ? t(protocolOf(source.protocol).headerName ?? 'request.pane.headerName') : t('request.placeholderKey')"
+        :value-placeholder="t('request.placeholderValue')"
+      >
+        <template #value-suffix>
           <span class="paste-hint">{{ t('request.pane.pasteHint', {shortcut: shortcut('V')}) }}</span>
-        </span>
-        <span></span>
-      </button>
+        </template>
+      </RowCreate>
 
       <template v-if="kind === 'headers'">
         <div
@@ -259,15 +267,13 @@ function patchValue(id: string, value: string) {
   @apply relative flex flex-col;
   padding: 0.5rem 1.125rem 0.5rem 1.125rem;
   --key-width: min(13.75rem, 40%);
+  --row-columns: 1.375rem var(--key-width) minmax(0, 1fr) 1.75rem;
+  --create-cell-padding: 0 0.5rem;
 }
 
 .kv {
   @apply relative;
   outline: none;
-}
-
-.kv-add-value {
-  @apply flex items-center min-w-0;
 }
 
 .paste-hint {

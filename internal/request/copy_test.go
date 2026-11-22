@@ -13,7 +13,7 @@ import (
 // above it — the shape a request composed on the line has.
 func copyLine(t *testing.T, drafts *line, format command.Format) Copy {
 	t.Helper()
-	out, err := drafts.copyAs(nil, nil, format)
+	out, err := drafts.copyAs(nil, domain.VarLevels{}, format)
 	if err != nil {
 		t.Fatalf("copyAs: %v", err)
 	}
@@ -198,18 +198,14 @@ func TestACopyOfAFormWithoutAFileKeepsTheBoundaryItWrote(t *testing.T) {
 	}
 }
 
-// A name nothing answers leaves the copy empty and is named beside it: the command is what the
-// request would be, and a name in braces is one no server reads.
+// An unknown name stays in the copy as written and is named beside it.
 func TestACopyNamesTheVariablesNothingAnswers(t *testing.T) {
 	line := newLine(t)
 	line.d.Body = `{"id": "{{nope}}"}`
 
 	out := copyLine(t, line, command.FormatCurl)
-	if strings.Contains(out.Text, "{{nope}}") {
-		t.Errorf("copy = %q, want nothing where the name stood", out.Text)
-	}
-	if !strings.Contains(out.Text, `{"id": ""}`) {
-		t.Errorf("copy = %q, want the empty value the request would carry", out.Text)
+	if !strings.Contains(out.Text, `{"id": "{{nope}}"}`) {
+		t.Errorf("copy = %q, want the name as written", out.Text)
 	}
 	if len(out.Omitted) != 1 || out.Omitted[0].Kind != command.OmissionVariable ||
 		out.Omitted[0].Name != "nope" {
@@ -254,7 +250,7 @@ func TestACopyTakesTheAuthorizationTheTreeAboveAnswered(t *testing.T) {
 	inherited := domain.NewAuth(domain.AuthBearer).With("token", "abc123")
 
 	before := len(line.auth.shown)
-	out, err := line.copyAs(&inherited, nil, command.FormatCurl)
+	out, err := line.copyAs(&inherited, domain.VarLevels{}, command.FormatCurl)
 	if err != nil {
 		t.Fatalf("copyAs: %v", err)
 	}

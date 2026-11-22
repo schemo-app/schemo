@@ -308,16 +308,16 @@ func TestExportHoldsBackSecretsUntilAsked(t *testing.T) {
 	}
 
 	back := roundTrip(t, storefront(), environments, true)
-	if len(back.Environments) != 1 || back.Environments[0].Name != "Dev" {
-		t.Fatalf("environments = %+v, want Dev back", back.Environments)
+	if len(back.Environments) != 1 || back.Environments[0].Name != "Dev" || len(back.Environments[0].Blocks) != 1 {
+		t.Fatalf("environments = %+v, want Dev back as a block", back.Environments)
 	}
-	url := variable(t, back.Environments[0].Variables, "base_url")
-	if url.Value != "https://api.dev.example" || url.Kind != domain.VariableText {
+	block := back.Environments[0].Blocks[0].Variables
+	if url := variable(t, block, "base_url"); url.Value != "https://api.dev.example" {
 		t.Errorf("base_url = %+v, want the plain value back", url)
 	}
-	token := variable(t, back.Environments[0].Variables, "dev_token")
-	if token.Value != "tok_dev" || token.Kind != domain.VariableSecret {
-		t.Errorf("dev_token = %+v, want the value and the name's own kind", token)
+	// Insomnia marks no single value secret, so the kind does not travel.
+	if token := variable(t, block, "dev_token"); token.Value != "tok_dev" {
+		t.Errorf("dev_token = %+v, want the value back", token)
 	}
 }
 

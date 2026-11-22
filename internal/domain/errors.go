@@ -57,6 +57,8 @@ const (
 	CodeSkippedBinaryFile    Code = "skippedBinaryFile"
 	CodeSkippedSecretValue   Code = "skippedSecretValue"
 	CodeSkippedAuthScheme    Code = "skippedAuthScheme"
+	CodeSkippedTemplateTag   Code = "skippedTemplateTag"
+	CodeSkippedVariableClash Code = "skippedVariableClash"
 	CodeRunInProgress        Code = "runInProgress"
 	CodeNodeHasNoRequests    Code = "nodeHasNoRequests"
 	CodeNoEnvironment        Code = "noEnvironment"

@@ -41,13 +41,12 @@ type Draft struct {
 	Headers  []Row            `json:"headers"`
 	// PathParams holds one row for each `:name` the address carries and is derived from it: the
 	// name is the address's, and what the row keeps is the value and the description.
-	PathParams    []Row     `json:"pathParams"`
-	Auth          Auth      `json:"auth"`
-	Body          string    `json:"body"`
-	BodyKind      BodyKind  `json:"bodyKind"`
-	Form          []FormRow `json:"form"`
-	BodyFile      string    `json:"bodyFile,omitempty"`
-	EnvironmentID string    `json:"environmentId,omitempty"`
+	PathParams []Row     `json:"pathParams"`
+	Auth       Auth      `json:"auth"`
+	Body       string    `json:"body"`
+	BodyKind   BodyKind  `json:"bodyKind"`
+	Form       []FormRow `json:"form"`
+	BodyFile   string    `json:"bodyFile,omitempty"`
 	// InactiveProtocols holds the editor's previous inputs in this draft when the protocol changes.
 	InactiveProtocols map[Protocol]ProtocolDraft `json:"inactiveProtocols,omitempty"`
 }
@@ -310,9 +309,9 @@ func escapeSegment(value string) string {
 
 // ResolvedRequest is a whole saved request with the nearest inherited auth and the variables above it.
 type ResolvedRequest struct {
-	Node      CollectionNode `json:"node"`
-	Auth      *Auth          `json:"auth,omitempty"`
-	Variables []Variable     `json:"variables,omitempty"`
+	Node   CollectionNode `json:"node"`
+	Auth   *Auth          `json:"auth,omitempty"`
+	Levels VarLevels      `json:"levels"`
 }
 
 type HTTPVersion string

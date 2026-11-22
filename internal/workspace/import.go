@@ -20,21 +20,49 @@ func (s *Collections) Import(
 	collections []domain.Collection,
 	parentID string,
 ) ([]domain.Collection, error) {
+	imported, err := s.ImportCollections(ctx, collections, parentID)
+	return imported.Tree, err
+}
+
+// ImportCollections is Import that also says where each collection landed.
+//
+//wails:ignore
+func (s *Collections) ImportCollections(
+	ctx context.Context,
+	collections []domain.Collection,
+	parentID string,
+) (domain.Imported, error) {
+	tree, targets, err := s.importCollections(ctx, collections, parentID)
+	return domain.Imported{Tree: tree, Targets: targets}, err
+}
+
+func (s *Collections) importCollections(
+	ctx context.Context,
+	collections []domain.Collection,
+	parentID string,
+) ([]domain.Collection, []string, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	root := ""
 	if parentID != "" {
 		if _, ok, err := s.collection(ctx, workspace, parentID); err != nil {
-			return nil, err
+			return nil, nil, err
 		} else if !ok {
-			return nil, fmt.Errorf("collection %s: %w", parentID, domain.ErrNotFound)
+			return nil, nil, fmt.Errorf("collection %s: %w", parentID, domain.ErrNotFound)
 		}
+		tree, err := s.store.Collections(ctx, workspace)
+		if err != nil {
+			return nil, nil, err
+		}
+		root = rootOf(tree, parentID)
 	}
 	position, err := s.store.NextPosition(ctx, workspace, parentID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	targets := make([]string, len(collections))
 
 	// Everything is built before any of it is written: an import that failed halfway would leave a
 	// tree with half a file in it.
@@ -42,7 +70,7 @@ func (s *Collections) Import(
 	for index, collection := range collections {
 		name, err := importName(collection.Name)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		imported := domain.Collection{
 			ID:          s.ids(),
@@ -56,12 +84,17 @@ func (s *Collections) Import(
 			// minted here, the way every other id of an import is.
 			Variables: withVariablesIDs(s.ids, collection.Variables),
 		}
+		targets[index] = imported.ID
+		if root != "" {
+			targets[index] = root
+		}
 		pending = append(pending, s.adopt(imported, collection.Items, collection.Children)...)
 	}
 	if err := s.saveTree(ctx, workspace, pending); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return s.store.Collections(ctx, workspace)
+	tree, err := s.store.Collections(ctx, workspace)
+	return tree, targets, err
 }
 
 // importName clips an overlong name rather than refusing the whole file.
@@ -228,12 +261,13 @@ func (s *Collections) Requests(
 		return nil, err
 	}
 
+	root := rootOf(tree, collectionID)
 	out := make([]domain.ResolvedRequest, 0, len(nodes))
 	for index, node := range nodes {
 		out = append(out, domain.ResolvedRequest{
-			Node:      node,
-			Auth:      requests[index].auth,
-			Variables: requests[index].variables,
+			Node:   node,
+			Auth:   requests[index].auth,
+			Levels: domain.VarLevels{Collection: root, Variables: requests[index].variables},
 		})
 	}
 	return out, nil

@@ -28,9 +28,6 @@ func TestDraftRoundTrip(t *testing.T) {
 	if got.Method != saved.Method || got.URL != saved.URL || got.Body != saved.Body {
 		t.Errorf("draft = %+v, want the saved one", got)
 	}
-	if got.EnvironmentID != "env-1" {
-		t.Errorf("environmentID = %q, want the pin it was saved with", got.EnvironmentID)
-	}
 	if len(got.Params) != 2 || got.Params[1].ID != "p2" || got.Params[1].Enabled {
 		t.Errorf("params = %+v, want both rows with what they carried", got.Params)
 	}

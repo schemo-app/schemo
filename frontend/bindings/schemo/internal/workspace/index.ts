@@ -18,12 +18,13 @@ export type {
     Changed,
     CollectionPatch,
     Created,
-    EnvironmentInput,
+    EnvironmentPatch,
     Invitation,
     InviteOutcome,
     ProxyAddress,
     Query,
     RequestDraft,
+    VariablePatch,
     WorkspaceInput,
     WorkspacePatch
 } from "./models.js";

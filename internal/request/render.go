@@ -29,9 +29,9 @@ func (s *Drafts) prepare(
 	workspace string,
 	draft domain.Draft,
 	inherits *domain.Auth,
-	above []domain.Variable,
+	above domain.VarLevels,
 ) (SendInput, error) {
-	resolve, err := s.vars.Resolver(ctx, workspace, above, draft.EnvironmentID)
+	resolve, err := s.vars.Resolver(ctx, workspace, above)
 	if err != nil {
 		return SendInput{}, err
 	}
@@ -260,9 +260,6 @@ type Seed struct {
 	Headers  []domain.HeaderPair     `json:"headers,omitempty"`
 	// Auth travels resolved: whoever builds a seed knows where the request came from.
 	Auth *domain.Auth `json:"auth,omitempty"`
-	// EnvironmentID is the environment this one request resolves its `{{tokens}}` in, when it is
-	// not the window's own: a run sends requests saved with a pin.
-	EnvironmentID string `json:"environmentId,omitempty"`
 }
 
 // Prepared fills in a draft; inherits and above are nil for a draft in no tree.
@@ -272,7 +269,7 @@ func (s *Drafts) Prepared(
 	ctx context.Context,
 	d domain.Draft,
 	inherits *domain.Auth,
-	above []domain.Variable,
+	above domain.VarLevels,
 ) (SendInput, error) {
 	workspace, err := s.scope.ActiveWorkspace(ctx)
 	if err != nil {
@@ -284,7 +281,7 @@ func (s *Drafts) Prepared(
 // Prepare fills in a run's or a followed link's request the same way as a draft.
 //
 //wails:ignore
-func (s *Drafts) Prepare(ctx context.Context, seed Seed, above []domain.Variable) (SendInput, error) {
+func (s *Drafts) Prepare(ctx context.Context, seed Seed, above domain.VarLevels) (SendInput, error) {
 	return s.Prepared(ctx, s.draftOfSeed(seed), nil, above)
 }
 
@@ -296,17 +293,17 @@ func (s *Drafts) Mask(ctx context.Context, seed Seed) (SendInput, error) {
 	if err != nil {
 		return SendInput{}, err
 	}
-	return s.MaskIn(ctx, workspace, seed, nil)
+	return s.MaskIn(ctx, workspace, seed, domain.VarLevels{})
 }
 
 // MaskIn masks an already resolved request within the workspace that sent it.
 //
 //wails:ignore
-func (s *Drafts) MaskIn(ctx context.Context, workspace string, seed Seed, above []domain.Variable) (SendInput, error) {
+func (s *Drafts) MaskIn(ctx context.Context, workspace string, seed Seed, above domain.VarLevels) (SendInput, error) {
 	draft := s.draftOfSeed(seed)
 	raw := partsOf(draft, nil, "")
 	texts := raw.texts()
-	hidden, err := s.vars.MaskTextsIn(ctx, workspace, above, texts, draft.EnvironmentID)
+	hidden, err := s.vars.MaskTextsIn(ctx, workspace, above, texts)
 	if err != nil {
 		return SendInput{}, err
 	}
@@ -320,17 +317,16 @@ func (s *Drafts) draftOfSeed(seed Seed) domain.Draft {
 		auth = seed.Auth.Normalized()
 	}
 	return s.withRowIDs(domain.Draft{
-		Protocol:      seed.Protocol,
-		Options:       seed.Options,
-		Method:        seed.Method,
-		URL:           seed.URL,
-		Body:          seed.Body,
-		BodyKind:      domain.KindOf(seed.BodyKind),
-		Form:          seed.Form,
-		BodyFile:      seed.BodyFile,
-		Headers:       s.rowsFromHeaders(seed.Headers),
-		Auth:          auth,
-		EnvironmentID: seed.EnvironmentID,
+		Protocol: seed.Protocol,
+		Options:  seed.Options,
+		Method:   seed.Method,
+		URL:      seed.URL,
+		Body:     seed.Body,
+		BodyKind: domain.KindOf(seed.BodyKind),
+		Form:     seed.Form,
+		BodyFile: seed.BodyFile,
+		Headers:  s.rowsFromHeaders(seed.Headers),
+		Auth:     auth,
 	})
 }
 
@@ -444,7 +440,7 @@ func (s *Drafts) cookiesIn(ctx context.Context, workspace string, d domain.Draft
 		return "", nil
 	}
 	raw := collectParts(d, "").url
-	if resolve, err := s.vars.Resolver(ctx, workspace, nil, d.EnvironmentID); err == nil {
+	if resolve, err := s.vars.Resolver(ctx, workspace, domain.VarLevels{}); err == nil {
 		raw, _ = resolve(raw)
 	}
 	return s.jar.CookieHeader(ctx, workspace, rules.httpURL(raw))
@@ -505,11 +501,11 @@ func (s *Drafts) autoRows(
 	ctx context.Context,
 	d domain.Draft,
 	inherits *domain.Auth,
-	above []domain.Variable,
+	above domain.VarLevels,
 	cookie string,
 ) ([]domain.ProjectedRow, error) {
 	raw := partsOf(d, inherits, cookie)
-	hidden, err := s.vars.SubstituteTexts(ctx, above, raw.texts(), true, d.EnvironmentID)
+	hidden, err := s.vars.SubstituteTexts(ctx, above, raw.texts(), true)
 	if err != nil {
 		return nil, err
 	}
@@ -552,14 +548,14 @@ func (s *Drafts) autoRows(
 func (s *Drafts) sentLength(
 	ctx context.Context,
 	raw parts,
-	above []domain.Variable,
+	above domain.VarLevels,
 	d domain.Draft,
 ) (int, bool) {
 	kind := domain.KindOf(d.BodyKind)
 	if d.Protocol.Live() || (d.Protocol == "" && (kind == domain.BodyBinary || formCarriesFile(raw.form))) {
 		return 0, false
 	}
-	live, err := s.vars.SubstituteTexts(ctx, above, raw.texts(), false, d.EnvironmentID)
+	live, err := s.vars.SubstituteTexts(ctx, above, raw.texts(), false)
 	if err != nil {
 		return 0, false
 	}

@@ -107,6 +107,13 @@ function onField(key: string, value: string) {
   @apply flex items-center;
 }
 
+.col-auth :deep(.pane-select.cell) {
+  height: 1.875rem;
+  padding: 0 0.625rem;
+  gap: 0.5rem;
+  border-radius: 0.4375rem;
+}
+
 .auth-note {
   @apply m-0 text-text-secondary;
   padding: 0.75rem 0;

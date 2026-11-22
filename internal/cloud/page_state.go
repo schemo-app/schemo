@@ -122,7 +122,7 @@ func (s *Publications) Preview(
 	out := PublishPreview{
 		Options:      optionsOf(snapshot),
 		Collection:   owner.Collection,
-		Environments: environmentChoices(state),
+		Environments: environmentChoices(state, owner.Collection),
 		Report:       report,
 	}
 	if owner.Held {
@@ -228,13 +228,13 @@ func (s *Publications) pageIDsInside(
 }
 
 // environmentChoices is the environments a page's addresses may be read against.
-func environmentChoices(state domain.EnvState) []Choice {
+func environmentChoices(state domain.EnvState, collection string) []Choice {
 	out := make([]Choice, 0, len(state.Environments))
 	for _, environment := range state.Environments {
 		out = append(out, Choice{
 			ID:      environment.ID,
 			Name:    environment.Name,
-			BaseURL: baseOf(environment),
+			BaseURL: baseOf(environment, collection),
 		})
 	}
 	return out

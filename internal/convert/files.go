@@ -90,13 +90,22 @@ func (s *Transfer) readFolder(ctx context.Context, format Format, path, pattern 
 			return domain.Document{}, 0, fmt.Errorf("%s: %w", entry.Name(), err)
 		}
 		size += len(data)
+		// Blocks name collections by index, which shifts once the files are joined.
+		for _, draft := range document.Environments {
+			blocks := slices.Clone(draft.Blocks)
+			for index := range blocks {
+				blocks[index].Collection += len(combined.Collections)
+			}
+			draft.Blocks = blocks
+			combined.Environments = append(combined.Environments, draft)
+		}
 		combined.Collections = append(combined.Collections, document.Collections...)
-		combined.Environments = append(combined.Environments, document.Environments...)
+		combined.Globals = append(combined.Globals, document.Globals...)
 		for _, skip := range document.Skipped {
 			combined.LeftOut(skip.Code, skip.Count)
 		}
 	}
-	if len(combined.Collections) == 0 && len(combined.Environments) == 0 {
+	if len(combined.Collections) == 0 && len(combined.Environments) == 0 && len(combined.Globals) == 0 {
 		return domain.Document{}, 0, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
 	return combined, size, nil

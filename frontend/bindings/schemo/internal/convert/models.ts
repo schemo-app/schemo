@@ -30,6 +30,7 @@ export interface Preview {
     "requests": number;
     "folders": number;
     "environments": number;
+    "globals": number;
     "skipped"?: domain$0.Skip[] | null;
 }
 
@@ -38,15 +39,23 @@ export interface Preview {
  */
 export interface Summary {
     "tree": domain$0.Collection[] | null;
-
-    /**
-     * EnvState is the environment list as it is now, present only when the document carried one.
-     */
     "envState"?: domain$0.EnvState | null;
     "name"?: string;
     "collections": number;
     "requests": number;
     "environments": number;
+    "globals": number;
+    "createdEnvironments": string[] | null;
+}
+
+/**
+ * VariablesImport is what a variables file did to a scope.
+ */
+export interface VariablesImport {
+    "file": string;
+    "added": number;
+    "kept": number;
+    "cancelled": boolean;
 }
 
 /**
@@ -56,11 +65,6 @@ export interface Workspace {
     "id": string;
     "name": string;
     "active": boolean;
-
-    /**
-     * Collections is empty for a workspace nothing could be taken from only in the sense of the walk:
-     * a workspace without collections answers with an empty list, which is an answer.
-     */
     "collections": WorkspaceCollection[] | null;
 }
 

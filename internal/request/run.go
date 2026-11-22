@@ -234,26 +234,26 @@ func (s *Runs) sendOne(ctx context.Context, req runRequest) (domain.Record, erro
 	if req.Protocol.Live() {
 		return domain.Record{}, domain.Refuse(domain.CodeLiveRequest, domain.ErrNotAllowed, nil)
 	}
-	variables := append(slices.Clone(req.Variables), s.scripts.RunVariables(req.Run)...)
+	levels := req.Levels
+	levels.Variables = append(slices.Clone(levels.Variables), s.scripts.RunVariables(req.Run)...)
 	seed := Seed{
-		Protocol:      req.Protocol,
-		Options:       req.Options,
-		Method:        req.Method,
-		URL:           req.URL,
-		Body:          req.Body,
-		BodyKind:      req.BodyKind,
-		Form:          req.Form,
-		BodyFile:      req.BodyFile,
-		Headers:       req.Headers,
-		Auth:          req.Auth,
-		EnvironmentID: req.EnvironmentID,
+		Protocol: req.Protocol,
+		Options:  req.Options,
+		Method:   req.Method,
+		URL:      req.URL,
+		Body:     req.Body,
+		BodyKind: req.BodyKind,
+		Form:     req.Form,
+		BodyFile: req.BodyFile,
+		Headers:  req.Headers,
+		Auth:     req.Auth,
 	}
-	prepared, err := s.drafts.prepare(ctx, req.Workspace, s.drafts.draftOfSeed(seed), nil, variables)
+	prepared, err := s.drafts.prepare(ctx, req.Workspace, s.drafts.draftOfSeed(seed), nil, levels)
 	if err != nil {
 		return domain.Record{}, err
 	}
 	prepared.Node, prepared.Run, prepared.Agent = req.NodeID, req.Run, req.Agent
-	prepared.EnvironmentID, prepared.Variables = req.EnvironmentID, variables
+	prepared.Levels = levels
 	return s.history.SendAndWait(ctx, req.Workspace, prepared)
 }
 
@@ -264,39 +264,37 @@ type runRequest struct {
 	Workspace string
 	Agent     string // empty when the person sends
 
-	Protocol      domain.Protocol
-	Options       *domain.ProtocolOptions
-	Method        string
-	URL           string
-	Body          string
-	BodyKind      domain.BodyKind
-	Form          []domain.FormRow
-	BodyFile      string
-	Headers       []domain.HeaderPair
-	Auth          *domain.Auth      // from the nearest level that answered
-	Variables     []domain.Variable // of the levels above, outermost first
-	EnvironmentID string            // the request's own pin; empty means the active one
+	Protocol domain.Protocol
+	Options  *domain.ProtocolOptions
+	Method   string
+	URL      string
+	Body     string
+	BodyKind domain.BodyKind
+	Form     []domain.FormRow
+	BodyFile string
+	Headers  []domain.HeaderPair
+	Auth     *domain.Auth     // from the nearest level that answered
+	Levels   domain.VarLevels // collection and variables of the levels above
 }
 
 func runRequestFrom(workspace string, item domain.ResolvedRequest, runID, agent string) runRequest {
 	node := item.Node
 	req := runRequest{
-		Run:           runID,
-		NodeID:        node.ID,
-		Workspace:     workspace,
-		Agent:         agent,
-		Protocol:      node.Protocol,
-		Options:       node.Options,
-		Method:        node.Method,
-		URL:           domain.FillPath(node.URL, node.PathParams),
-		Body:          node.Body,
-		BodyKind:      node.BodyKind,
-		Form:          node.Form,
-		BodyFile:      node.BodyFile,
-		Headers:       []domain.HeaderPair{},
-		Auth:          item.Auth,
-		Variables:     item.Variables,
-		EnvironmentID: node.EnvironmentID,
+		Run:       runID,
+		NodeID:    node.ID,
+		Workspace: workspace,
+		Agent:     agent,
+		Protocol:  node.Protocol,
+		Options:   node.Options,
+		Method:    node.Method,
+		URL:       domain.FillPath(node.URL, node.PathParams),
+		Body:      node.Body,
+		BodyKind:  node.BodyKind,
+		Form:      node.Form,
+		BodyFile:  node.BodyFile,
+		Headers:   []domain.HeaderPair{},
+		Auth:      item.Auth,
+		Levels:    item.Levels,
 	}
 	for _, row := range node.Headers {
 		if row.Enabled && strings.TrimSpace(row.Name) != "" {
