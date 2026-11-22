@@ -26,7 +26,6 @@ require (
 require (
 	github.com/agnivade/levenshtein v1.2.2 // indirect
 	github.com/ebitengine/purego v0.11.3 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/petermattis/goid v0.0.0-20261120131106-3f141f74aebc // indirect
 	golang.org/x/term v0.48.0 // indirect
 )
@@ -41,7 +40,6 @@ require (
 )
 
 require (
-	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/coder/websocket v1.8.15
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dlclark/regexp2/v2 v2.13.2 // indirect
@@ -50,7 +48,6 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/google/pprof v0.0.0-20261118010117-084b33a85f63 // indirect
-	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
