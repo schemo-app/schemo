@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -35,11 +34,6 @@ func installDebPackage(ctx context.Context, path string) error {
 	if filepath.Ext(path) != ".deb" {
 		return errors.New("updater: expected a signed Debian package")
 	}
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 	conn, err := dbus.ConnectSystemBus()
 	if err != nil {
 		return fmt.Errorf("updater: connect to PackageKit: %w", err)
@@ -79,14 +73,9 @@ func installDebPackage(ctx context.Context, path string) error {
 			_ = object.CallWithContext(cancelCtx, packageKitTransaction+".Cancel", 0).Err
 		}
 	}()
-	err = object.CallWithContext(ctx, packageKitTransaction+".InstallFiles", dbus.FlagAllowInteractiveAuthorization,
-		uint64(0), []dbus.UnixFD{dbus.UnixFD(file.Fd())}).Err
-	var busError dbus.Error
-	if errors.As(err, &busError) && busError.Name == "org.freedesktop.DBus.Error.InvalidArgs" {
-		err = object.CallWithContext(ctx, packageKitTransaction+".InstallFiles", dbus.FlagAllowInteractiveAuthorization,
-			uint64(0), []string{path}).Err
-	}
-	if err != nil {
+	// Released PackageKit takes paths here; only its renamed packagekit1 interface accepts descriptors.
+	if err := object.CallWithContext(ctx, packageKitTransaction+".InstallFiles", dbus.FlagAllowInteractiveAuthorization,
+		uint64(0), []string{path}).Err; err != nil {
 		return fmt.Errorf("updater: install package: %w", err)
 	}
 	var failure error
