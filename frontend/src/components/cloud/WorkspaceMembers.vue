@@ -39,7 +39,7 @@ const {
         :key="one.userId"
         :tint="roleTint(one.roleName)"
         :live="!one.self"
-        :drop-icon="one.self ? undefined : 'Trash2'"
+        :drop-icon="one.self ? undefined : 'X'"
         :drop-title="t('workspaces.removeMember')"
         @drop="drop(one.userId)"
       >
@@ -65,8 +65,8 @@ const {
         v-for="one in team?.invites ?? []"
         :key="one.id"
         quiet
-        :tint="roleTint(one.roleName ?? '')"
-        drop-icon="Trash2"
+        live
+        drop-icon="X"
         :drop-title="t('workspaces.revokeInvite')"
         @drop="revoke(one.id)"
       >
@@ -77,7 +77,11 @@ const {
           </span>
         </span>
         <template #role>
-          <span class="role-word">{{ roleName(one.roleName ?? '') }}</span>
+          <Select
+            :model-value="one.roleId"
+            :options="[{ value: one.roleId, label: roleName(one.roleName ?? '') }]"
+            disabled
+          />
         </template>
       </MemberRow>
 

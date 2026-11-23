@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Icon, { type IconName } from '../ui/Icon.vue'
+import IconButton from '../ui/IconButton.vue'
 
 // Without `dropIcon` the cell stays, so the buttons keep their column.
 const { tint, live = false, quiet = false, dropIcon, dropTitle } = defineProps<{
@@ -25,9 +26,16 @@ defineEmits<{ (e: 'drop'): void }>()
       <slot name="role" />
     </span>
 
-    <button v-if="dropIcon" class="member-drop" type="button" :title="dropTitle" @click="$emit('drop')">
-      <Icon :name="dropIcon" :size="10" />
-    </button>
+    <IconButton
+      v-if="dropIcon"
+      variant="danger"
+      size="xl"
+      :hint="dropTitle"
+      :aria-label="dropTitle"
+      @click="$emit('drop')"
+    >
+      <Icon :name="dropIcon" :size="14" :stroke-width="1.8" />
+    </IconButton>
     <span v-else></span>
   </div>
 </template>
@@ -63,16 +71,5 @@ defineEmits<{ (e: 'drop'): void }>()
 
 .role-dot {
   @apply w-1.5 h-1.5 rounded-full flex-none;
-}
-
-.member-drop {
-  @apply inline-flex items-center justify-center justify-self-end w-5 h-5 rounded-md
-         cursor-pointer text-text-tertiary;
-  background: transparent;
-  border: 0;
-}
-
-.member-drop:hover {
-  @apply text-red bg-red-soft;
 }
 </style>

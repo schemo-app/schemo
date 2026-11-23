@@ -44,6 +44,92 @@ func TestTwoDevicesShareACollection(t *testing.T) {
 	}
 }
 
+func TestReorderedCollectionsKeepTheirRequestsForOtherMembers(t *testing.T) {
+	cloud := newFakeCloud(t)
+	owner, member := newDevice(t), newDevice(t)
+	owner.signIn(cloud, "ann")
+	ctx := t.Context()
+	first, err := owner.Collections.CreateCollection(ctx, "First", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := owner.Collections.CreateCollection(ctx, "Second", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := owner.Collections.CreateCollection(ctx, "Folder", "", first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const count = 205
+	for i := range count {
+		draft := domain.NewDraft()
+		draft.URL = fmt.Sprintf("https://example.test/items/%d", i)
+		if _, err := owner.Drafts.SaveAsNode(ctx, folder.ID, fmt.Sprintf("Item %d", i), draft); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner.sync()
+	cloud.mu.Lock()
+	for _, workspace := range cloud.workspaces {
+		workspace.members["bob"] = true
+	}
+	cloud.mu.Unlock()
+	member.signIn(cloud, "bob")
+	member.sync()
+	check := func(receiver *device, parent, other string) {
+		t.Helper()
+		workspaces, err := receiver.Store.SyncWorkspaces(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, workspace := range workspaces {
+			tree, err := receiver.Collections.TreeOf(ctx, workspace.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tree) == 0 {
+				continue
+			}
+			if len(tree) != 2 {
+				t.Fatalf("member tree has %d roots, want 2", len(tree))
+			}
+			if tree[0].ID != parent || tree[1].ID != other {
+				t.Fatalf("member roots = %s, %s, want %s, %s", tree[0].ID, tree[1].ID, parent, other)
+			}
+			if len(tree[0].Children) != 1 || tree[0].Children[0].ID != folder.ID {
+				t.Fatalf("member collection %s is missing folder %s", parent, folder.ID)
+			}
+			if got := len(tree[0].Children[0].Items); got != count {
+				t.Fatalf("member folder has %d requests, want %d", got, count)
+			}
+			for i, row := range tree[0].Children[0].Items {
+				node, err := receiver.Collections.Node(ctx, row.ID)
+				if err != nil || node.URL != fmt.Sprintf("https://example.test/items/%d", i) {
+					t.Fatalf("member request %d = %+v, %v", i, node, err)
+				}
+			}
+			return
+		}
+		t.Fatal("member did not receive the shared collections")
+	}
+	check(member, first.ID, second.ID)
+	if err := owner.Collections.Move(ctx, second.ID, "", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Collections.Move(ctx, folder.ID, second.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	owner.sync()
+	member.sync()
+	check(member, second.ID, first.ID)
+
+	fresh := newDevice(t)
+	fresh.signIn(cloud, "bob")
+	fresh.sync()
+	check(fresh, second.ID, first.ID)
+}
+
 func TestInspectorSuggestsASavedRequest(t *testing.T) {
 	t.Parallel()
 	device := newDevice(t)

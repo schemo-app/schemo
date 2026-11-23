@@ -2,9 +2,11 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	historyv1 "github.com/schemo-app/proto/go/history/v1"
 
 	"schemo/internal/domain"
+	"schemo/internal/platform"
 )
 
 // What these tests are about is the part of the engine that only a database can be wrong about: the
@@ -3160,8 +3163,7 @@ func TestARowOfADetachedWorkspaceForgetsTheVersionTheServerGaveIt(t *testing.T) 
 	}
 }
 
-// A page is in the order the server last wrote the rows, so a request edited early can come before
-// a collection that was edited later, and the foreign key refuses it until its parent is there.
+// A page follows the last edit of each row, so a child can precede its parent.
 func TestAChildThatComesBeforeItsParentInAPageIsStillApplied(t *testing.T) {
 	store, ctx := newMigratedStore(t), context.Background()
 	workspace := linked(t, store)
@@ -3186,9 +3188,57 @@ func TestAChildThatComesBeforeItsParentInAPageIsStillApplied(t *testing.T) {
 	}
 }
 
-// A page written deepest first needs a pass for each level, and a row whose parent is nowhere in
-// the page, or on the device, is still the one thing that is skipped.
-func TestAPageWrittenDeepestFirstIsAppliedAndAnOrphanIsStillSkipped(t *testing.T) {
+func TestChildrenSurviveWhenReorderedParentsArriveOnLaterPages(t *testing.T) {
+	t.Parallel()
+	store := newMigratedStore(t)
+	ctx := t.Context()
+	workspace := linked(t, store)
+	pages := []domain.SyncChange{
+		{Seq: 1, Entity: domain.SyncEntity{
+			Kind: domain.EntityRequest, ID: "request", Parent: "folder", Name: "Read item",
+			Version: 1, Data: []byte(`{"method":"GET","url":"https://example.test/items"}`),
+		}},
+		{Seq: 2, Entity: domain.SyncEntity{
+			Kind: domain.EntityCollection, ID: "folder", Parent: "root", Name: "Folder",
+			Version: 2, Data: []byte(`{}`),
+		}},
+		{Seq: 3, Entity: domain.SyncEntity{
+			Kind: domain.EntityCollection, ID: "root", Name: "Root", Position: 1,
+			Version: 2, Data: []byte(`{}`),
+		}},
+	}
+	for _, change := range pages {
+		skipped, err := store.ApplyPage(ctx, workspace.ID, []domain.SyncChange{change}, change.Seq)
+		if err != nil || skipped != 0 {
+			t.Fatalf("ApplyPage(seq %d) = %d skipped, %v, want the row saved", change.Seq, skipped, err)
+		}
+		if err := store.Close(); err != nil {
+			t.Fatal(err)
+		}
+		reopened, err := NewStore(platform.DataDir(filepath.Dir(store.path)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = reopened.Close() })
+		store = reopened
+		if err := store.Open(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tree, err := store.Collections(ctx, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree) != 1 || len(tree[0].Children) != 1 || len(tree[0].Children[0].Items) != 1 {
+		t.Fatalf("Collections = %+v, want root, folder and request", tree)
+	}
+	node, err := store.Node(ctx, "request")
+	if err != nil || node.URL != "https://example.test/items" {
+		t.Errorf("Node = %+v, %v, want the original request", node, err)
+	}
+}
+
+func TestAPageWrittenDeepestFirstKeepsChildrenWhoseParentHasNotArrived(t *testing.T) {
 	store, ctx := newMigratedStore(t), context.Background()
 	workspace := linked(t, store)
 	collection := func(id, parent string, seq int64) domain.SyncChange {
@@ -3206,15 +3256,43 @@ func TestAPageWrittenDeepestFirstIsAppliedAndAnOrphanIsStillSkipped(t *testing.T
 
 	skipped, err := store.ApplyPage(ctx, workspace.ID, page, 4)
 
-	if err != nil || skipped != 1 {
-		t.Fatalf("ApplyPage = %d skipped, %v, want only the orphan skipped", skipped, err)
+	if err != nil || skipped != 0 {
+		t.Fatalf("ApplyPage = %d skipped, %v, want every row saved", skipped, err)
 	}
-	for _, id := range []string{"root", "child", "grand"} {
+	for _, id := range []string{"root", "child", "grand", "orphan"} {
 		var held int
 		if err := store.db.QueryRowContext(ctx,
 			`SELECT count(*) FROM entities WHERE id = ?`, id).Scan(&held); err != nil || held != 1 {
 			t.Errorf("collection %s held %d times, %v, want it written", id, held, err)
 		}
+	}
+}
+
+func TestAPageSkipsMalformedRowsAndKeepsValidChildren(t *testing.T) {
+	t.Parallel()
+	store := newMigratedStore(t)
+	ctx := t.Context()
+	workspace := linked(t, store)
+	page := []domain.SyncChange{
+		{Seq: 1, Entity: domain.SyncEntity{Kind: domain.EntityRequest, ID: "no-parent", Data: []byte(`{}`)}},
+		{Seq: 2, Entity: domain.SyncEntity{Kind: domain.EntityCollection, ID: "bad-json", Data: []byte(`{`)}},
+		{Seq: 3, Entity: domain.SyncEntity{Kind: "unknown", ID: "unknown", Data: []byte(`{}`)}},
+		{Seq: 4, Entity: domain.SyncEntity{Kind: domain.EntityRequest, ID: "valid", Parent: "later", Data: []byte(`{}`)}},
+	}
+	skipped, err := store.ApplyPage(ctx, workspace.ID, page, 4)
+	if err != nil || skipped != 3 {
+		t.Fatalf("ApplyPage = %d skipped, %v, want only the malformed rows skipped", skipped, err)
+	}
+	if _, err := store.Node(ctx, "valid"); err != nil {
+		t.Errorf("Node(valid) = %v, want the child saved", err)
+	}
+	for _, id := range []string{"no-parent", "bad-json", "unknown"} {
+		if _, err := anyEntity(ctx, store.db, id); !errors.Is(err, sql.ErrNoRows) {
+			t.Errorf("row %s = %v, want no stored row", id, err)
+		}
+	}
+	if got := cursorOf(t, store); got != 4 {
+		t.Errorf("cursor = %d, want 4", got)
 	}
 }
 

@@ -27,34 +27,22 @@ func (s *Store) ApplyPage(
 		if err != nil {
 			return err
 		}
-		// A child may arrive before its parent, so failures are retried while a pass writes anything;
-		// a row that never becomes writable is skipped.
-		pending := changes
-		for len(pending) > 0 {
-			var refused []domain.SyncChange
-			for _, change := range pending {
-				if left.holds(workspaceID, change.Entity) {
-					continue
-				}
-				if _, err := tx.ExecContext(ctx, `SAVEPOINT row`); err != nil {
+		for _, change := range changes {
+			if left.holds(workspaceID, change.Entity) {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, `SAVEPOINT row`); err != nil {
+				return fmt.Errorf("applying %s: %w", change.Entity.ID, err)
+			}
+			if err := applyEntity(ctx, tx, workspaceID, change.Entity); err != nil {
+				if _, err := tx.ExecContext(ctx, `ROLLBACK TO row`); err != nil {
 					return fmt.Errorf("applying %s: %w", change.Entity.ID, err)
 				}
-				if err := applyEntity(ctx, tx, workspaceID, change.Entity); err != nil {
-					if _, err := tx.ExecContext(ctx, `ROLLBACK TO row`); err != nil {
-						return fmt.Errorf("applying %s: %w", change.Entity.ID, err)
-					}
-					refused = append(refused, change)
-					continue
-				}
-				if _, err := tx.ExecContext(ctx, `RELEASE row`); err != nil {
-					return fmt.Errorf("applying %s: %w", change.Entity.ID, err)
-				}
+				skipped++
 			}
-			if len(refused) == len(pending) {
-				skipped = len(refused)
-				break
+			if _, err := tx.ExecContext(ctx, `RELEASE row`); err != nil {
+				return fmt.Errorf("applying %s: %w", change.Entity.ID, err)
 			}
-			pending = refused
 		}
 
 		if _, err := tx.ExecContext(ctx,
@@ -150,20 +138,12 @@ func applyEntity(ctx context.Context, tx *writeTx, workspaceID string, in domain
 		}
 		row.Data = data
 	}
-	if err := parentHeld(ctx, tx, spec, row); err != nil {
-		return err
+	if spec.parentRequired && row.Parent == "" {
+		return fmt.Errorf("applying %s %s: missing parent", in.Kind, in.ID)
 	}
+	// Editing a parent moves it later in the server log, possibly onto a later page.
+	// Keep its children now so advancing the cursor cannot lose them.
 	return putRemote(ctx, tx, row)
-}
-
-// parentHeld refuses a row whose parent is not on the device yet, so the page retries it after
-// the rest.
-func parentHeld(ctx context.Context, tx *writeTx, spec syncKind, row entity) error {
-	if spec.parent == "" || (row.Parent == "" && !spec.parentRequired) {
-		return nil
-	}
-	_, err := getEntity(ctx, tx, spec.parent, row.Parent)
-	return err
 }
 
 func applyWorkspace(

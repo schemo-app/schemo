@@ -22,7 +22,7 @@ const options = computed(() => [
 </script>
 
 <template>
-  <MemberRow quiet live drop-icon="X" @drop="$emit('drop')">
+  <MemberRow quiet live drop-icon="X" :drop-title="t('common.delete')" @drop="$emit('drop')">
     <input
       v-model="email"
       class="invite-input"

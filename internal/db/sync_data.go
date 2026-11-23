@@ -16,7 +16,7 @@ import (
 // syncKind is one kind that travels.
 type syncKind struct {
 	// parent is the kind a row's parent id points at, and parentRequired says a row without one is
-	// malformed. A row whose parent is not here yet is retried after the rest of the page.
+	// malformed. Parents may arrive on a later page.
 	parent         domain.EntityType
 	parentRequired bool
 	// secrets names the slots of a row's data that hold a secret; nil for a kind with none.

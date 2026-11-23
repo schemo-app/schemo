@@ -392,7 +392,14 @@ func (s syncServer) Pull(ctx context.Context, req *syncv1.PullRequest) (*syncv1.
 	if err != nil {
 		return nil, err
 	}
-	changes, next, more := page(sp.log, req.GetAfterSeq(), req.GetLimit(), (*syncv1.SyncChange).GetSeq)
+	// The server keeps only the latest version of each entity in its content log.
+	var latest []*syncv1.SyncChange
+	for _, change := range sp.log {
+		if sp.current[change.GetEntity().GetId()] == change.GetEntity() {
+			latest = append(latest, change)
+		}
+	}
+	changes, next, more := page(latest, req.GetAfterSeq(), req.GetLimit(), (*syncv1.SyncChange).GetSeq)
 	return syncv1.PullResponse_builder{Changes: changes, NextSeq: next, HasMore: more}.Build(), nil
 }
 
