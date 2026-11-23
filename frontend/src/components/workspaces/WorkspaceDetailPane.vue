@@ -6,6 +6,7 @@ import Button from '../ui/Button.vue'
 import ColorSwatches from '../ui/ColorSwatches.vue'
 import Segment from '../ui/Segment.vue'
 import Tooltip from '../ui/Tooltip.vue'
+import ManagerHeader from '../ui/ManagerHeader.vue'
 import WorkspaceMembers from '../cloud/WorkspaceMembers.vue'
 import { useWorkspaceTeam } from '../../composables/useWorkspaceTeam'
 import { WORKSPACE_COLORS, WORKSPACE_TINTS } from '../../lib/workspacePalette'
@@ -14,10 +15,9 @@ import { useWorkspaceCounts } from '../../composables/useWorkspaceCounts'
 import { useNameField } from '../../composables/useNameField'
 import { useSheetNotice } from '../../composables/useSheetNotice'
 import { usePlan } from '../../composables/usePlan'
-import { roleLabel } from '../../lib/roles'
-import { describeFailure, failureOf, t, te } from '../../i18n'
+import { describeFailure, failureOf, t } from '../../i18n'
 
-const emit = defineEmits<{ (e: 'danger'): void; (e: 'leave'): void }>()
+const emit = defineEmits<{ (e: 'danger'): void; (e: 'leave'): void; (e: 'close'): void }>()
 
 const workspaces = useWorkspacesStore()
 const { contentsOf } = useWorkspaceCounts()
@@ -32,7 +32,6 @@ const personal = computed(() => workspace.value?.id === workspaces.personalId)
 const mayEdit = computed(() => workspace.value?.access.update ?? true)
 const mayEnd = computed(() => workspace.value?.access.delete ?? true)
 const mayWrite = computed(() => workspace.value?.access.write ?? true)
-const role = computed(() => roleLabel(t, te, workspace.value?.access.roleName ?? ''))
 
 const colorLabels = useColorLabels('workspaces', WORKSPACE_COLORS)
 
@@ -98,6 +97,7 @@ defineExpose({ cancelTop })
 
 <template>
   <div class="pane">
+    <ManagerHeader :title="personal ? t('workspaces.personal') : workspace?.name ?? t('workspaces.title')" @close="emit('close')" />
     <div v-if="workspace" class="pane-body">
       <!-- A role the account gave that may read and not write: what this person builds here stays on
            this device, because the round will not send it and the server would refuse it. -->
@@ -153,17 +153,6 @@ defineExpose({ cancelTop })
         />
       </div>
 
-      <div v-if="workspace?.access.roleName" class="field">
-        <span class="field-label">{{ t('workspaces.roleLabel') }}</span>
-        <span class="as-value">{{ role }}</span>
-      </div>
-
-      <div v-if="kind === 'team'" class="field">
-        <span class="field-label">{{ membersLabel }}</span>
-
-        <WorkspaceMembers :state="team" />
-      </div>
-
       <div class="field">
         <span class="field-label">{{ t('workspaces.contentsLabel') }}</span>
         <div class="contents">
@@ -172,6 +161,12 @@ defineExpose({ cancelTop })
             <span class="count-label">{{ entry.label }}</span>
           </div>
         </div>
+      </div>
+
+      <div v-if="kind === 'team'" class="field">
+        <span class="field-label">{{ membersLabel }}</span>
+
+        <WorkspaceMembers :state="team" />
       </div>
     </div>
 
@@ -206,7 +201,7 @@ defineExpose({ cancelTop })
 
 .pane-body {
   @apply flex-1 min-h-0 overflow-y-auto flex flex-col gap-4.5;
-  padding: 1.125rem 1.25rem;
+  padding: 12px 24px 24px;
 }
 
 .read-only {
@@ -285,15 +280,15 @@ defineExpose({ cancelTop })
 }
 
 .foot {
-  @apply flex-none flex items-center h-12 px-5 gap-3;
+  @apply flex-none flex items-center gap-3;
+  min-height: 44px;
+  padding: 6px 24px;
   border-top: 1px solid var(--border);
 }
 
 .danger-note {
-  @apply flex-1 min-w-0 text-13 text-text-tertiary;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply flex-1 min-w-0 text-12 text-text-tertiary;
+  line-height: 1.5;
 }
 
 .danger-note.bad {

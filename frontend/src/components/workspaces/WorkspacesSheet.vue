@@ -80,7 +80,7 @@ function cancelTop(): boolean {
 </script>
 
 <template>
-  <TwoPaneSheet :title="title" :cancel-top="cancelTop" @close="emit('close')">
+  <TwoPaneSheet :title="title" :width="920" split-header :cancel-top="cancelTop" @close="emit('close')">
     <template #default>
       <!-- The list steps aside while a new workspace is being made: the form is the only thing to do at that
       moment, and a row to click beside it would only take the room the name and the colour want. Cancel
@@ -91,12 +91,14 @@ function cancelTop(): boolean {
         v-if="creating"
         @cancel="workspaces.cancelCreating()"
         @created="clearNotice()"
+        @close="emit('close')"
       />
       <WorkspaceDetailPane
         v-else
         ref="detailRef"
         @danger="confirming = 'end'"
         @leave="confirming = 'leave'"
+        @close="emit('close')"
       />
     </template>
 

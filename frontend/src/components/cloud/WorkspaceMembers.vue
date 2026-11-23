@@ -4,7 +4,6 @@ import InviteFoot from './InviteFoot.vue'
 import InviteRow from './InviteRow.vue'
 import MemberRow from './MemberRow.vue'
 import SignInGate from './SignInGate.vue'
-import { roleTint } from '../../lib/roles'
 import { formatAgo, t } from '../../i18n'
 import type { useWorkspaceTeam } from '../../composables/useWorkspaceTeam'
 
@@ -15,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const {
-  team, asking, failure, signedOut, drafts,
+  team, asking, failure, signedOut, drafts, canManage, canInvite,
   addDraft, dropDraft, send, give, drop, revoke, roleName,
 } = props.state
 </script>
@@ -31,16 +30,12 @@ const {
     answered about yet, and a card with nothing in it says "nobody" where the truth is "not yet"; the
     line under it says which of the two it is. -->
     <div v-if="team?.members?.length || team?.invites?.length || drafts.length" class="card">
-      <!-- Somebody else's role is a control; the reader's own is a word. A workspace's owner is what they
-      were made, and handing their own place about is not a row in a list: there is nothing to remove on
-      it either, and the cell is kept so the buttons stay a column. -->
       <MemberRow
         v-for="one in team?.members ?? []"
         :key="one.userId"
-        :tint="roleTint(one.roleName)"
-        :live="!one.self"
-        :drop-icon="one.self ? undefined : 'X'"
+        :drop-icon="!one.self && canManage ? 'X' : undefined"
         :drop-title="t('workspaces.removeMember')"
+        :disabled="asking"
         @drop="drop(one.userId)"
       >
         <span class="member-name">
@@ -48,11 +43,17 @@ const {
             t('workspaces.you') }}</span>
         </span>
         <template #role>
-          <span v-if="one.self" class="role-word">{{ roleName(one.roleName) }}</span>
+          <Select
+            v-if="one.self || !canManage || !team?.roles?.length"
+            :model-value="one.roleId"
+            :options="[{ value: one.roleId, label: roleName(one.roleName) }]"
+            disabled
+          />
           <Select
             v-else
             :options="(team?.roles ?? []).map((role) => ({ value: role.id, label: roleName(role.name) }))"
             :model-value="one.roleId"
+            :disabled="asking"
             @update:model-value="give(one.userId, $event)"
           />
         </template>
@@ -65,9 +66,9 @@ const {
         v-for="one in team?.invites ?? []"
         :key="one.id"
         quiet
-        live
         drop-icon="X"
         :drop-title="t('workspaces.revokeInvite')"
+        :disabled="asking"
         @drop="revoke(one.id)"
       >
         <span class="member-column">
@@ -97,6 +98,7 @@ const {
     </div>
 
     <InviteFoot
+      :can-invite="canInvite"
       :failure
       :busy="asking"
       :has-invitations="drafts.length > 0 || Boolean(team?.invites?.length)"
@@ -132,7 +134,4 @@ const {
   @apply text-10 text-text-tertiary;
 }
 
-.role-word {
-  @apply flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
-}
 </style>

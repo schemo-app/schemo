@@ -56,13 +56,13 @@ async function openCollection(id: string) {
     class="environment-rail"
     :rows
     :new-label="t('environments.new')"
+    :title="t('environments.title')"
     :can-create="workspaces.canWrite"
     :reorderable="workspaces.canWrite"
     @select="environments.editEnv($event)"
     @create="environments.createEnv()"
     @move="move"
   >
-    <template #head><div class="rail-title">{{ t('environments.title') }}</div></template>
     <template v-if="collections.tree.length" #foot>
       <DropdownMenuRoot>
         <DropdownMenuTrigger as-child>
@@ -88,50 +88,10 @@ async function openCollection(id: string) {
 <style scoped>
 @reference "../../style.css";
 
-.environment-rail {
-  width: 236px;
-  padding: 0;
-}
-
-.rail-title {
-  display: flex;
-  align-items: center;
-  flex: none;
-  height: 52px;
-  padding: 0 16px;
-  font-size: var(--text-14);
-  font-weight: 600;
-}
-
-.environment-rail :deep(.side-rows) {
-  padding: 0 8px;
-}
-
 .environment-rail :deep(.side-group:first-child) {
   padding-bottom: 6px;
   margin-bottom: 6px;
   border-bottom: 1px solid var(--border);
-}
-
-.environment-rail :deep(.side-create) {
-  padding: 6px 8px 10px;
-}
-
-.environment-rail :deep(.side-new) {
-  height: 30px;
-  border-radius: 7px;
-  color: var(--text-secondary);
-  font-weight: 400;
-}
-
-.environment-rail :deep(.side-new:hover) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.environment-rail :deep(.side-foot) {
-  padding: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .collection-vars {

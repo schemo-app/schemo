@@ -52,6 +52,48 @@ func TestTheTeamOfAWorkspaceIsItsPeopleItsLinksAndItsRoles(t *testing.T) {
 	}
 }
 
+func TestTheTeamOnlyShowsPendingInvitations(t *testing.T) {
+	members, server := newMembers(t)
+	server.invitations = []domain.Invite{
+		{ID: "pending", WorkspaceID: account, Status: "pending"},
+		{ID: "used", WorkspaceID: account, Status: "exhausted"},
+		{ID: "revoked", WorkspaceID: account, Status: "revoked"},
+		{ID: "expired", WorkspaceID: account, Status: "expired"},
+		{ID: "elsewhere", WorkspaceID: "another-space", Status: "pending"},
+	}
+	team, err := members.Team(t.Context(), workspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(team.Invites) != 1 || team.Invites[0].ID != "pending" {
+		t.Fatalf("Team invites = %+v, want only the pending invitation", team.Invites)
+	}
+}
+
+func TestARegularMemberCanReadTheTeamWithoutOrganizationManagementPermissions(t *testing.T) {
+	members, server := newMembers(t)
+	server.access = &domain.WorkspaceAccess{RoleName: "Editor", Write: true}
+	team, err := members.Team(t.Context(), workspaceID)
+	if err != nil || len(team.Members) != 2 {
+		t.Fatalf("Team = %+v, %v, want the workspace members", team, err)
+	}
+	if server.inviteReads != 0 || server.roleReads != 0 {
+		t.Errorf("management reads = %d invites, %d roles, want none", server.inviteReads, server.roleReads)
+	}
+}
+
+func TestAWorkspaceManagerDoesNotNeedOrganizationInvitationAccessToReadTheTeam(t *testing.T) {
+	members, server := newMembers(t)
+	server.access = &domain.WorkspaceAccess{RoleName: "Manager", Write: true, ManageMembers: true}
+	team, err := members.Team(t.Context(), workspaceID)
+	if err != nil || len(team.Members) != 2 || len(team.Roles) != 1 {
+		t.Fatalf("Team = %+v, %v, want members and workspace roles", team, err)
+	}
+	if server.inviteReads != 0 {
+		t.Errorf("organization invitation reads = %d, want none", server.inviteReads)
+	}
+}
+
 // A workspace that has never been linked has no team: there is no account for anybody to have been
 // invited through, and the window is told that rather than handed an empty list to draw.
 func TestAWorkspaceThatIsNotInTheAccountHasNoTeam(t *testing.T) {
@@ -127,9 +169,13 @@ func TestARefusalTravels(t *testing.T) {
 
 // The fake server: one workspace of one organisation, two people, and the links made for it.
 type fakeMemberServer struct {
-	kind    domain.WorkspaceKind
-	refuse  error
-	invited []invitation
+	kind        domain.WorkspaceKind
+	refuse      error
+	invited     []invitation
+	invitations []domain.Invite
+	access      *domain.WorkspaceAccess
+	inviteReads int
+	roleReads   int
 }
 
 type invitation struct {
@@ -143,10 +189,14 @@ func (f *fakeMemberServer) Workspaces(
 	if f.refuse != nil {
 		return domain.AccountWorkspaces{}, f.refuse
 	}
+	access := domain.OwnAccess()
+	if f.access != nil {
+		access = *f.access
+	}
 	return domain.AccountWorkspaces{
 		OwnOrgID: orgID,
 		Workspaces: []domain.RemoteWorkspace{{
-			ID: account, OrgID: orgID, Kind: f.kind, OwnOrg: true,
+			ID: account, OrgID: orgID, Kind: f.kind, OwnOrg: true, Access: access,
 		}},
 	}, nil
 }
@@ -179,6 +229,10 @@ func (f *fakeMemberServer) RemoveMember(context.Context, domain.Caller, string, 
 func (f *fakeMemberServer) Invites(
 	context.Context, domain.Caller, string,
 ) ([]domain.Invite, error) {
+	f.inviteReads++
+	if f.invitations != nil {
+		return f.invitations, nil
+	}
 	return []domain.Invite{
 		{ID: "invite-1", WorkspaceID: account, Email: "ann@acme.com", RoleID: roleEdit,
 			RoleName: "Editor", Status: "pending"},
@@ -210,6 +264,7 @@ func (f *fakeMemberServer) RevokeInvite(
 func (f *fakeMemberServer) Roles(
 	_ context.Context, _ domain.Caller, _, scope string,
 ) ([]domain.Role, error) {
+	f.roleReads++
 	if scope != domain.ScopeWorkspace {
 		return nil, domain.ErrNotFound
 	}

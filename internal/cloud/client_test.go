@@ -5,6 +5,9 @@ import (
 
 	commonv1 "github.com/schemo-app/proto/go/common/v1"
 	workspacev1 "github.com/schemo-app/proto/go/workspace/v1"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"schemo/internal/domain"
 )
@@ -35,6 +38,43 @@ func TestARoleWithoutTheWordThatWritesIsAReaders(t *testing.T) {
 
 	if got := accessOf(row); got.Write {
 		t.Errorf("access = %+v, want a role without workspace:write to be kept from writing", got)
+	}
+}
+
+func TestAWorkspaceWithMembersHasItsOwnRefusal(t *testing.T) {
+	held, err := status.New(codes.FailedPrecondition, "workspaceHasMembers").WithDetails(
+		&errdetails.ErrorInfo{Reason: "workspaceHasMembers", Domain: "schemo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := domain.CodeOf(FromStatus(held.Err())); got != domain.CodeWorkspaceHasMembers {
+		t.Errorf("FromStatus code = %q, want %q", got, domain.CodeWorkspaceHasMembers)
+	}
+}
+
+func TestInvitingRequiresWorkspaceAndOrganizationAuthority(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		manage, invite bool
+	}{
+		{name: "ordinary member"},
+		{name: "workspace manager", manage: true},
+		{name: "organization inviter", invite: true},
+		{name: "workspace inviter", manage: true, invite: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			permissions := []string{"workspace:read"}
+			if test.invite {
+				permissions = append(permissions, "invite:manage")
+			}
+			got := accessOf(workspacev1.Workspace_builder{
+				Permissions: permissions,
+				Can:         workspacev1.WorkspaceCan_builder{ManageMembers: test.manage}.Build(),
+			}.Build())
+			if got.ManageMembers != test.manage || got.Invite != (test.manage && test.invite) {
+				t.Errorf("access = %+v, want manage=%v, invite=%v", got, test.manage, test.manage && test.invite)
+			}
+		})
 	}
 }
 

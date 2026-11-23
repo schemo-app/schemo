@@ -97,6 +97,9 @@ func (s EnvState) Variables(scope EnvScope) []Variable {
 type VarLevels struct {
 	Collection string     `json:"collection,omitempty"`
 	Variables  []Variable `json:"variables,omitempty"`
+	// Run is what the run's scripts kept so far (`pm.variables`): it stands over every stored scope,
+	// the block included, and lives only as long as the run.
+	Run []Variable `json:"-"`
 }
 
 // VarImport is what bringing variables into a set did: names added, and names it already held,
@@ -125,7 +128,7 @@ type Imported struct {
 // Resolution is what a `{{token}}` resolves to, with where it came from so the tooltip can say it.
 type Resolution struct {
 	Value  string       `json:"value,omitempty"`
-	Source string       `json:"source"` // "global" | "collection" | "env" | "block"
+	Source string       `json:"source"` // "global" | "collection" | "env" | "block" | "run"
 	Kind   VariableKind `json:"kind"`
 	// HasValue is false when the value was withheld from the answer (a secret) or is empty.
 	HasValue bool `json:"hasValue"`

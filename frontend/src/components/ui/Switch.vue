@@ -1,13 +1,24 @@
 <script setup lang="ts">
-import { SwitchRoot, SwitchThumb, type SwitchRootProps } from 'reka-ui'
+import { SwitchRoot, SwitchThumb } from 'reka-ui'
 
-const props = defineProps<SwitchRootProps>()
+const { modelValue = false, disabled = false } = defineProps<{
+  modelValue?: boolean
+  disabled?: boolean
+}>()
+
+const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 defineOptions({ inheritAttrs: false })
 </script>
 
 <template>
-  <SwitchRoot v-bind="{ ...props, ...$attrs }" class="switch">
+  <SwitchRoot
+    v-bind="$attrs"
+    :model-value
+    :disabled
+    class="switch"
+    @update:model-value="(value) => emit('update:modelValue', value)"
+  >
     <SwitchThumb class="thumb" />
   </SwitchRoot>
 </template>

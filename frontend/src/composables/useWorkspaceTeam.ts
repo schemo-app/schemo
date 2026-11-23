@@ -20,6 +20,8 @@ export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<str
   const linked = computed(
     () => kind.value === 'team' && !!workspace.value?.remoteId && !signedOut.value
   )
+  const canManage = computed(() => workspace.value?.access?.manageMembers ?? false)
+  const canInvite = computed(() => workspace.value?.access?.invite ?? false)
 
   const label = computed(() =>
     team.value
@@ -49,6 +51,15 @@ export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<str
       if (ticket === latestAsk) team.value = answer
     } catch (error) {
       if (ticket === latestAsk) failure.value = describeFailure(error)
+      if (call && ticket === latestAsk) {
+        // The write may have committed before refreshing the team failed.
+        try {
+          const answer = await Members.Team(target.id)
+          if (ticket === latestAsk) team.value = answer
+        } catch {
+          // Keep the original failure until the server can answer again.
+        }
+      }
     } finally {
       if (ticket === latestAsk) asking.value = false
     }
@@ -85,7 +96,7 @@ export function useWorkspaceTeam(workspace: Ref<Workspace | null>, kind: Ref<str
   const roleName = (name: string) => roleLabel(t, te, name)
 
   return {
-    team, asking, failure, signedOut, drafts, label,
+    team, asking, failure, signedOut, drafts, label, canManage, canInvite,
     addDraft, dropDraft, send, give, drop, revoke, roleName,
   }
 }

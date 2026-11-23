@@ -97,12 +97,18 @@ watch(
     }
     onCleanup(reset)
     if (!id) return
-    void callOrToast(contentsSnapshot.take(Collections.Contents(id).then(rows => rows ?? [])), 'collections.contentsFailed')
-    void callOrToast(scriptsSnapshot.take(ScriptsService.Scripts(id)), 'collections.readFailed')
     void publications.mark(id)
   },
   { immediate: true }
 )
+
+// Sync can fill an already open collection after its first page was empty.
+watch(level, (collection) => {
+  if (!collection) return
+  const id = collection.id
+  void callOrToast(contentsSnapshot.take(Collections.Contents(id).then(rows => rows ?? [])), 'collections.contentsFailed')
+  void callOrToast(scriptsSnapshot.take(ScriptsService.Scripts(id)), 'collections.readFailed')
+}, { immediate: true })
 
 const { run, tableRows, resultOf } = useLevelRun(levelId, requests)
 const runList = useWorkspaceSnapshot<CollectionRun[]>([])

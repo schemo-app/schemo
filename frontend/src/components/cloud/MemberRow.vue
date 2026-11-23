@@ -3,12 +3,11 @@ import Icon, { type IconName } from '../ui/Icon.vue'
 import IconButton from '../ui/IconButton.vue'
 
 // Without `dropIcon` the cell stays, so the buttons keep their column.
-const { tint, live = false, quiet = false, dropIcon, dropTitle } = defineProps<{
-  tint?: string
-  live?: boolean
+const { quiet = false, dropIcon, dropTitle, disabled = false } = defineProps<{
   quiet?: boolean
   dropIcon?: IconName
   dropTitle?: string
+  disabled?: boolean
 }>()
 
 defineEmits<{ (e: 'drop'): void }>()
@@ -21,8 +20,7 @@ defineEmits<{ (e: 'drop'): void }>()
       <slot />
     </span>
 
-    <span class="role" :class="{ boxed: !live }">
-      <span v-if="!live" class="role-dot" :style="{ background: tint }"></span>
+    <span class="role">
       <slot name="role" />
     </span>
 
@@ -32,6 +30,7 @@ defineEmits<{ (e: 'drop'): void }>()
       size="xl"
       :hint="dropTitle"
       :aria-label="dropTitle"
+      :disabled
       @click="$emit('drop')"
     >
       <Icon :name="dropIcon" :size="14" :stroke-width="1.8" />
@@ -45,7 +44,7 @@ defineEmits<{ (e: 'drop'): void }>()
 
 .member {
   @apply grid items-center gap-2 py-1.5 px-1.5 min-h-10;
-  grid-template-columns: 1fr auto 1.625rem;
+  grid-template-columns: minmax(0, 1fr) 140px 26px;
 }
 
 .member-who {
@@ -61,15 +60,13 @@ defineEmits<{ (e: 'drop'): void }>()
 }
 
 .role {
-  @apply inline-flex items-center gap-1.5 min-w-0;
+  @apply inline-flex items-center gap-1.5 min-w-0 h-7;
 }
 
-.role.boxed {
-  @apply min-w-24 h-6 px-2 rounded-md border border-border bg-bg-hover
-         text-12 text-text-secondary;
+.role :deep(.select),
+.role :deep(select) {
+  width: 100%;
+  min-width: 0;
 }
 
-.role-dot {
-  @apply w-1.5 h-1.5 rounded-full flex-none;
-}
 </style>

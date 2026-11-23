@@ -31,5 +31,5 @@ function select(id: string | null) {
 </script>
 
 <template>
-  <ManagerRail :rows :new-label="t('workspaces.create')" @select="select" @create="emit('create')" />
+  <ManagerRail :rows :title="t('workspaces.title')" :new-label="t('workspaces.create')" @select="select" @create="emit('create')" />
 </template>

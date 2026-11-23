@@ -7,6 +7,7 @@ import type { InviteOutcome } from '../../../bindings/schemo/internal/workspace'
 import Button from '../ui/Button.vue'
 import ColorSwatches from '../ui/ColorSwatches.vue'
 import Segment from '../ui/Segment.vue'
+import ManagerHeader from '../ui/ManagerHeader.vue'
 import InviteFoot from '../cloud/InviteFoot.vue'
 import InviteRow from '../cloud/InviteRow.vue'
 import SignInGate from '../cloud/SignInGate.vue'
@@ -20,7 +21,7 @@ import { describeFailure, t } from '../../i18n'
 
 // A team workspace is created in the account at once so its invitations can go out with it, which
 // needs a sign-in and a plan that carries the feature.
-const emit = defineEmits<{ (e: 'cancel'): void; (e: 'created'): void }>()
+const emit = defineEmits<{ (e: 'cancel'): void; (e: 'created'): void; (e: 'close'): void }>()
 
 const workspaces = useWorkspacesStore()
 const { notice, setNotice, clearNotice } = useSheetNotice()
@@ -125,6 +126,7 @@ function cancel() {
 
 <template>
   <div class="pane">
+    <ManagerHeader :title="t('workspaces.newTitle')" @close="emit('close')" />
     <div class="pane-body">
       <div class="pair">
         <label class="field">
@@ -192,8 +194,8 @@ function cancel() {
 
     <div class="foot">
       <span class="notice" :class="{ bad: !!notice }">{{ notice }}</span>
-      <Button size="pane" @click="cancel">{{ t('common.cancel') }}</Button>
-      <Button size="pane" variant="primary" :disabled="!mayCreate" @click="create">
+      <Button size="field" @click="cancel">{{ t('common.cancel') }}</Button>
+      <Button size="field" variant="primary" :disabled="!mayCreate" @click="create">
         {{ t('workspaces.createAction') }}
       </Button>
     </div>
@@ -209,7 +211,7 @@ function cancel() {
 
 .pane-body {
   @apply flex-1 min-h-0 overflow-y-auto flex flex-col gap-4.5;
-  padding: 1.125rem 1.25rem;
+  padding: 12px 24px 24px;
 }
 
 .pair {
@@ -249,15 +251,15 @@ function cancel() {
 }
 
 .foot {
-  @apply flex-none flex items-center h-12 px-5 gap-2.5;
+  @apply flex-none flex items-center gap-2.5;
+  min-height: 44px;
+  padding: 6px 24px;
   border-top: 1px solid var(--border);
 }
 
 .notice {
-  @apply flex-1 min-w-0 text-13 text-text-tertiary;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply flex-1 min-w-0 text-12 text-text-tertiary;
+  line-height: 1.5;
 }
 
 .notice.bad {

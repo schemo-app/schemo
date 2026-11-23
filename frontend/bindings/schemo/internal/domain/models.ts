@@ -236,6 +236,7 @@ export enum Code {
     CodeMemberExists = "memberExists",
     CodeFeatureRequired = "featureRequired",
     CodeWorkspacePersonal = "workspacePersonal",
+    CodeWorkspaceHasMembers = "workspaceHasMembers",
     CodeVariableSecret = "variableSecret",
     CodeEnvironmentReadOnly = "environmentReadOnly",
     CodeWorkspaceReadOnly = "workspaceReadOnly",
@@ -2058,6 +2059,8 @@ export interface WorkspaceAccess {
      * changes would be refused and parked is owed the warning before it.
      */
     "write": boolean;
+    "manageMembers": boolean;
+    "invite": boolean;
 }
 
 /**

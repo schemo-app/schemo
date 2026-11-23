@@ -89,6 +89,7 @@ const (
 	CodeMemberExists         Code = "memberExists"
 	CodeFeatureRequired      Code = "featureRequired"
 	CodeWorkspacePersonal    Code = "workspacePersonal"
+	CodeWorkspaceHasMembers  Code = "workspaceHasMembers"
 	CodeVariableSecret       Code = "variableSecret"
 	CodeEnvironmentReadOnly  Code = "environmentReadOnly"
 	CodeWorkspaceReadOnly    Code = "workspaceReadOnly"

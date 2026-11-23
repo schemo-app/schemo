@@ -28,13 +28,15 @@ type WorkspaceAccess struct {
 	Delete   bool   `json:"delete"`
 	// Write is whether this person may put anything into the workspace at all, and a reader whose
 	// changes would be refused and parked is owed the warning before it.
-	Write bool `json:"write"`
+	Write         bool `json:"write"`
+	ManageMembers bool `json:"manageMembers"`
+	Invite        bool `json:"invite"`
 }
 
 // OwnAccess allows everything, for workspaces no account describes; denying on a missing answer would
 // silently stop syncing.
 func OwnAccess() WorkspaceAccess {
-	return WorkspaceAccess{Update: true, Delete: true, Write: true}
+	return WorkspaceAccess{Update: true, Delete: true, Write: true, ManageMembers: true, Invite: true}
 }
 
 // Workspace represents the primary entity container for collections, environments, and history.

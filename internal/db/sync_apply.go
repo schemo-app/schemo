@@ -122,6 +122,7 @@ func applyEntity(ctx context.Context, tx *writeTx, workspaceID string, in domain
 		if err != nil {
 			return fmt.Errorf("deleting %s %s: %w", in.Kind, in.ID, err)
 		}
+		tx.touched(in.Kind, workspaceID)
 		return nil
 	}
 	row := entity{Kind: in.Kind, ID: in.ID, Workspace: workspaceID, Parent: in.Parent,

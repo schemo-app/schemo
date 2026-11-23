@@ -20,9 +20,10 @@ interface RailRow {
   fixed?: boolean
 }
 
-const { rows, newLabel, canCreate = true, reorderable = false } = defineProps<{
+const { rows, newLabel, title, canCreate = true, reorderable = false } = defineProps<{
   rows: RailRow[]
   newLabel: string
+  title?: string
   canCreate?: boolean
   reorderable?: boolean
 }>()
@@ -49,7 +50,8 @@ function grab(event: PointerEvent, row: RailRow, index: number) {
 </script>
 
 <template>
-  <div class="sheet-side">
+  <div class="sheet-side" :class="{ headed: title }">
+    <div v-if="title" class="rail-title">{{ title }}</div>
     <slot name="head" />
     <div class="side-rows">
       <template v-for="(group, at) in [pinned, ordered]" :key="at">
@@ -103,6 +105,42 @@ function grab(event: PointerEvent, row: RailRow, index: number) {
   padding: 0.875rem 0.5rem 0.5rem;
   background: var(--bg-sidebar);
   border-color: var(--border);
+}
+
+.sheet-side.headed {
+  width: 236px;
+  padding: 0;
+}
+
+.rail-title {
+  @apply flex items-center flex-none font-semibold text-14;
+  height: 52px;
+  padding: 0 16px;
+}
+
+.headed .side-rows {
+  padding: 0 8px;
+}
+
+.headed .side-create {
+  padding: 6px 8px 10px;
+}
+
+.headed .side-new {
+  height: 30px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.headed .side-new:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.headed .side-foot {
+  padding: 8px;
+  border-top: 1px solid var(--border);
 }
 
 .side-rows {

@@ -82,10 +82,12 @@ func accessOf(workspace *workspacev1.Workspace) domain.WorkspaceAccess {
 	permissions := workspace.GetPermissions()
 	can := workspace.GetCan()
 	return domain.WorkspaceAccess{
-		RoleName: workspace.GetRole().GetName(),
-		Update:   can.GetUpdate(),
-		Delete:   can.GetDelete(),
-		Write:    slices.Contains(permissions, permWrite),
+		RoleName:      workspace.GetRole().GetName(),
+		Update:        can.GetUpdate(),
+		Delete:        can.GetDelete(),
+		Write:         slices.Contains(permissions, permWrite),
+		ManageMembers: can.GetManageMembers(),
+		Invite:        can.GetManageMembers() && slices.Contains(permissions, "invite:manage"),
 	}
 }
 
@@ -402,6 +404,8 @@ func FromStatus(err error) error {
 		return domain.Refuse(domain.CodeNotFound, domain.ErrNotFound, nil)
 	case "workspacePersonal":
 		return domain.Refuse(domain.CodeWorkspacePersonal, domain.ErrNotAllowed, nil)
+	case "workspaceHasMembers":
+		return domain.Refuse(domain.CodeWorkspaceHasMembers, domain.ErrNotAllowed, nil)
 	case "workspaceUnknown", "notAMember":
 		return domain.Refuse(domain.CodeWorkspaceMissing, domain.ErrNotFound, nil)
 	case "memberExists":

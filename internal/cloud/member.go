@@ -163,20 +163,32 @@ func (s *Members) of(
 		people[at].Self = people[at].UserID == mine.UserID
 	}
 
-	made, err := s.server.Invites(ctx, caller, held.OrgID)
-	if err != nil {
-		return Team{}, err
+	var made []domain.Invite
+	if held.Access.Invite {
+		made, err = s.server.Invites(ctx, caller, held.OrgID)
+		if err != nil {
+			return Team{}, err
+		}
 	}
 	waiting := make([]domain.Invite, 0, len(made))
 	for _, one := range made {
-		if one.WorkspaceID == accountID {
+		if one.WorkspaceID == accountID && one.Status == "pending" {
 			waiting = append(waiting, one)
 		}
 	}
 
-	roles, err := s.server.Roles(ctx, caller, held.OrgID, domain.ScopeWorkspace)
-	if err != nil {
-		return Team{}, err
+	var roles []domain.Role
+	if held.Access.ManageMembers {
+		roles, err = s.server.Roles(ctx, caller, held.OrgID, domain.ScopeWorkspace)
+		if err != nil {
+			// Role menus need organization permissions beyond workspace membership.
+			switch domain.CodeOf(err) {
+			case domain.CodeNotAllowed, domain.CodeWorkspaceMissing, domain.CodeNotFound:
+				roles = nil
+			default:
+				return Team{}, err
+			}
+		}
 	}
 	return Team{
 		AccountID: accountID,

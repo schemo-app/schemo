@@ -3,6 +3,7 @@ import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui'
 import Icon from '../ui/Icon.vue'
 import IconButton from '../ui/IconButton.vue'
+import ManagerHeader from '../ui/ManagerHeader.vue'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
 import DropdownMenuSeparator from '../ui/DropdownMenuSeparator.vue'
@@ -114,7 +115,7 @@ defineExpose({ cancelTop })
 
 <template>
   <div class="pane">
-    <div class="pane-head">
+    <ManagerHeader class="pane-head" @close="emit('close')">
       <template v-if="isGlobals">
         <span class="title">{{ t('environments.globals') }}</span>
       </template>
@@ -135,67 +136,64 @@ defineExpose({ cancelTop })
         <span v-else class="title" @dblclick="rename">{{ env.name }}</span>
       </template>
 
-      <span class="spacer"></span>
+      <template #actions>
+        <span v-if="readonly" class="badge" :title="t('environments.readonlyHint')">
+          <Icon name="Lock" :size="11" />{{ t('environments.readonly') }}
+        </span>
+        <span v-if="isActive" class="in-use"><Icon name="Check" :size="12" :stroke-width="2.4" />{{ t('environments.inUse') }}</span>
+        <button v-else-if="env" type="button" class="use" :title="t('environments.useHint')" @click="use">
+          {{ t('environments.use') }}
+        </button>
 
-      <span v-if="readonly" class="badge" :title="t('environments.readonlyHint')">
-        <Icon name="Lock" :size="11" />{{ t('environments.readonly') }}
-      </span>
-      <span v-if="isActive" class="in-use"><Icon name="Check" :size="12" :stroke-width="2.4" />{{ t('environments.inUse') }}</span>
-      <button v-else-if="env" type="button" class="use" :title="t('environments.useHint')" @click="use">
-        {{ t('environments.use') }}
-      </button>
+        <IconButton
+          size="lg"
+          :class="{ on: textMode }"
+          :hint="t('environments.textMode')"
+          :aria-label="t('environments.textMode')"
+          :aria-pressed="textMode"
+          @click="textMode = !textMode"
+        >
+          <Icon name="AlignLeft" :size="14" />
+        </IconButton>
 
-      <IconButton
-        size="lg"
-        :class="{ on: textMode }"
-        :hint="t('environments.textMode')"
-        :aria-label="t('environments.textMode')"
-        :aria-pressed="textMode"
-        @click="textMode = !textMode"
-      >
-        <Icon name="AlignLeft" :size="14" />
-      </IconButton>
-
-      <DropdownMenuRoot>
-        <DropdownMenuTrigger as-child>
-          <IconButton size="lg" :hint="t('common.options')" :aria-label="t('common.options')"><Icon name="Ellipsis" :size="14" /></IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <template v-if="env">
-            <DropdownMenuItem :disabled="locked" @select="rename">{{ t('environments.rename') }}</DropdownMenuItem>
-            <DropdownMenuSubmenu :label="t('environments.colorLabel')" :disabled="!workspaces.canWrite">
-              <template #indicator>
-                <span class="dot" :style="{ background: dotOf(env.color ?? '') }"></span>
-              </template>
-              <DropdownMenuItem v-for="color in ENVIRONMENT_COLORS" :key="color" @select="pickColor(color)">
-                <span class="dot" :style="{ background: dotOf(color) }"></span>
-                <span class="cap-line">{{ colorLabels[color] }}</span>
+        <DropdownMenuRoot>
+          <DropdownMenuTrigger as-child>
+            <IconButton size="lg" :hint="t('common.options')" :aria-label="t('common.options')"><Icon name="Ellipsis" :size="14" /></IconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <template v-if="env">
+              <DropdownMenuItem :disabled="locked" @select="rename">{{ t('environments.rename') }}</DropdownMenuItem>
+              <DropdownMenuSubmenu :label="t('environments.colorLabel')" :disabled="!workspaces.canWrite">
+                <template #indicator>
+                  <span class="dot" :style="{ background: dotOf(env.color ?? '') }"></span>
+                </template>
+                <DropdownMenuItem v-for="color in ENVIRONMENT_COLORS" :key="color" @select="pickColor(color)">
+                  <span class="dot" :style="{ background: dotOf(color) }"></span>
+                  <span class="cap-line">{{ colorLabels[color] }}</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubmenu>
+              <DropdownMenuItem :disabled="!workspaces.canWrite" @select="duplicate">{{ t('environments.duplicate') }}</DropdownMenuItem>
+              <DropdownMenuSubmenu v-if="!locked && mergeTargets.length" :label="t('environments.mergeWith')">
+                <DropdownMenuItem v-for="target in mergeTargets" :key="target.id" @select="emit('merge', target.id)">
+                  <span class="dot" :style="{ background: dotOf(target.color ?? '') }"></span>
+                  <span class="cap-line">{{ target.name }}</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubmenu>
+              <DropdownMenuSeparator />
+            </template>
+            <DropdownMenuItem v-if="!locked" @select="importFile">{{ t('environments.importFile') }}</DropdownMenuItem>
+            <DropdownMenuItem @select="exportFile">{{ t('environments.exportFile') }}</DropdownMenuItem>
+            <template v-if="env && workspaces.canWrite">
+              <DropdownMenuItem @select="toggleReadonly">
+                {{ readonly ? t('environments.allowChanges') : t('environments.readonly') }}
               </DropdownMenuItem>
-            </DropdownMenuSubmenu>
-            <DropdownMenuItem :disabled="!workspaces.canWrite" @select="duplicate">{{ t('environments.duplicate') }}</DropdownMenuItem>
-            <DropdownMenuSubmenu v-if="!locked && mergeTargets.length" :label="t('environments.mergeWith')">
-              <DropdownMenuItem v-for="target in mergeTargets" :key="target.id" @select="emit('merge', target.id)">
-                <span class="dot" :style="{ background: dotOf(target.color ?? '') }"></span>
-                <span class="cap-line">{{ target.name }}</span>
-              </DropdownMenuItem>
-            </DropdownMenuSubmenu>
-            <DropdownMenuSeparator />
-          </template>
-          <DropdownMenuItem v-if="!locked" @select="importFile">{{ t('environments.importFile') }}</DropdownMenuItem>
-          <DropdownMenuItem @select="exportFile">{{ t('environments.exportFile') }}</DropdownMenuItem>
-          <template v-if="env && workspaces.canWrite">
-            <DropdownMenuItem @select="toggleReadonly">
-              {{ readonly ? t('environments.allowChanges') : t('environments.readonly') }}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem class="danger" @select="emit('delete')">{{ t('environments.deleteEnv') }}</DropdownMenuItem>
-          </template>
-        </DropdownMenuContent>
-      </DropdownMenuRoot>
-      <IconButton size="lg" :hint="t('common.close') + ' · Esc'" :aria-label="t('common.close')" @click="emit('close')">
-        <Icon name="X" :size="14" :stroke-width="2" />
-      </IconButton>
-    </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem class="danger" @select="emit('delete')">{{ t('environments.deleteEnv') }}</DropdownMenuItem>
+            </template>
+          </DropdownMenuContent>
+        </DropdownMenuRoot>
+      </template>
+    </ManagerHeader>
 
     <div class="pane-body">
       <VariablesTable ref="table" :env-id="environments.editedEnvId" :locked :text-mode />
@@ -212,14 +210,6 @@ defineExpose({ cancelTop })
 
 .pane {
   @apply flex-1 min-w-0 flex flex-col min-h-0;
-}
-
-.pane-head {
-  @apply flex-none flex items-center gap-1.5;
-  height: 52px;
-  padding: 0 12px 0 24px;
-  gap: 10px;
-  border-bottom: 1px solid var(--border);
 }
 
 .title {
@@ -244,10 +234,6 @@ defineExpose({ cancelTop })
 .name-input.invalid {
   border-color: color-mix(in srgb, var(--red) 45%, transparent);
   box-shadow: 0 0 0 3px var(--red-soft);
-}
-
-.spacer {
-  @apply flex-1;
 }
 
 .badge,

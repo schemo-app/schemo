@@ -838,11 +838,11 @@ func TestAWorkspaceTheAccountRefusesToChangeStaysAsItWas(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	id := store.lastInAccount("00000000-0000-0000-0000-0000000000aa")
-	remote.refuse = domain.Refuse(domain.CodeWorkspacePersonal, domain.ErrNotAllowed, nil)
+	remote.refuse = domain.Refuse(domain.CodeWorkspaceHasMembers, domain.ErrNotAllowed, nil)
 
 	personal := string(domain.WorkspacePersonal)
 	if _, err := u.Update(ctx, id, WorkspacePatch{Kind: &personal}); domain.CodeOf(err) !=
-		domain.CodeWorkspacePersonal {
+		domain.CodeWorkspaceHasMembers {
 		t.Fatalf("Update = %q, want the account's refusal", domain.CodeOf(err))
 	}
 

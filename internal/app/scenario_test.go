@@ -7,9 +7,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -158,6 +160,80 @@ func TestInspectorSuggestsASavedRequest(t *testing.T) {
 	got, err := device.Inspector.Suggest(ctx, opened.ID, path)
 	if err != nil || len(got) != 1 || got[0] != want {
 		t.Fatalf("Suggest(%q) = %+v, %v, want [%+v]", path, got, err, want)
+	}
+}
+
+// The shape the report came with: the root's bearer reads {{token}}, the request sits a folder down
+// and inherits it, and each environment's block for the root overrides a name the environment holds
+// or adds one it does not.
+func TestARootBlockOverridesTheEnvironmentForARequestInAFolder(t *testing.T) {
+	t.Parallel()
+	type received struct{ auth, front string }
+	requests := make(chan received, 1)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- received{r.Header.Get("Authorization"), r.URL.Query().Get("front")}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer api.Close()
+	device := newDevice(t)
+	ctx := t.Context()
+	root, err := device.Collections.CreateCollection(ctx, "API", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := device.Collections.CreateCollection(ctx, "Attributes", "", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := domain.NewAuth(domain.AuthBearer).With("token", "{{token}}")
+	if err := device.Collections.Update(ctx, root.ID, workspace.CollectionPatch{Auth: &auth}); err != nil {
+		t.Fatal(err)
+	}
+	draft := domain.NewDraft()
+	draft.URL = "{{baseUrl}}/attributes?front={{tokenFront}}"
+	node, err := device.Drafts.SaveAsNode(ctx, folder.ID, "List", draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := func(scope domain.EnvScope, name, value string, secret bool) {
+		t.Helper()
+		if _, err := device.Environments.SetInScope(ctx, scope, name, value, secret); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"Production", "Staging"} {
+		env, err := device.Environments.Create(ctx, name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		own, block := domain.EnvScope{Environment: env}, domain.EnvScope{Environment: env, Collection: root.ID}
+		set(own, "baseUrl", "http://environment.invalid", false)
+		set(own, "token", "environment-"+name, true)
+		set(block, "baseUrl", api.URL, false)
+		set(block, "token", "collection-"+name, true)
+		set(block, "tokenFront", "front-"+name, true)
+		if err := device.Environments.Activate(ctx, env); err != nil {
+			t.Fatal(err)
+		}
+		opened, err := device.Drafts.OpenNode(ctx, node.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		preview, err := device.Drafts.Preview(ctx, opened.Draft)
+		if err != nil || len(preview.Missing) != 0 {
+			t.Fatalf("Preview in %s: missing = %v, %v", name, preview.Missing, err)
+		}
+		if _, err := device.Drafts.Send(ctx, opened.Draft); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case got := <-requests:
+			if want := (received{"Bearer collection-" + name, "front-" + name}); got != want {
+				t.Errorf("request in %s = %+v, want %+v", name, got, want)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("nothing reached the block's baseUrl in %s", name)
+		}
 	}
 }
 
@@ -328,5 +404,61 @@ func TestACollectionRunSendsEveryRequestAndRecordsIt(t *testing.T) {
 		if row.RecordID == "" {
 			t.Errorf("row %+v has no record", row)
 		}
+	}
+}
+
+// What a script keeps for the run answers the run's next requests over every stored scope, the
+// collection's block in the active environment included; before it is kept, the block answers.
+func TestARunVariableStandsOverTheEnvironmentAndItsBlock(t *testing.T) {
+	tokens := make(chan string, 2)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokens <- r.URL.Query().Get("token")
+	}))
+	defer api.Close()
+
+	device := newDevice(t)
+	ctx := t.Context()
+	draft := domain.NewDraft()
+	draft.URL = api.URL + "/login?token={{token}}"
+	login, err := device.Drafts.SaveAsNewCollection(ctx, "API", "Login", draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := device.Scripts.SaveScripts(ctx, login.ID,
+		&domain.Scripts{Post: `pm.variables.set('token', 'from-run');`}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := device.Collections.CreateNode(ctx, workspace.RequestDraft{
+		CollectionID: login.CollectionID, Name: "Read", Method: "GET", URL: api.URL + "/read?token={{token}}",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	env, err := device.Environments.Create(ctx, "Staging", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for scope, value := range map[domain.EnvScope]string{
+		{Environment: env}: "from-environment",
+		{Environment: env, Collection: login.CollectionID}: "from-block",
+	} {
+		if _, err := device.Environments.SetInScope(ctx, scope, "token", value, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := device.Environments.Activate(ctx, env); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := device.Runs.Run(ctx, login.CollectionID, ""); err != nil {
+		t.Fatal(err)
+	}
+	device.eventually("run", func() bool { return device.events.count(request.TopicRunFinished) == 1 })
+	close(tokens)
+	got := []string{}
+	for token := range tokens {
+		got = append(got, token)
+	}
+	if want := []string{"from-block", "from-run"}; !slices.Equal(got, want) {
+		t.Errorf("tokens sent = %q, want %q", got, want)
 	}
 }

@@ -1578,6 +1578,7 @@
       "workspaceMissing": "That workspace is gone.",
       "memberExists": "Already in this workspace or the organisation.",
       "workspacePersonal": "A personal workspace is yours alone — there is nobody to invite into it.",
+      "workspaceHasMembers": "Remove other members before making this workspace personal.",
       "featureRequired": "{feature} is not included in your plan.",
       "variableMissing": "The variable {names} resolves to nothing — the request was not sent. | The variables {names} resolve to nothing — the request was not sent.",
       "variableSecret": "A collection cannot hold a secret: it leaves the app when it is exported. Secrets belong to the environment.",

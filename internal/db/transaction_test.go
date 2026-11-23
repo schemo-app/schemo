@@ -5,7 +5,40 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"schemo/internal/domain"
 )
+
+func TestRemoteDeletionsNotifyTheOpenWorkspace(t *testing.T) {
+	t.Parallel()
+	store := newMigratedStore(t)
+	ctx := t.Context()
+	workspace := linked(t, store)
+	page := []domain.SyncChange{
+		{Entity: domain.SyncEntity{Kind: domain.EntityCollection, ID: "collection", Data: []byte(`{}`)}},
+		{Entity: domain.SyncEntity{Kind: domain.EntityRequest, ID: "request", Parent: "collection", Data: []byte(`{}`)}},
+	}
+	if skipped, err := store.ApplyPage(ctx, workspace.ID, page, 2); err != nil || skipped != 0 {
+		t.Fatalf("ApplyPage(create) = %d skipped, %v, want both rows saved", skipped, err)
+	}
+	notices := map[domain.Changed]bool{}
+	store.SetNotify(func(change domain.Changed) { notices[change] = true })
+	for i := range page {
+		page[i].Entity.Deleted = true
+	}
+	if skipped, err := store.ApplyPage(ctx, workspace.ID, page, 4); err != nil || skipped != 0 {
+		t.Fatalf("ApplyPage(delete) = %d skipped, %v, want both rows deleted", skipped, err)
+	}
+	for _, kind := range []domain.EntityType{domain.EntityCollection, domain.EntityRequest} {
+		if !notices[domain.Changed{Kind: string(kind), Workspace: workspace.ID}] {
+			t.Errorf("ApplyPage(delete %s) did not notify the workspace", kind)
+		}
+	}
+	tree, err := store.Collections(ctx, workspace.ID)
+	if err != nil || len(tree) != 0 {
+		t.Errorf("Collections(after deletion) = %+v, %v, want an empty tree", tree, err)
+	}
+}
 
 func TestQueuedChangesNotifyOnlyAfterSuccessfulCommit(t *testing.T) {
 	for _, scenario := range []string{"commit", "callback failure", "commit failure"} {

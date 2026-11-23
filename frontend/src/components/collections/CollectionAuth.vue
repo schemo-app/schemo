@@ -5,6 +5,7 @@ import PaneSelect from '../request/PaneSelect.vue'
 import { useCollectionsStore } from '../../stores/collections'
 import { findCollection, trailOf } from '../../lib/collectionTree'
 import { useAuthSchemes } from '../../composables/useAuthSchemes'
+import { provideVarContext } from '../../composables/useVarContext'
 import { textOf, t } from '../../i18n'
 import { AuthType, type Auth } from '../../../bindings/schemo/internal/domain'
 
@@ -14,10 +15,11 @@ const { levelId } = defineProps<{ levelId: string }>()
 
 const collections = useCollectionsStore()
 const { menuFor, nameOf, schemeOf } = useAuthSchemes()
+provideVarContext(() => levelId)
 
 const NONE: Auth = { type: AuthType.AuthNone, fields: {} }
 
-const level = computed(() => findCollection(collections.tree, collections.collectionId))
+const level = computed(() => findCollection(collections.tree, levelId))
 const stored = computed<Auth>(() => level.value?.auth ?? NONE)
 // A collection inside another inherits; the top one has nothing above it to inherit from.
 const canInherit = computed(() => (trailOf(collections.tree, levelId)?.ancestors.length ?? 0) > 0)

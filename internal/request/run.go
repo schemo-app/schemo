@@ -3,7 +3,6 @@ package request
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -235,7 +234,7 @@ func (s *Runs) sendOne(ctx context.Context, req runRequest) (domain.Record, erro
 		return domain.Record{}, domain.Refuse(domain.CodeLiveRequest, domain.ErrNotAllowed, nil)
 	}
 	levels := req.Levels
-	levels.Variables = append(slices.Clone(levels.Variables), s.scripts.RunVariables(req.Run)...)
+	levels.Run = s.scripts.RunVariables(req.Run)
 	seed := Seed{
 		Protocol: req.Protocol,
 		Options:  req.Options,

@@ -179,7 +179,7 @@ func (s *Environments) resolverIn(
 func variableLookup(state domain.EnvState, revealSecrets bool, above domain.VarLevels) (lookup, []string) {
 	env, _ := state.Find(state.ActiveID)
 
-	// Last source to hold a name wins: globals, collection, active environment, its block.
+	// Last source to hold a name wins: globals, collection, active environment, its block, the run.
 	type held struct {
 		variable domain.Variable
 		source   string
@@ -196,6 +196,7 @@ func variableLookup(state domain.EnvState, revealSecrets bool, above domain.VarL
 	layer(above.Variables, "collection")
 	layer(env.Vars, "env")
 	layer(env.Block(above.Collection), "block")
+	layer(above.Run, "run")
 
 	secrets := []string{}
 	if !revealSecrets {

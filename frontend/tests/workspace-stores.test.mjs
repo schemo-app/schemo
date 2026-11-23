@@ -1127,6 +1127,26 @@ test('a late snapshot cannot overwrite a newer snapshot', async () => {
   assert.equal(store.activeId, 'new')
 })
 
+test("a collection's block in the active environment answers over the environment itself", () => {
+  setup()
+  const variable = (name, value) => ({ id: `${value}-${name}`, name, value, kind: VariableKind.VariableText, enabled: true })
+  store.envState = {
+    environments: [{
+      id: 'staging',
+      name: 'Staging',
+      vars: [variable('token', 'environment')],
+      collections: { api: [variable('token', 'block'), variable('tokenFront', 'block')] },
+    }],
+    globals: [],
+    activeId: 'staging',
+  }
+  const api = { collection: 'api', variables: [] }
+  assert.deepEqual(store.resolveVariable('token', api), { value: 'block', source: 'block', kind: VariableKind.VariableText })
+  assert.equal(store.resolveVariable('tokenFront', api)?.source, 'block')
+  assert.equal(store.resolveVariable('token')?.source, 'env')
+  assert.equal(store.resolveVariable('tokenFront'), null)
+})
+
 test('reset cancels an old workspace load without restoring state or showing an error', async () => {
   setup()
   const old = deferred()
