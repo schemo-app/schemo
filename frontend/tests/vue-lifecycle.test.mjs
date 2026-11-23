@@ -527,6 +527,36 @@ test('an empty local publication list does not show the empty state while the se
   assert.ok(rendered(root, 'PageIntro'))
 })
 
+test('tab context menus are not canceled by the desktop native-menu handler', async context => {
+  ports.tabs = reactive({
+    tabs: [{id:'first',kind:TabKind.TabKindRequest}, {id:'second',kind:TabKind.TabKindRequest}],
+    activeId:'first',
+  })
+  ports.records = {records:[]}
+  ports.collections = {tree:[]}
+  ports.rekaMenus = true
+  try {
+    const root = mount(context, components.AppTabStrip)
+    await settle()
+    const tabs = all(root).filter(child=>child.props.class?.split(' ').includes('tab'))
+    for (const index of [0,1,0,1]) {
+      const event = {
+        clientX:20+index*220, clientY:20, defaultPrevented:false, cancelBubble:false,
+        preventDefault(){this.defaultPrevented=true},
+        stopPropagation(){this.cancelBubble=true},
+      }
+      const handlers = [tabs[index].props.onContextmenu].flat()
+      for (const handler of handlers) handler(event)
+      // Wails cancels native menus at window level before Reka's awaited handler resumes.
+      if (!event.cancelBubble) event.preventDefault()
+      await settle()
+      assert.equal(tabs[index].props['data-state'],'open')
+    }
+  } finally {
+    ports.rekaMenus = false
+  }
+})
+
 test('closing an inactive tab does not activate it on pointerdown', (context) => {
   const activated = []
   const closed = []

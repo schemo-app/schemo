@@ -246,7 +246,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
   <div ref="stripEl" class="tab-strip" @mouseleave="leaveStrip">
     <div class="tab-scroll">
       <ContextMenu v-for="entry in views" :key="entry.tab.id">
-        <ContextMenuTrigger as-child>
+        <ContextMenuTrigger as-child @contextmenu.stop>
           <div
             class="tab"
             :class="{ active: entry.active, preview: entry.tab.preview, fixed: entry.fixed, 'pin-end': entry.pinEnd }"
