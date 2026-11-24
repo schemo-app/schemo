@@ -1,12 +1,12 @@
 {
 	"fixed": {
-		"file_version": "0.7.3",
-		"product_version": "0.7.3"
+		"file_version": "0.7.4",
+		"product_version": "0.7.4"
 	},
 	"info": {
 		"0409": {
-			"FileVersion": "0.7.3",
-			"ProductVersion": "0.7.3",
+			"FileVersion": "0.7.4",
+			"ProductVersion": "0.7.4",
 			"CompanyName": "Yuri Gerassimov",
 			"FileDescription": "A cross-platform API client for building, testing, and sharing HTTP requests.",
 			"LegalCopyright": "© 2026, Yuri Gerassimov",
