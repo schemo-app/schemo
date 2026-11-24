@@ -27,6 +27,31 @@ const collections = useCollectionsStore()
 const { hint } = useCommands()
 
 const hovered = ref('')
+const menuId = ref('')
+const menuPoint = ref<{ x: number; y: number } | null>(null)
+const menuAnchor = computed(() => {
+  if (!menuPoint.value) return undefined
+  const { x, y } = menuPoint.value
+  return { getBoundingClientRect: () => ({ x, y, left: x, right: x, top: y, bottom: y, width: 0, height: 0 }) }
+})
+
+// WebKit needs native menu cancellation during dispatch. Reka's trigger awaits nextTick before
+// checking defaultPrevented, so open the controlled menu here rather than relying on that handler.
+function openTabMenu(event: MouseEvent, id: string) {
+  event.preventDefault()
+  event.stopPropagation()
+  menuPoint.value = { x: event.clientX, y: event.clientY }
+  menuId.value = id
+}
+
+function updateTabMenu(id: string, open: boolean) {
+  if (open) menuId.value = id
+  else if (menuId.value === id) {
+    menuId.value = ''
+    menuPoint.value = null
+  }
+}
+
 const isCompactTab = (tab: (typeof tabs.tabs)[number]) => tab.pinned || tab.kind === TabKind.TabKindCollections
 const ordered = computed(() => [
   ...tabs.tabs.filter(isCompactTab),
@@ -144,7 +169,7 @@ const switcherEntries = computed(() => allViews.value.map((entry) => ({
 // Pressing a tab shows it: the gesture and the choice are one move, and the drag that may follow
 // starts from the same place.
 function onTabDown(event: PointerEvent, id: string) {
-  if (event.button !== 0) return
+  if (event.button !== 0 || event.ctrlKey) return
   void tabs.activate(id)
   const at = movable.value.findIndex((tab) => tab.id === id)
   if (at >= 0) press(event, id, at)
@@ -245,8 +270,13 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
 <template>
   <div ref="stripEl" class="tab-strip" @mouseleave="leaveStrip">
     <div class="tab-scroll">
-      <ContextMenu v-for="entry in views" :key="entry.tab.id">
-        <ContextMenuTrigger as-child @contextmenu.stop>
+      <ContextMenu
+        v-for="entry in views"
+        :key="entry.tab.id"
+        :open="menuId === entry.tab.id"
+        @update:open="updateTabMenu(entry.tab.id, $event)"
+      >
+        <ContextMenuTrigger as-child @contextmenu="openTabMenu($event, entry.tab.id)">
           <div
             class="tab"
             :class="{ active: entry.active, preview: entry.tab.preview, fixed: entry.fixed, 'pin-end': entry.pinEnd }"
@@ -299,7 +329,7 @@ function useTabRename(rename: (nodeId: string, name: string) => Promise<unknown>
           </div>
         </ContextMenuTrigger>
 
-        <ContextMenuContent class="tab-menu">
+        <ContextMenuContent class="tab-menu" :reference="menuAnchor">
           <ContextMenuItem v-if="entry.tab.preview" @select="tabs.keep(entry.tab.id)">
             <span class="menu-mark"><Icon name="Bookmark" :size="14" :stroke-width="1.8" /></span>
             <span class="menu-label-text cap-line">{{ t('tabs.keep') }}</span>

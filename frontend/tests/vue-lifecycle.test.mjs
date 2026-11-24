@@ -527,7 +527,7 @@ test('an empty local publication list does not show the empty state while the se
   assert.ok(rendered(root, 'PageIntro'))
 })
 
-test('tab context menus are not canceled by the desktop native-menu handler', async context => {
+test('tab context menus cancel native WebKit menus synchronously and open at the pointer', async context => {
   ports.tabs = reactive({
     tabs: [{id:'first',kind:TabKind.TabKindRequest}, {id:'second',kind:TabKind.TabKindRequest}],
     activeId:'first',
@@ -547,14 +547,40 @@ test('tab context menus are not canceled by the desktop native-menu handler', as
       }
       const handlers = [tabs[index].props.onContextmenu].flat()
       for (const handler of handlers) handler(event)
-      // Wails cancels native menus at window level before Reka's awaited handler resumes.
-      if (!event.cancelBubble) event.preventDefault()
+      // A native WebKit default action runs at the end of dispatch, before Reka resumes.
+      assert.equal(event.defaultPrevented, true, 'Cancel the native menu before yielding')
+      assert.equal(event.cancelBubble, true)
+      // The desktop runtime may also cancel the event; our controlled menu must still open.
+      event.preventDefault()
       await settle()
       assert.equal(tabs[index].props['data-state'],'open')
+      assert.equal(tabs[1-index].props['data-state'],'closed')
+      const menus = all(root).filter(child => child.props['data-component'] === 'ContextMenuContent')
+      assert.deepEqual(menus[index].props.reference.getBoundingClientRect(), {
+        x:event.clientX, y:event.clientY, left:event.clientX, right:event.clientX,
+        top:event.clientY, bottom:event.clientY, width:0, height:0,
+      })
     }
   } finally {
     ports.rekaMenus = false
   }
+})
+
+test('secondary clicks and control-clicks do not activate or drag a tab', context => {
+  const activated = []
+  ports.tabs = reactive({
+    tabs: [{id:'first',kind:TabKind.TabKindRequest}, {id:'second',kind:TabKind.TabKindRequest}],
+    activeId:'first', activate:id => activated.push(id),
+  })
+  ports.records = {records:[]}
+  ports.collections = {tree:[]}
+  const root = mount(context, components.AppTabStrip)
+  const tab = all(root).filter(child => child.props.class?.split(' ').includes('tab'))[1]
+  tab.props.onPointerdown({button:2, ctrlKey:false})
+  tab.props.onPointerdown({button:0, ctrlKey:true})
+  assert.deepEqual(activated, [])
+  tab.props.onPointerdown({button:0, ctrlKey:false})
+  assert.deepEqual(activated, ['second'])
 })
 
 test('closing an inactive tab does not activate it on pointerdown', (context) => {

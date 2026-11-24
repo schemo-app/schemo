@@ -24,6 +24,10 @@ void setWindowToolbar(void* nsWindow, bool use) {
 		return;
 	}
 
+	// Keep AppKit's inset chrome compact and transparent in both window states.
+	window.titlebarAppearsTransparent = YES;
+	window.toolbarStyle = NSWindowToolbarStyleUnifiedCompact;
+
 	static const void* toolbarKey = &toolbarKey;
 	NSToolbar* toolbar = [window toolbar];
 
