@@ -122,7 +122,7 @@
     "colorGrey": "Grey",
     "membersLabel": "Members · {count}",
     "membersTeam": "Members",
-    "membersLoading": "Asking the cloud…",
+    "membersLoading": "Refreshing…",
     "you": "You",
     "inviteEmail": "Email",
     "inviteAdd": "+ Add invitation",
