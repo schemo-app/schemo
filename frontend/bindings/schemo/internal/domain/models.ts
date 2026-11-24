@@ -1295,6 +1295,7 @@ export interface Record {
     "id": string;
     "workspaceId"?: string;
     "source": RecordSource;
+    "senderId"?: string;
     "method": string;
     "url": string;
     "status": number;
@@ -1304,17 +1305,7 @@ export interface Record {
     "durationUs": number;
     "startedAt": number;
     "nodeId"?: string;
-
-    /**
-     * RunID is the collection run this record was sent by, empty for a request sent on its own. The
-     * run travels as a document of its own, and the record names it rather than carrying a copy.
-     */
     "runId"?: string;
-
-    /**
-     * Agent is who sent this through the MCP server when it was not the person. Empty for sends
-     * made by the window, a run or the command line.
-     */
     "agent"?: string;
     "tabId"?: number;
     "tabTitle"?: string;

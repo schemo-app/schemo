@@ -66,7 +66,7 @@ function recordEntry(record: RequestRecord, scope: string) {
     .replace(/\/(?:\d+|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})(?=\/|$)/gi, '/{id}') || '/'
   const origin = record.url.slice(0, record.url.length - path.length)
   const key = JSON.stringify([
-    scope, requestLabel(record), origin, normalizedPath, record.operation, record.status, Boolean(record.error), record.active,
+    scope, record.senderId, requestLabel(record), origin, normalizedPath, record.operation, record.status, Boolean(record.error), record.active,
   ])
   return { record, host, path, normalizedPath, key }
 }

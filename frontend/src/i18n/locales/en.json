@@ -929,6 +929,8 @@
     "showRepeated": "Show all {n} requests",
     "collapseRepeated": "Collapse requests",
     "sourceAgent": "MCP · {agent}",
+    "sender": "Sender",
+    "unknownSender": "Unknown",
     "session": "Tab: {title}",
     "countOf": "{shown} of {total}",
     "recording": "Recording",

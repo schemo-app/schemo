@@ -5,6 +5,8 @@ import { History } from '../../../bindings/schemo/internal/request'
 import { callOrToast } from '../../lib/calls'
 import { useCaptureStore } from '../../stores/capture'
 import { useRecordsStore } from '../../stores/records'
+import { useWorkspacesStore } from '../../stores/workspaces'
+import { useWorkspaceTeam } from '../../composables/useWorkspaceTeam'
 import { methodInkClass, metaLine } from '../../lib/format'
 import { protocolOf, requestLabel } from '../../lib/protocol'
 import { groupLabel, tabKeyOf } from '../../lib/recordTabs'
@@ -24,6 +26,20 @@ import { DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger } from 'reka-ui'
 
 const records = useRecordsStore()
 const capture = useCaptureStore()
+const workspaces = useWorkspacesStore()
+const workspace = computed(() => workspaces.active)
+const workspaceKind = computed(() => workspace.value?.kind ?? '')
+const showSender = computed(() => workspaceKind.value === 'team')
+const { team } = useWorkspaceTeam(workspace, workspaceKind)
+const senders = computed(() => {
+  const members = team.value?.workspaceId === workspace.value?.id ? team.value?.members ?? [] : []
+  return new Map(members.map(member => [member.userId, member]))
+})
+
+function senderName(record: RequestRecord): string {
+  const member = senders.value.get(record.senderId ?? '')
+  return member?.name?.trim() || member?.email || t('history.unknownSender')
+}
 const toast = useToast()
 const { exportHar } = useHarExport(() => records.sessionFilter)
 const { loadIfNearEnd } = useLoadOlder()
@@ -177,7 +193,7 @@ watch(() => records.workspaceId, collapseRepeats)
 </script>
 
 <template>
-  <div class="history-page">
+  <div class="history-page" :class="{ 'with-sender': showSender }">
     <div class="hist-bar">
       <div class="hist-search">
         <Icon name="Search" :size="13" :stroke-width="2" class="shrink-0" />
@@ -364,6 +380,12 @@ watch(() => records.workspaceId, collapseRepeats)
             <Icon :name="sourceIcons[sourceOf(row.record)]" :size="14" />
             <span class="sr-only">{{ sourceText(row.record) }}</span>
           </span>
+          <span
+            v-if="showSender"
+            class="hist-sender"
+            :title="senderName(row.record)"
+            :aria-label="`${t('history.sender')}: ${senderName(row.record)}`"
+          >{{ senderName(row.record) }}</span>
           <span class="hist-when">{{ formatClock(row.record.startedAt) }}</span>
         </button>
       </template>
@@ -668,6 +690,16 @@ watch(() => records.workspaceId, collapseRepeats)
   font: inherit;
 }
 
+.with-sender .hist-row {
+  grid-template-columns: 3.25rem minmax(0, 1fr) 3.5rem min(9.375rem, 20%) 1.625rem minmax(5rem, 8.5rem) var(--clock-width);
+}
+
+.hist-sender {
+  @apply truncate;
+  color: var(--text-secondary);
+  font-size: var(--text-12);
+}
+
 .hist-row:hover,
 .hist-row:focus-visible {
   background: var(--bg-hover);
@@ -768,6 +800,14 @@ watch(() => records.workspaceId, collapseRepeats)
   }
 
   .hist-source {
+    display: none;
+  }
+
+  .with-sender .hist-row {
+    grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem 6rem var(--clock-width);
+  }
+
+  .with-sender .hist-metrics {
     display: none;
   }
 }

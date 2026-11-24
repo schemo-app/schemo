@@ -17,6 +17,7 @@ func TestRecordRoundTrip(t *testing.T) {
 
 	saved := sampleRecord("rec-1", domain.SourceManual)
 	saved.ResponseBytes = 11
+	saved.SenderID = "user-alice"
 	if err := store.SaveRecord(ctx, ws, saved); err != nil {
 		t.Fatalf("SaveRecord: %v", err)
 	}
@@ -29,6 +30,9 @@ func TestRecordRoundTrip(t *testing.T) {
 		t.Fatalf("records = %d, want one", len(list))
 	}
 	row := list[0]
+	if row.SenderID != saved.SenderID {
+		t.Errorf("Records sender = %q, want %q", row.SenderID, saved.SenderID)
+	}
 	if row.Method != "GET" || row.Status != 200 || row.TabTitle != "Example" {
 		t.Errorf("record = %+v, want the saved fields", row)
 	}

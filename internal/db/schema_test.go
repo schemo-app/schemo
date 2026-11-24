@@ -51,6 +51,7 @@ func TestProtocolUpgradeKeepsExistingRecords(t *testing.T) {
 	store := newMigratedStore(t)
 	_, err := store.DB().ExecContext(ctx, `
 		ALTER TABLE records DROP COLUMN protocol_json;
+        ALTER TABLE records DROP COLUMN sender_id;
 		PRAGMA user_version = 2;
 		INSERT INTO records (id, workspace_id, source, method, url, started_at)
 		VALUES ('old', 'personal', 'manual', 'GET', 'https://example.test', 1)`)
@@ -284,5 +285,23 @@ func TestTheOutboxHoldsOneWaitingEntryPerRow(t *testing.T) {
 	queue()
 	if held := entries(); held != 2 {
 		t.Errorf("%d entries for one row, want two: the one in flight and the one waiting", held)
+	}
+}
+
+func TestSenderUpgradeKeepsExistingHistory(t *testing.T) {
+	store := newMigratedStore(t)
+	ctx := t.Context()
+	if err := store.SaveRecord(ctx, ws, sampleRecord("old-sender", domain.SourceManual)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(ctx, `ALTER TABLE records DROP COLUMN sender_id; PRAGMA user_version = 3`); err != nil {
+		t.Fatal(err)
+	}
+	if moved, err := store.Migrate(ctx); moved != "" || err != nil {
+		t.Fatalf("Migrate = %q, %v", moved, err)
+	}
+	record, err := store.Record(ctx, "old-sender")
+	if err != nil || record.SenderID != "" || record.Method != "GET" {
+		t.Fatalf("Record after upgrade = %+v, %v", record, err)
 	}
 }

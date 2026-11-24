@@ -4,6 +4,8 @@ import { createRenderer, createSSRApp, nextTick, reactive, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { vite } from './vite.mjs'
 
+globalThis.historyWorkspaces = reactive({active:null})
+globalThis.historyTeam = {team:ref(null)}
 globalThis.captureListeners = new Map()
 globalThis.recordsStore = reactive({
   records: [],
@@ -48,7 +50,8 @@ const load = await vite({
   '/src/stores/cookies.ts': 'export const useCookiesStore = () => ({})',
   '/src/stores/environments.ts': 'export const useEnvironmentsStore = () => ({})',
   '/src/stores/transfer.ts': 'export const useTransferStore = () => ({})',
-  '/src/stores/workspaces.ts': 'export const useWorkspacesStore = () => ({})',
+  '/src/stores/workspaces.ts': 'export const useWorkspacesStore = () => globalThis.historyWorkspaces',
+  '/src/composables/useWorkspaceTeam.ts': 'export const useWorkspaceTeam = () => globalThis.historyTeam',
   '/src/composables/useWailsEvent.ts': `import { onScopeDispose } from 'vue';
     export function useWailsEvent(name, handler) {
       globalThis.captureListeners.set(name, handler);
@@ -211,4 +214,35 @@ test('history does not offer capture controls for a finished tab session', async
   Object.assign(globalThis.captureStore, { connected: true, recording: true, tabList: [{ tabId: 8, since: 1, paused: false }] })
   const html = await renderToString(createSSRApp(HistoryPage))
   assert.doesNotMatch(html, /class="hist-rec"/)
+})
+
+
+test('team history resolves senders by ID, falling back from name to email', async () => {
+  globalThis.historyWorkspaces.active = {id:'team', kind:'team'}
+  globalThis.historyTeam.team.value = {workspaceId:'team',members:[
+    {userId:'alice', name:'Alice Example', email:'alice@example.test'},
+    {userId:'bob', name:'  ', email:'bob@example.test'},
+  ]}
+  globalThis.recordsStore.sessionFilter = ''
+  globalThis.recordsStore.historySource = 'all'
+  globalThis.recordsStore.records = ['alice','bob','missing',''].map((senderId,index) => ({
+    id:`sender-${index}`,senderId,source:'manual',method:'GET',url:'https://example.test',status:200,startedAt:10-index,
+  }))
+  try {
+    const html = await renderToString(createSSRApp(HistoryPage))
+    assert.match(html, /Alice Example/)
+    assert.match(html, /bob@example.test/)
+    assert.match(html, /history.unknownSender/)
+    assert.equal((html.match(/class="hist-sender"/g) ?? []).length, 4)
+    globalThis.historyWorkspaces.active = {id:'other-team',kind:'team'}
+    const switching = await renderToString(createSSRApp(HistoryPage))
+    assert.doesNotMatch(switching, /Alice Example|bob@example.test/)
+    globalThis.historyWorkspaces.active = {id:'personal',kind:'personal'}
+    const personal = await renderToString(createSSRApp(HistoryPage))
+    assert.doesNotMatch(personal, /class="hist-sender"/)
+  } finally {
+    globalThis.historyWorkspaces.active = null
+    globalThis.historyTeam.team.value = null
+    globalThis.recordsStore.records = []
+  }
 })

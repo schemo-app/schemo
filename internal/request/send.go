@@ -80,6 +80,10 @@ func (s *History) executeAttempt(
 	in SendInput,
 ) (domain.Record, error) {
 	workspace, id, started := active.workspace, active.id, active.started
+	senderID, err := s.senderID(ctx)
+	if err != nil {
+		return domain.Record{}, err
+	}
 	cancelled := domain.Record{
 		RecordSummary: domain.RecordSummary{ID: id, ProtocolRecord: domain.ProtocolRecord{Protocol: in.Protocol}},
 		Cancelled:     true,
@@ -130,6 +134,7 @@ func (s *History) executeAttempt(
 	if stream := active.stream; stream != nil {
 		stream.opened = func(response *domain.Response) {
 			record := s.recordFrom(id, workspace, started, in, pass, masked, response)
+			record.SenderID = senderID
 			record.Active = true
 			stream.setRecord(record)
 			s.notifier.Publish(TopicStreamOpened, RequestFinished{ID: id, Record: record})
@@ -162,6 +167,7 @@ func (s *History) executeAttempt(
 	}
 
 	rec := s.recordFrom(id, workspace, started, in, pass, masked, resp)
+	rec.SenderID = senderID
 	if err := s.save(ctx, workspace, rec); err != nil {
 		return domain.Record{}, err
 	}

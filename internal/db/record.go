@@ -39,16 +39,16 @@ func (s *Store) SaveRecord(ctx context.Context, workspaceID string, rec domain.R
                       tls_us, wait_us, download_us, request_bytes, response_bytes,
                       request_headers_json, response_headers_json, cookie_writes_json,
                       started_at, finished_at, node_id, run_id, tab_id, tab_title, tab_url,
-                      favicon_url, agent, updated_at, protocol_json)
+                      favicon_url, agent, updated_at, protocol_json, sender_id)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-			         ?, ?, ?, ?, ?)`,
+			         ?, ?, ?, ?, ?, ?)`,
 			rec.ID, workspaceID, string(rec.Source), rec.Method, rec.URL, rec.Status, rec.StatusText,
 			rec.ContentType,
 			rec.Error, rec.Cancelled, rec.DurationUs, rec.DNSUs, rec.ConnectUs, rec.TLSUs,
 			rec.WaitUs, rec.DownloadUs, rec.RequestBytes, rec.ResponseBytes,
 			string(requestHeaders), string(responseHeaders), string(writes), rec.StartedAt, finishedAt,
 			rec.NodeID, nullIfEmpty(rec.RunID), nullIfZero(rec.TabID), nullIfEmpty(rec.TabTitle),
-			nullIfEmpty(rec.TabURL), nullIfEmpty(rec.FavIconURL), rec.Agent, finishedAt, string(protocol))
+			nullIfEmpty(rec.TabURL), nullIfEmpty(rec.FavIconURL), rec.Agent, finishedAt, string(protocol), rec.SenderID)
 		if err != nil {
 			if isUniqueViolation(err) {
 				return fmt.Errorf("record %s: %w", rec.ID, domain.ErrConflict)
@@ -85,7 +85,7 @@ const recordColumns = `id, workspace_id, source, method, url, status, status_tex
 	       download_us, request_bytes, response_bytes, request_headers_json,
 	       response_headers_json, cookie_writes_json, started_at, node_id, ifnull(run_id, ''),
 	       ifnull(tab_id, 0), ifnull(tab_title, ''), ifnull(tab_url, ''),
-	       ifnull(favicon_url, ''), is_remote, ifnull(agent, ''), protocol_json`
+	       ifnull(favicon_url, ''), is_remote, ifnull(agent, ''), protocol_json, sender_id`
 
 // rowScanner abstracts scanning methods shared between sql.Row and sql.Rows.
 type rowScanner interface {
@@ -102,7 +102,7 @@ func scanRecord(row rowScanner) (domain.Record, error) {
 		&rec.DNSUs, &rec.ConnectUs, &rec.TLSUs, &rec.WaitUs, &rec.DownloadUs, &rec.RequestBytes,
 		&rec.ResponseBytes, &requestHeaders, &responseHeaders, &writes, &rec.StartedAt,
 		&rec.NodeID, &rec.RunID, &rec.TabID, &rec.TabTitle, &rec.TabURL, &rec.FavIconURL,
-		&rec.IsRemote, &rec.Agent, &protocol); err != nil {
+		&rec.IsRemote, &rec.Agent, &protocol, &rec.SenderID); err != nil {
 		return domain.Record{}, err
 	}
 	for _, part := range []struct {

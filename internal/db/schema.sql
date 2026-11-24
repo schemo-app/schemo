@@ -83,6 +83,7 @@ CREATE TABLE records (
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     source TEXT NOT NULL CHECK (source IN ('manual', 'browser')),
     agent TEXT NOT NULL DEFAULT '',
+    sender_id TEXT NOT NULL DEFAULT '',
     method TEXT NOT NULL,
     protocol_json TEXT NOT NULL DEFAULT '{}',
     url TEXT NOT NULL,

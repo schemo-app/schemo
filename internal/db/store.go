@@ -95,7 +95,7 @@ func (s *Store) Open(ctx context.Context) error {
 //go:embed schema.sql
 var schema string
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 // Migrate creates the schema in a fresh database. It reports the path an incompatible database was
 // moved to, if it had to move one.
@@ -107,8 +107,8 @@ func (s *Store) Migrate(ctx context.Context) (string, error) {
 	if version == schemaVersion {
 		return "", nil
 	}
-	if version == 2 {
-		return "", s.upgradeRecordProtocols(ctx)
+	if version == 2 || version == 3 {
+		return "", s.upgradeRecordMetadata(ctx, version)
 	}
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT count(*) FROM sqlite_schema WHERE type = 'table'`).Scan(&tables); err != nil {
@@ -135,14 +135,19 @@ func (s *Store) Migrate(ctx context.Context) (string, error) {
 	return moved, tx.Commit()
 }
 
-func (s *Store) upgradeRecordProtocols(ctx context.Context) error {
+func (s *Store) upgradeRecordMetadata(ctx context.Context, version int) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("upgrading record metadata: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE records ADD COLUMN protocol_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
-		return fmt.Errorf("upgrading record metadata: %w", err)
+	if version == 2 {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE records ADD COLUMN protocol_json TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return fmt.Errorf("upgrading record metadata: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `ALTER TABLE records ADD COLUMN sender_id TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("upgrading record sender: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
 		return fmt.Errorf("upgrading record metadata: %w", err)

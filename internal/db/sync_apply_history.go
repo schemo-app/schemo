@@ -126,11 +126,12 @@ func writeRecord(
 		                      tls_us, wait_us, download_us, request_bytes, response_bytes,
 		                      request_headers_json, response_headers_json, cookie_writes_json,
 		                      started_at, finished_at, node_id, run_id, agent, tab_id, tab_title,
-		                      tab_url, favicon_url, updated_at, remote_seq, cached_at, is_remote, protocol_json)
+		                      tab_url, favicon_url, updated_at, remote_seq, cached_at, is_remote, protocol_json, sender_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-		         ?, ?, ?, ?, ?, ?, 1, ?)
+		         ?, ?, ?, ?, ?, ?, 1, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		     remote_seq = max(records.remote_seq, excluded.remote_seq),
+             sender_id = CASE WHEN records.sender_id = '' THEN excluded.sender_id ELSE records.sender_id END,
 		     cookie_writes_json = CASE
 		         WHEN records.is_remote = 1 AND excluded.remote_seq > records.remote_seq
 		              AND NOT EXISTS (SELECT 1 FROM sync_queue
@@ -145,7 +146,7 @@ func writeRecord(
 		string(headers), string(back), writes, record.StartedAt, finishedAt(record),
 		record.NodeID, nullIfEmpty(record.RunID), record.Agent, nullIfZero(record.TabID),
 		nullIfEmpty(record.TabTitle), nullIfEmpty(record.TabURL), nullIfEmpty(record.FavIconURL),
-		now(), seq, cachedAt, string(protocol), string(entityRecord))
+		now(), seq, cachedAt, string(protocol), record.SenderID, string(entityRecord))
 	if err != nil {
 		return fmt.Errorf("applying record %s: %w", record.ID, err)
 	}

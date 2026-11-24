@@ -23,6 +23,11 @@ func (s *History) Ingest(ctx context.Context, in IngestInput) (domain.Record, er
 		return domain.Record{}, err
 	}
 
+	senderID, err := s.senderID(ctx)
+	if err != nil {
+		return domain.Record{}, err
+	}
+
 	started := in.StartedAt
 	if started == 0 {
 		started = time.Now().UnixMilli()
@@ -37,6 +42,7 @@ func (s *History) Ingest(ctx context.Context, in IngestInput) (domain.Record, er
 		RecordSummary: domain.RecordSummary{
 			ID:          s.ids(),
 			WorkspaceID: workspace,
+			SenderID:    senderID,
 			Source:      source,
 			Method:      in.Method,
 			URL:         in.URL,
@@ -379,4 +385,16 @@ func (s *History) save(ctx context.Context, workspace string, rec domain.Record)
 		log.Printf("[record] retention: %v", err)
 	}
 	return nil
+}
+
+// senderID is read before execution so sign-out during a send cannot change its author.
+func (s *History) senderID(ctx context.Context) (string, error) {
+	account, err := s.store.Account(ctx)
+	if errors.Is(err, domain.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return account.UserID, nil
 }

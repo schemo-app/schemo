@@ -120,6 +120,7 @@ type RecordSummary struct {
 	ID          string       `json:"id"`
 	WorkspaceID string       `json:"workspaceId,omitempty"`
 	Source      RecordSource `json:"source"`
+	SenderID    string       `json:"senderId,omitempty"`
 	Method      string       `json:"method"`
 	URL         string       `json:"url"`
 	Status      int          `json:"status"`
@@ -129,17 +130,13 @@ type RecordSummary struct {
 	DurationUs  int64        `json:"durationUs"`
 	StartedAt   int64        `json:"startedAt"`
 	NodeID      string       `json:"nodeId,omitempty"`
-	// RunID is the collection run this record was sent by, empty for a request sent on its own. The
-	// run travels as a document of its own, and the record names it rather than carrying a copy.
-	RunID string `json:"runId,omitempty"`
-	// Agent is who sent this through the MCP server when it was not the person. Empty for sends
-	// made by the window, a run or the command line.
-	Agent      string `json:"agent,omitempty"`
-	TabID      int    `json:"tabId,omitempty"`
-	TabTitle   string `json:"tabTitle,omitempty"`
-	TabURL     string `json:"tabURL,omitempty"`
-	FavIconURL string `json:"favIconUrl,omitempty"`
-	IsRemote   bool   `json:"isRemote,omitempty"`
+	RunID       string       `json:"runId,omitempty"`
+	Agent       string       `json:"agent,omitempty"`
+	TabID       int          `json:"tabId,omitempty"`
+	TabTitle    string       `json:"tabTitle,omitempty"`
+	TabURL      string       `json:"tabURL,omitempty"`
+	FavIconURL  string       `json:"favIconUrl,omitempty"`
+	IsRemote    bool         `json:"isRemote,omitempty"`
 }
 
 // Record represents full execution history, including timing phases, headers, and bodies.

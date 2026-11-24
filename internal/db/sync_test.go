@@ -880,6 +880,7 @@ func TestARecordTravelsWithItsBodiesAndTheRunThatProducedIt(t *testing.T) {
 
 	rec := sampleRecord("rec-1", domain.SourceManual)
 	rec.RunID = "run-1"
+	rec.SenderID = "user-alice"
 	if err := store.SaveRecord(ctx, ws, rec); err != nil {
 		t.Fatalf("SaveRecord: %v", err)
 	}
@@ -923,6 +924,9 @@ func TestARecordTravelsWithItsBodiesAndTheRunThatProducedIt(t *testing.T) {
 	var entry historyv1.RecordEntry
 	if err := proto.Unmarshal(recordPayload, &entry); err != nil {
 		t.Fatalf("reading the payload: %v", err)
+	}
+	if wireRecord(t, entry.GetRecord()).SenderID != rec.SenderID {
+		t.Errorf("synced sender = %q, want %q", wireRecord(t, entry.GetRecord()).SenderID, rec.SenderID)
 	}
 	if wireRecord(t, entry.GetRecord()).URL != "https://api.example.com/articles" {
 		t.Errorf("record = %+v, want the row it was read from", entry.GetRecord())
@@ -1585,6 +1589,7 @@ func TestAHistoryPageIsWrittenUnderTheWorkspaceOfTheDeviceReadingIt(t *testing.T
 	linked(t, store)
 
 	record := remoteRecord("rec-1", "manual")
+	record.SenderID = "user-alice"
 	record.ProtocolRecord = domain.ProtocolRecord{
 		Protocol: domain.ProtocolGraphQL, Operation: "Lookup",
 		Options: &domain.ReplayOptions{OperationName: "Lookup", Variables: `{"id":7}`},
@@ -1611,6 +1616,9 @@ func TestAHistoryPageIsWrittenUnderTheWorkspaceOfTheDeviceReadingIt(t *testing.T
 	}
 	if len(records) != 1 || records[0].ID != "rec-1" {
 		t.Fatalf("records = %+v, want the one that arrived", records)
+	}
+	if records[0].SenderID != record.SenderID {
+		t.Errorf("pulled sender = %q, want %q", records[0].SenderID, record.SenderID)
 	}
 	if records[0].WorkspaceID != ws {
 		t.Errorf("workspace = %q, want the workspace this page was read for", records[0].WorkspaceID)

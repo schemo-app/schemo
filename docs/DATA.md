@@ -28,6 +28,10 @@ versions and conflicts.
 What syncs: collections and requests, environments and variables, cookies, workspace metadata,
 history and runs. What stays: settings, drafts, window session, local retention.
 
+History records reference the sender by account ID. Team history resolves the current member name,
+falling back to email; names and emails are not copied into records. Older records without an ID
+have an unknown sender.
+
 ### Engine
 
 - **One registry.** Every synced kind is one entry (`syncKinds` in `db/sync_data.go`):

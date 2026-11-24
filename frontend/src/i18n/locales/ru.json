@@ -929,6 +929,8 @@
     "showRepeated": "Показать все {n}",
     "collapseRepeated": "Свернуть запросы",
     "sourceAgent": "MCP · {agent}",
+    "sender": "Отправитель",
+    "unknownSender": "Неизвестно",
     "session": "Вкладка: {title}",
     "countOf": "{shown} из {total}",
     "recording": "Запись",
