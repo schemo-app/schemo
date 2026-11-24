@@ -527,7 +527,7 @@ test('an empty local publication list does not show the empty state while the se
   assert.ok(rendered(root, 'PageIntro'))
 })
 
-test('tab context menus cancel native WebKit menus synchronously and open at the pointer', async context => {
+test('tab context menus cancel native WebKit menus synchronously and open below the tab', async context => {
   ports.tabs = reactive({
     tabs: [{id:'first',kind:TabKind.TabKindRequest}, {id:'second',kind:TabKind.TabKindRequest}],
     activeId:'first',
@@ -541,7 +541,7 @@ test('tab context menus cancel native WebKit menus synchronously and open at the
     const tabs = all(root).filter(child=>child.props.class?.split(' ').includes('tab'))
     for (const index of [0,1,0,1]) {
       const event = {
-        clientX:20+index*220, clientY:20, defaultPrevented:false, cancelBubble:false,
+        clientX:20+index*220, clientY:20, currentTarget:tabs[index], defaultPrevented:false, cancelBubble:false,
         preventDefault(){this.defaultPrevented=true},
         stopPropagation(){this.cancelBubble=true},
       }
@@ -556,10 +556,10 @@ test('tab context menus cancel native WebKit menus synchronously and open at the
       assert.equal(tabs[index].props['data-state'],'open')
       assert.equal(tabs[1-index].props['data-state'],'closed')
       const menus = all(root).filter(child => child.props['data-component'] === 'ContextMenuContent')
-      assert.deepEqual(menus[index].props.reference.getBoundingClientRect(), {
-        x:event.clientX, y:event.clientY, left:event.clientX, right:event.clientX,
-        top:event.clientY, bottom:event.clientY, width:0, height:0,
-      })
+      assert.equal(toRaw(menus[index].props.reference), tabs[index])
+      assert.equal(menus[index].props.side, 'bottom')
+      assert.equal(menus[index].props.align, 'start')
+      assert.equal(menus[index].props['side-offset'], 6)
     }
   } finally {
     ports.rekaMenus = false
