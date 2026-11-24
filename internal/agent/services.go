@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -149,6 +151,12 @@ func (t appTools) Request(ctx context.Context, id string) (Request, error) {
 	for _, row := range params {
 		texts = append(texts, row.Name, row.Value)
 	}
+	formOffset := len(texts)
+	for _, row := range node.Form {
+		if row.Enabled && !row.File {
+			texts = append(texts, row.Name, row.Value)
+		}
+	}
 	masked, err := t.environments.MaskTextsIn(ctx, workspace, domain.VarLevels{}, texts)
 	if err != nil {
 		return Request{}, err
@@ -177,6 +185,9 @@ func (t appTools) Request(ctx context.Context, id string) (Request, error) {
 	}
 	for i := range params {
 		out.Params = append(out.Params, Header{Name: masked[3+2*len(rows)+2*i], Value: masked[4+2*len(rows)+2*i]})
+	}
+	for i := formOffset; i < len(masked); i += 2 {
+		out.Form = append(out.Form, Header{Name: masked[i], Value: masked[i+1]})
 	}
 	return out, nil
 }
@@ -401,7 +412,7 @@ func (t appTools) CreateRequest(ctx context.Context, in RequestInput) (IDOutput,
 	one, err := t.collections.InWorkspace(in.Workspace).CreateNode(ctx, workspace.RequestDraft{
 		CollectionID: in.Collection, Name: node.Name, Method: node.Method, URL: node.URL,
 		Description: node.Description, Headers: node.Headers, Params: node.Params,
-		Body: node.Body, BodyKind: node.BodyKind, Auth: node.Auth,
+		Body: node.Body, BodyKind: node.BodyKind, Form: node.Form, Auth: node.Auth,
 	})
 	return IDOutput{ID: one.ID}, err
 }
@@ -483,7 +494,7 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 		node.Auth = patch.Auth.Normalized().Stored()
 	}
 	for field, value := range map[string]*string{
-		"name": patch.Name, "method": patch.Method, "url": patch.URL, "description": patch.Description, "body": patch.Body,
+		"name": patch.Name, "method": patch.Method, "url": patch.URL, "description": patch.Description,
 	} {
 		if value != nil && strings.Contains(*value, domain.SecretMask) {
 			return fmt.Errorf("%s contains a masked value; omit it to preserve the original", field)
@@ -501,17 +512,60 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 	if patch.Description != nil {
 		node.Description = *patch.Description
 	}
-	if patch.Body != nil {
-		node.Body = *patch.Body
-	}
 	if patch.BodyKind != nil {
 		kind := domain.BodyKind(*patch.BodyKind)
 		switch kind {
-		case domain.BodyRaw, domain.BodyJSON, domain.BodyXML:
+		case domain.BodyRaw, domain.BodyJSON, domain.BodyXML, domain.BodyForm, domain.BodyBinary:
 		default:
-			return errors.New("bodyKind must be raw, json or xml")
+			return errors.New("bodyKind must be raw, json, xml, form or binary")
 		}
-		node.BodyKind, node.BodyFile, node.Form = kind, "", nil
+		if kind != domain.KindOf(node.BodyKind) {
+			node.BodyFile, node.Form = "", nil
+		}
+		node.BodyKind = kind
+	}
+	if body := bytes.TrimSpace(patch.Body); len(body) > 0 && !bytes.Equal(body, []byte("null")) {
+		if node.BodyKind == domain.BodyForm || node.BodyKind == domain.BodyBinary {
+			return errors.New("body text requires raw, json or xml mode; use form fields for form mode; binary uses the saved file")
+		}
+		var text string
+		if body[0] == '"' {
+			if err := json.Unmarshal(body, &text); err != nil {
+				return fmt.Errorf("invalid body: %w", err)
+			}
+		} else {
+			if node.BodyKind != domain.BodyJSON {
+				return errors.New("structured body requires bodyKind json")
+			}
+			var compact bytes.Buffer
+			if err := json.Compact(&compact, body); err != nil {
+				return fmt.Errorf("invalid JSON body: %w", err)
+			}
+			text = compact.String()
+		}
+		if strings.Contains(text, domain.SecretMask) {
+			return errors.New("body contains a masked value; omit it to preserve the original")
+		}
+		node.Body = text
+	}
+	if patch.Form != nil {
+		if node.BodyKind != domain.BodyForm {
+			return errors.New("form fields require bodyKind form")
+		}
+		kept := make([]domain.FormRow, 0, len(node.Form)+len(*patch.Form))
+		for _, row := range node.Form {
+			if row.File || !row.Enabled {
+				kept = append(kept, row)
+			}
+		}
+		ids := platform.NewIDGen()
+		for _, row := range *patch.Form {
+			if strings.Contains(row.Name, domain.SecretMask) || strings.Contains(row.Value, domain.SecretMask) {
+				return errors.New("masked form fields cannot be written; omit form to preserve existing fields")
+			}
+			kept = append(kept, domain.FormRow{ID: ids(), Name: row.Name, Value: row.Value, Enabled: true})
+		}
+		node.Form = kept
 	}
 	for _, rows := range []struct {
 		from *[]Header

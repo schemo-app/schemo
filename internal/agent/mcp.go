@@ -270,6 +270,7 @@ type Request struct {
 	Headers     []Header     `json:"headers,omitempty"`
 	Body        string       `json:"body,omitempty"`
 	BodyKind    string       `json:"bodyKind,omitempty"`
+	Form        []Header     `json:"form,omitempty" jsonschema:"enabled text form fields; file parts are not exposed"`
 	Params      []Header     `json:"params,omitempty"`
 	Description string       `json:"description,omitempty"`
 	Auth        *domain.Auth `json:"auth,omitempty"`

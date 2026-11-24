@@ -2,8 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"schemo/internal/domain"
@@ -70,15 +73,16 @@ type MoveInput struct {
 
 // RequestFields addresses saved request data, without scripts or local file paths.
 type RequestFields struct {
-	Name        *string      `json:"name,omitempty"`
-	Method      *string      `json:"method,omitempty"`
-	URL         *string      `json:"url,omitempty"`
-	Description *string      `json:"description,omitempty"`
-	Headers     *[]Header    `json:"headers,omitempty" jsonschema:"replace enabled headers; omit to preserve all existing headers"`
-	Params      *[]Header    `json:"params,omitempty" jsonschema:"replace query parameters"`
-	Body        *string      `json:"body,omitempty"`
-	BodyKind    *string      `json:"bodyKind,omitempty" jsonschema:"raw, json or xml; file bodies are not accepted"`
-	Auth        *domain.Auth `json:"auth,omitempty" jsonschema:"replace saved authorization; omit to preserve it; use variable references for protected credentials"`
+	Name        *string         `json:"name,omitempty"`
+	Method      *string         `json:"method,omitempty"`
+	URL         *string         `json:"url,omitempty"`
+	Description *string         `json:"description,omitempty"`
+	Headers     *[]Header       `json:"headers,omitempty" jsonschema:"replace enabled headers; omit to preserve all existing headers"`
+	Params      *[]Header       `json:"params,omitempty" jsonschema:"replace query parameters"`
+	Body        json.RawMessage `json:"body,omitempty" jsonschema:"JSON value for bodyKind json, or a string containing body text or a {{variable}} template; omit or null to preserve; empty string clears"`
+	BodyKind    *string         `json:"bodyKind,omitempty" jsonschema:"raw, json, xml, form or binary; local file paths cannot be assigned through MCP"`
+	Form        *[]Header       `json:"form,omitempty" jsonschema:"replace enabled text form fields in form mode; file parts and disabled fields are preserved; omit or null to preserve; empty array clears enabled text fields"`
+	Auth        *domain.Auth    `json:"auth,omitempty" jsonschema:"replace saved authorization; omit to preserve it; use variable references for protected credentials"`
 }
 
 type RequestInput struct {
@@ -125,11 +129,23 @@ func addWorkspaceTool[I interface{ workspace() string }, O any](
 	s *MCP, name, description string, write, destructive bool, run func(context.Context, I) (O, error),
 ) {
 	closed := false
+	// Body text and structured JSON share one field.
+	schema, err := jsonschema.For[I](&jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
+		reflect.TypeFor[json.RawMessage](): {},
+	}})
+	if err != nil {
+		panic(err)
+	}
 	sdk.AddTool(s.mcp, &sdk.Tool{
-		Name: name, Description: description,
+		Name: name, Description: description, InputSchema: schema,
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: !write, DestructiveHint: &destructive, OpenWorldHint: &closed},
 	}, func(ctx context.Context, req *sdk.CallToolRequest, in I) (*sdk.CallToolResult, O, error) {
 		var zero O
+		// SDK schema validation remarshal uses float64; decode the original arguments
+		// again so large numbers inside RawMessage bodies keep their exact value.
+		if err := json.Unmarshal(req.Params.Arguments, &in); err != nil {
+			return nil, zero, err
+		}
 		policy := s.opened(req)
 		if write && !policy.Write {
 			return nil, zero, errors.New("editing is disabled in MCP settings")
