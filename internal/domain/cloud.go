@@ -118,9 +118,10 @@ type Publication struct {
 
 	// ContentHash is the digest of what was published, so that a device can say whether the page is
 	// behind what it holds without publishing to find out.
-	ContentHash     string `json:"contentHash,omitempty"`
-	EnvironmentName string `json:"environmentName,omitempty"`
-	UpdatedAt       int64  `json:"updatedAt,omitempty"`
+	ContentHash      string   `json:"contentHash,omitempty"`
+	EnvironmentName  string   `json:"environmentName,omitempty"`
+	EnvironmentNames []string `json:"environmentNames,omitempty"`
+	UpdatedAt        int64    `json:"updatedAt,omitempty"`
 
 	// CanManage is the server's answer about the caller who asked, and never about the row.
 	CanManage bool `json:"canManage"`

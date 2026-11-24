@@ -3,6 +3,8 @@ import { afterEach, test } from 'node:test'
 import { createRenderer, nextTick, reactive } from 'vue'
 import { clientComponent, vite } from './vite.mjs'
 
+globalThis.Document = class { activeElement = null }
+globalThis.document = new Document()
 globalThis.importDrop = { listeners: new Map() }
 const ports = globalThis.importDrop
 const load = await vite({
@@ -30,7 +32,7 @@ const load = await vite({
 const { default: ImportDialog } = await load('/src/components/transfer/ImportDialog.vue')
 
 function node(type, text = '') {
-    return { type, text, props: {}, children: [], parent: null, addEventListener() {}, removeEventListener() {} }
+    return { type, text, props: {}, children: [], parent: null, getRootNode() { return document }, addEventListener() {}, removeEventListener() {} }
 }
 
 function remove(child) {
@@ -79,7 +81,7 @@ async function mount(format = 'postman') {
     const root = node('root')
     app = renderer.createApp(ImportDialog)
     app.mount(root)
-    find(root, element => element.props.name === `transfer.source.${format}`).props.onClick()
+    if (format) find(root, element => element.props.name === `transfer.source.${format}`).props.onClick()
     await nextTick()
     ports.root = root
     return root
@@ -196,4 +198,36 @@ test('unmount removes the file drop listener', async () => {
     app.unmount()
     app = null
     assert.equal(ports.listeners.has('files-dropped'), false)
+})
+
+
+test('the first publication link loads its preview when it opens the import dialog', async () => {
+    const root = await mount(null)
+    ports.transfer.importOpen = false
+    await nextTick()
+    ports.transfer.previewUrl = async (...args) => {
+        ports.calls.push(args)
+        return {token:'page',file:'Published API',requests:3,size:100}
+    }
+    ports.transfer.linkedPage = 'https://share.example.test/view/catalog/'
+    ports.transfer.importOpen = true
+    for (let turn = 0; turn < 12; turn++) await nextTick()
+    assert.deepEqual(ports.calls,[['page','https://share.example.test/view/catalog/']])
+    assert.ok(find(root,element=>element.type === 'input' && element.props.class === 'url'))
+    const button = find(root,element=>element.props['data-component'] === 'DialogButton' && 'primary' in element.props)
+    assert.equal(button.props.disabled,false)
+    assert.equal(ports.transfer.linkedPage,'')
+})
+
+test('publication links arriving while the import dialog is open are read once', async () => {
+    await mount(null)
+    ports.transfer.previewUrl = async (...args) => {
+        ports.calls.push(args)
+        return {token:'page',file:'Published API',requests:3,size:100}
+    }
+    ports.transfer.linkedPage = 'https://share.example.test/view/first/'
+    for (let turn = 0; turn < 12; turn++) await nextTick()
+    ports.transfer.linkedPage = 'https://share.example.test/view/second/'
+    for (let turn = 0; turn < 12; turn++) await nextTick()
+    assert.deepEqual(ports.calls,[['page','https://share.example.test/view/first/'],['page','https://share.example.test/view/second/']])
 })

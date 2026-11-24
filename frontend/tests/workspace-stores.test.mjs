@@ -479,12 +479,32 @@ test('older publication previews cannot change the current environment or visibi
   const old = deferred()
   globalThis.publicationServices.Preview = () => old.promise
   store.openShare('collection')
-  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({ environments: [{ id: 'new' }] })
-  await store.choose('new')
-  old.resolve({ environments: [{ id: 'old' }], publication: { visibility: 'password' } })
+  globalThis.publicationServices.Preview = () => CancellablePromise.resolve({ environments: [{ id: 'new' }], environmentIds: ['new'] })
+  await store.choose(['new'])
+  old.resolve({ environments: [{ id: 'old' }], environmentIds: ['old'], publication: { visibility: 'password' } })
   await new Promise(resolve => setImmediate(resolve))
-  assert.equal(store.environment, 'new')
+  assert.deepEqual(store.environmentIds, ['new'])
   assert.equal(store.visibility, 'unlisted')
+})
+
+test('publication updates keep every selected environment', async () => {
+  setupPublications()
+  const page = {collectionId: 'collection', status: 'active', visibility: 'unlisted'}
+  const selected = ['staging', 'production']
+  let submitted
+  globalThis.publicationServices.Preview = (_, __, ids) => {
+    assert.ok(ids === null || JSON.stringify(ids) === JSON.stringify(selected))
+    return CancellablePromise.resolve({publication: page, environments: [], environmentIds: selected})
+  }
+  globalThis.publicationServices.Publish = request => {
+    submitted = request
+    return CancellablePromise.resolve({page, passwordSaved: true})
+  }
+  globalThis.publicationServices.List = () => CancellablePromise.resolve([page])
+  store.pages = [page]
+  assert.equal(await store.updatePage('collection'), true)
+  assert.deepEqual(submitted.environmentIds, selected)
+  assert.deepEqual(store.environmentIds, selected)
 })
 
 test('reset cancels publishing without refreshing the new workspace', async () => {

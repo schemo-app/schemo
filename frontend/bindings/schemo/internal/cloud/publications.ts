@@ -45,8 +45,8 @@ export function Password(collection: string): $CancellablePromise<string> {
     return $Call.ByID(3213123466, collection);
 }
 
-export function Preview(workspace: string, collectionID: string, environmentID: string, options: domain$0.PublicationOptions | null): $CancellablePromise<$models.PublishPreview> {
-    return $Call.ByID(2226600157, workspace, collectionID, environmentID, options);
+export function Preview(workspace: string, collectionID: string, environmentIDs: string[] | null, options: domain$0.PublicationOptions | null): $CancellablePromise<$models.PublishPreview> {
+    return $Call.ByID(2226600157, workspace, collectionID, environmentIDs, options);
 }
 
 /**

@@ -7,7 +7,6 @@ import { PopoverRoot as Popover, PopoverTrigger } from 'reka-ui'
 import PublicationFields from './PublicationFields.vue'
 import PublicationPassword from './PublicationPassword.vue'
 import { usePublicationsStore, type Visibility } from '../../stores/publications'
-import { useEnvironmentsStore } from '../../stores/environments'
 import { useTabsStore } from '../../stores/tabs'
 import { usePlan } from '../../composables/usePlan'
 import { useToast } from '../../composables/useToast'
@@ -20,7 +19,6 @@ import { Feature } from '../../../bindings/schemo/internal/domain'
 
 const props = defineProps<{ collectionId: string }>()
 const publications = usePublicationsStore()
-const environments = useEnvironmentsStore()
 const tabs = useTabsStore()
 const toast = useToast()
 const { includes } = usePlan()
@@ -45,8 +43,7 @@ const passwordOk = computed(() => publications.visibility !== 'password' || pass
   (!publications.password && publication.value?.visibility === 'password'))
 const canPublish = computed(() => includes(Feature.FeatureShareLinks) &&!disabled.value && passwordOk.value)
 const pending = computed(() => publications.behind || publications.visibility !== publication.value?.visibility || publications.passwordChanged)
-const envLabel = computed(() => publications.environments.find(choice => choice.id === publications.environment)?.name ??
-  environments.activeEnvironment?.name ?? t('publications.envNone'))
+
 const lede = computed(() => t(publications.visibility === 'public' ? 'publications.draftPublic' :
   publications.visibility === 'password' ? 'publications.draftPassword' : 'publications.draftUnlisted'))
 const hidden = computed(() => publications.report?.hidden ?? [])
@@ -93,8 +90,8 @@ function selectAddress(event: FocusEvent) {
           <span class="pop-lede">{{ lede }}</span>
         </div>
         <div class="draft-fields">
-          <PublicationFields :visibility="publications.visibility" :environment="publications.environment"
-            :environment-label="envLabel" :environments="publications.environments" :disabled="disabled"
+          <PublicationFields :visibility="publications.visibility" :environment-ids="publications.environmentIds"
+            :environments="publications.environments" :disabled="disabled"
             @visibility="pickVisibility" @environment="publications.choose" />
           <PublicationPassword v-if="publications.visibility === 'password'" v-model="publications.password" :disabled="disabled"
             :placeholder="t('publications.passwordPlaceholder', passwordRange)" />
@@ -131,7 +128,7 @@ function selectAddress(event: FocusEvent) {
         </div>
         <div class="divider"></div>
         <div class="quick-fields">
-          <PublicationFields :visibility="publications.visibility" :environment="publications.environment" :environment-label="envLabel"
+          <PublicationFields :visibility="publications.visibility" :environment-ids="publications.environmentIds"
             :environments="publications.environments" :disabled="disabled" access-only @visibility="pickVisibility" @environment="publications.choose" />
           <div v-if="publications.visibility === 'password'" class="quick-password">
             <PublicationPassword :key="publications.collection" v-model="publications.password" tools save :disabled="disabled"

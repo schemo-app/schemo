@@ -391,10 +391,8 @@ func TestASecretWrittenIntoProseIsMasked(t *testing.T) {
 	}
 }
 
-// The addresses a page may be called from are every environment that stands somewhere, and the one
-// the page was built against stands first, because that is the address a reader is handed. An
-// environment with no address of its own is left out rather than named with nothing beside it.
-func TestThePageNamesEveryEnvironmentItMayBeCalledFrom(t *testing.T) {
+// Publishing a selected environment must not expose the workspace's other addresses.
+func TestThePagePublishesOnlyTheSelectedEnvironment(t *testing.T) {
 	publications := newPublications(newStore(t), &fakePublicationServer{}, publicationCaller{})
 	publications.environments = fakeEnvironments{state: domain.EnvState{
 		Environments: []domain.Environment{
@@ -414,10 +412,84 @@ func TestThePageNamesEveryEnvironmentItMayBeCalledFrom(t *testing.T) {
 	for _, environment := range snapshot.Environments {
 		held = append(held, environment.Name+" "+environment.BaseURL)
 	}
-	want := []string{"Staging https://staging.example.com", "Production https://api.example.com"}
+	want := []string{"Staging https://staging.example.com"}
 	if strings.Join(held, ", ") != strings.Join(want, ", ") {
 		t.Errorf("environments = %v, want %v", held, want)
 	}
+	blank, _, err := publications.Build(context.Background(), "space-1", "collection-1", "env-2", "en")
+	if err != nil || len(blank.Environments) != 1 || blank.Environments[0].Name != "Blank" || blank.Environments[0].BaseURL != "" {
+		t.Errorf("Build(blank environment) = %+v, %v, want only the selected blank environment", blank.Environments, err)
+	}
+}
+
+func TestMultiplePublicationEnvironmentsSurviveReopeningAndUpdating(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	server := &fakePublicationServer{}
+	publications := newPublications(store, server, publicationCaller{})
+	state := domain.EnvState{ActiveID: "local", Environments: []domain.Environment{
+		{ID: "local", Name: "Local", Vars: addressed("http://localhost:9000")},
+		{ID: "production", Name: "Production", Vars: addressed("https://api.example.com")},
+		{ID: "staging", Name: "Staging", Vars: addressed("https://staging.example.com")},
+	}}
+	publications.environments = fakeEnvironments{state: state}
+	request := publishing("collection-1")
+	request.EnvironmentIDs = []string{"staging", "production", "staging"}
+	if _, err := publications.publish(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := expand(server.sent[0].Document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := snapshotv1.UnmarshalSnapshot(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(environmentNames(snapshot), ","); got != "Staging,Production" {
+		t.Fatalf("published environments = %s, want Staging,Production", got)
+	}
+	if snapshot.Environment.Name != "Staging" || bytes.Contains(raw, []byte("http://localhost:9000")) {
+		t.Fatalf("published document contains an unselected environment or the wrong default: %+v", snapshot.Environments)
+	}
+	preview, err := publications.Preview(ctx, "space-1", "collection-1", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(preview.EnvironmentIDs, ",") != "staging,production" || preview.Behind {
+		t.Fatalf("reopened preview = %+v, want the saved selection without changes", preview)
+	}
+	change, err := publications.Changes(ctx, "space-1", "collection-1")
+	if err != nil || change.Behind {
+		t.Fatalf("Changes = %+v, %v, want unchanged", change, err)
+	}
+	request.EnvironmentIDs = nil
+	if _, err := publications.publish(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := expand(server.sent[1].Document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, updated) {
+		t.Fatal("updating without changing the selection changed the published document")
+	}
+	// A smaller selection replaces the previous list.
+	request.EnvironmentIDs = []string{"production"}
+	if _, err := publications.publish(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	preview, err = publications.Preview(ctx, "space-1", "collection-1", nil, nil)
+	if err != nil || strings.Join(preview.EnvironmentIDs, ",") != "production" {
+		t.Fatalf("updated preview = %+v, %v, want only Production", preview, err)
+	}
+	state.Environments[1].ID = "production-on-another-device"
+	publications.environments = fakeEnvironments{state: state}
+	preview, err = publications.Preview(ctx, "space-1", "collection-1", nil, nil)
+	if err != nil || strings.Join(preview.EnvironmentIDs, ",") != "production-on-another-device" || preview.Behind {
+		t.Fatalf("preview after environment ID change = %+v, %v, want the saved environment by name", preview, err)
+	}
+
 }
 
 // What a page says has moved at it is read off the shape the last publish put up: a request that

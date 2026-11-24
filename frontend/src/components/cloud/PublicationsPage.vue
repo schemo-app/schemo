@@ -87,7 +87,6 @@ const editable = computed(() => !!current.value?.canManage && workspaces.canWrit
 const disabled = computed(() => !editable.value || publications.busy || publications.reading || restoring.value !== 0)
 const passwordOk = computed(() => publications.visibility !== 'password' || passwordFits(publications.password) || (!publications.password && current.value?.visibility === 'password'))
 const pending = computed(() => behind.value || publications.visibility !== current.value?.visibility || publications.passwordChanged)
-const environmentLabel = computed(() => publications.environments.find(choice => choice.id === publications.environment)?.name ?? current.value?.environmentName ?? t('publications.envNone'))
 
 watch([() => current.value?.collectionId, () => current.value?.revision], async ([collectionId], [previousCollectionId]) => {
   const page = current.value
@@ -274,8 +273,8 @@ async function update() {
 
           <section class="pane-settings">
             <div class="changes-head"><span class="changes-title">{{ t('publications.settings') }}</span></div>
-            <PublicationFields :visibility="publications.visibility" :environment="publications.environment"
-              :environment-label="environmentLabel" :environments="publications.environments" :disabled="disabled"
+            <PublicationFields :visibility="publications.visibility" :environment-ids="publications.environmentIds"
+              :environments="publications.environments" :disabled="disabled"
               @visibility="publications.visibility = $event" @environment="publications.choose" />
             <PublicationPassword v-if="publications.visibility === 'password'" :key="current.collectionId" v-model="publications.password" class="password-row" tools save :disabled="disabled"
               :placeholder="t(current.visibility === 'password' ? 'publications.passwordUnavailable' : 'publications.newPassword')"

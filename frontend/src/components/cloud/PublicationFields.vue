@@ -7,66 +7,86 @@ import { t } from '../../i18n'
 import Icon from '../ui/Icon.vue'
 import DropdownMenuContent from '../ui/DropdownMenuContent.vue'
 import DropdownMenuItem from '../ui/DropdownMenuItem.vue'
-import { DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger } from 'reka-ui'
+import { DropdownMenuRoot as DropdownMenu, DropdownMenuTrigger, DropdownMenuCheckboxItem } from 'reka-ui'
 
-const { visibility, environment, environmentLabel, environments, disabled = false, accessOnly = false } = defineProps<{
+const { visibility, environmentIds, environments, disabled = false, accessOnly = false } = defineProps<{
   visibility: Visibility
-  environment: string
-  environmentLabel: string
+  environmentIds: string[] | null
   environments: Choice[]
   disabled?: boolean
   accessOnly?: boolean
 }>()
 const emit = defineEmits<{
   visibility: [value: Visibility]
-  environment: [value: string]
+  environment: [value: string[]]
 }>()
-const fields = computed(() => [
-  {
-    key: 'visibility', label: t('publications.visibility'), value: visibility,
-    labelValue: visibilityOptions().find(option => option.value === visibility)?.label,
-    options: visibilityOptions(), disabled,
-  },
-  {
-    key: 'environment', label: t('publications.environment'), value: environment,
-    labelValue: environmentLabel,
-    options: environments.map(choice => ({ value: choice.id, label: choice.name, hint: choice.baseUrl })),
-    disabled: disabled || !environments.length,
-  },
-].filter(field => !accessOnly || field.key === 'visibility'))
+const accessChoices = computed(visibilityOptions)
+const visibilityLabel = computed(() => accessChoices.value.find(option => option.value === visibility)?.label)
+const environmentLabel = computed(() => (environmentIds ?? [])
+  .map(id => environments.find(choice => choice.id === id)?.name).filter(Boolean)
+  .join(', ') || t('publications.envNone'))
 
-function pick(key: string, value: string) {
-  if (key === 'visibility') emit('visibility', value as Visibility)
-  else emit('environment', value)
+function toggleEnvironment(id: string) {
+  const selected = environmentIds ?? []
+  if (selected.includes(id)) {
+    if (selected.length > 1) emit('environment', selected.filter(value => value !== id))
+  } else {
+    emit('environment', [...selected, id])
+  }
 }
 </script>
 
 <template>
-  <div v-for="field in fields" :key="field.key" class="publication-field" :class="{ quick: accessOnly }">
+  <div class="publication-field" :class="{ quick: accessOnly }">
     <span v-if="accessOnly" class="quick-icon"><Icon name="Globe" :size="15" /></span>
-    <span class="field-label">{{ field.label }}</span>
+    <span class="field-label">{{ t('publications.visibility') }}</span>
     <DropdownMenu>
       <DropdownMenuTrigger as-child>
-        <button type="button" class="field-value" :disabled="field.disabled">
-          <span class="field-display">{{ field.labelValue }}</span>
+        <button type="button" class="field-value" :disabled="disabled">
+          <span class="field-display">{{ visibilityLabel }}</span>
           <Icon name="ChevronDown" :size="9" :stroke-width="3" class="text-text-tertiary" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent class="publication-field-menu" align="end" :side-offset="5">
         <DropdownMenuItem
-          v-for="option in field.options"
+          v-for="option in accessChoices"
           :key="option.value"
           class="field-option"
-          @select="pick(field.key, option.value)"
+          @select="emit('visibility', option.value as Visibility)"
         >
           <span class="option-mark">
-            <Icon v-if="field.value === option.value" name="Check" :size="12" :stroke-width="2.8" />
+            <Icon v-if="visibility === option.value" name="Check" :size="12" :stroke-width="2.8" />
           </span>
           <span class="option-text">
             <span>{{ option.label }}</span>
             <span class="option-hint">{{ option.hint }}</span>
           </span>
         </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+  <div v-if="!accessOnly" class="publication-field">
+    <span class="field-label">{{ t('publications.environment') }}</span>
+    <DropdownMenu>
+      <DropdownMenuTrigger as-child>
+        <button type="button" class="field-value" :disabled="disabled || !environments.length">
+          <span class="field-display">{{ environmentLabel }}</span>
+          <Icon name="ChevronDown" :size="9" :stroke-width="3" class="text-text-tertiary" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent class="publication-field-menu" align="end" :side-offset="5">
+        <DropdownMenuCheckboxItem v-for="choice in environments" :key="choice.id"
+          class="menu-item field-option" :model-value="environmentIds?.includes(choice.id) ?? false"
+          :disabled="disabled || (environmentIds?.length === 1 && environmentIds.includes(choice.id))"
+          @select.prevent="toggleEnvironment(choice.id)">
+          <span class="option-mark">
+            <Icon v-if="environmentIds?.includes(choice.id)" name="Check" :size="12" :stroke-width="2.8" />
+          </span>
+          <span class="option-text">
+            <span>{{ choice.name }}</span>
+            <span class="option-hint">{{ choice.baseUrl }}</span>
+          </span>
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   </div>

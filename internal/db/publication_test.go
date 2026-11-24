@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"schemo/internal/domain"
@@ -61,7 +62,7 @@ func TestPublicationOptionsSurviveServerRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := domain.PublicationOptions{Docs: true, Examples: false}
-	if err := store.SavePublished(ctx, "col-1", nil, nil, options); err != nil {
+	if err := store.SavePublished(ctx, "col-1", nil, nil, options, []string{"Staging", "Production"}); err != nil {
 		t.Fatal(err)
 	}
 	refreshed := page("col-1", ws)
@@ -72,6 +73,9 @@ func TestPublicationOptionsSurviveServerRefresh(t *testing.T) {
 	held, known, err := store.Publication(ctx, "col-1")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if strings.Join(held.EnvironmentNames, ",") != "Staging,Production" {
+		t.Fatalf("environment names = %v", held.EnvironmentNames)
 	}
 	if !known || held.Options == nil || *held.Options != options || held.Revision != refreshed.Revision {
 		t.Fatalf("publication after refresh = %+v, want revision %d and options %+v", held, refreshed.Revision, options)

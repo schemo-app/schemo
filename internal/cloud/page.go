@@ -63,12 +63,18 @@ func (s *Publications) Build(
 	ctx context.Context,
 	workspace, collectionID, environmentID, locale string,
 ) (snapshotv1.Snapshot, Report, error) {
-	return s.build(ctx, workspace, collectionID, environmentID, locale, nil)
+	var ids []string
+	if environmentID != "" {
+		ids = []string{environmentID}
+	}
+	return s.build(ctx, workspace, collectionID, ids, locale, nil)
 }
 
 func (s *Publications) build(
 	ctx context.Context,
-	workspace, collectionID, environmentID, locale string,
+	workspace, collectionID string,
+	environmentIDs []string,
+	locale string,
 	options *domain.PublicationOptions,
 ) (snapshotv1.Snapshot, Report, error) {
 	tree, err := s.collections.FullOf(ctx, workspace, collectionID)
@@ -79,11 +85,26 @@ func (s *Publications) build(
 	if err != nil {
 		return snapshotv1.Snapshot{}, Report{}, err
 	}
-	environment := active(state, environmentID)
+	held, published, err := s.store.Publication(ctx, collectionID)
+	if err != nil {
+		return snapshotv1.Snapshot{}, Report{}, err
+	}
+	selected := selectedEnvironments(state, held, environmentIDs)
+	if err := tooMany("environments", len(selected), maxEnvironments); err != nil {
+		return snapshotv1.Snapshot{}, Report{}, err
+	}
+	var environment domain.Environment
+	if len(selected) > 0 {
+		environment = selected[0]
+	}
 
 	// Hiding considers every variable, but only the collection's own are published: globals and
 	// environments are the reader's setup, not the collection.
-	hidden := hiddenNames(variablesOf(tree, nil), state.Globals, environment.Vars, environment.Block(collectionID))
+	vars := [][]domain.Variable{variablesOf(tree, nil), state.Globals}
+	for _, selected := range selected {
+		vars = append(vars, selected.Vars, selected.Block(collectionID))
+	}
+	hidden := hiddenNames(vars...)
 
 	walk := &page{collection: collectionID, hidden: hidden, base: baseOf(environment, collectionID)}
 	groups, err := walk.groups(tree, 0)
@@ -114,10 +135,7 @@ func (s *Publications) build(
 
 	// Mask the complete document before deriving the public sections from it.
 	description := walk.cut(title, tree.Description, maxTextRunes)
-	addresses, err := listed(state, environment, collectionID, hidden)
-	if err != nil {
-		return snapshotv1.Snapshot{}, Report{}, err
-	}
+	addresses := listed(selected, collectionID, hidden)
 
 	snapshot := snapshotv1.Snapshot{
 		Format:    snapshotv1.Format,
@@ -138,10 +156,6 @@ func (s *Publications) build(
 
 	// What has moved at the page since it last went up travels with the document, so the digest covers
 	// it: a page whose changelog grew is a page that moved, and a device can say so while offline.
-	held, published, err := s.store.Publication(ctx, collectionID)
-	if err != nil {
-		return snapshotv1.Snapshot{}, Report{}, err
-	}
 	chosen := held.PageOptions()
 	if options != nil {
 		chosen = *options
@@ -553,30 +567,46 @@ func baseOf(environment domain.Environment, collection string) string {
 	return base
 }
 
-// listed is the environments with an address, the page's own first; that is the address a reader gets.
-func listed(
-	state domain.EnvState,
-	chosen domain.Environment,
-	collection string,
-	hidden map[string]domain.HiddenReason,
-) ([]snapshotv1.Environment, error) {
-	out := make([]snapshotv1.Environment, 0, len(state.Environments))
-	for _, environment := range state.Environments {
-		stands := strings.TrimSpace(baseOf(environment, collection)) != ""
-		if stands && environment.ID == chosen.ID {
-			out = append(out, environmentOf(environment, collection, hidden))
+// selectedEnvironments restores publication choices by name because IDs are device-local.
+func selectedEnvironments(state domain.EnvState, held domain.Publication, ids []string) []domain.Environment {
+	if ids == nil {
+		for _, name := range held.EnvironmentNames {
+			if id := environmentNamed(state, name); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			environment := active(state, environmentNamed(state, held.EnvironmentName))
+			if environment.ID != "" {
+				ids = []string{environment.ID}
+			}
 		}
 	}
-	for _, environment := range state.Environments {
-		stands := strings.TrimSpace(baseOf(environment, collection)) != ""
-		if stands && environment.ID != chosen.ID {
-			out = append(out, environmentOf(environment, collection, hidden))
+	out := make([]domain.Environment, 0, len(ids))
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if environment, ok := state.Find(id); ok && !seen[id] {
+			out = append(out, environment)
+			seen[id] = true
 		}
 	}
-	if err := tooMany("environments", len(out), maxEnvironments); err != nil {
-		return nil, err
+	return out
+}
+
+func listed(selected []domain.Environment, collection string, hidden map[string]domain.HiddenReason) []snapshotv1.Environment {
+	out := make([]snapshotv1.Environment, 0, len(selected))
+	for _, environment := range selected {
+		out = append(out, environmentOf(environment, collection, hidden))
 	}
-	return out, nil
+	return out
+}
+
+func environmentNames(snapshot snapshotv1.Snapshot) []string {
+	names := make([]string, 0, len(snapshot.Environments))
+	for _, environment := range snapshot.Environments {
+		names = append(names, environment.Name)
+	}
+	return names
 }
 
 // environmentOf is one environment as a page may name it: what it is called and where it stands,

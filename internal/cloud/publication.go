@@ -159,13 +159,13 @@ type Passwords interface {
 
 // PublishRequest is what Preview returned, sent back whole so arguments cannot be transposed.
 type PublishRequest struct {
-	Options       *domain.PublicationOptions `json:"options"`
-	Workspace     string                     `json:"workspace"`
-	Collection    string                     `json:"collection"`
-	EnvironmentID string                     `json:"environmentId"`
-	Visibility    string                     `json:"visibility"`
-	Locale        string                     `json:"locale"`
-	Confirmed     bool                       `json:"confirmed"`
+	Options        *domain.PublicationOptions `json:"options"`
+	Workspace      string                     `json:"workspace"`
+	Collection     string                     `json:"collection"`
+	EnvironmentIDs []string                   `json:"environmentIds"`
+	Visibility     string                     `json:"visibility"`
+	Locale         string                     `json:"locale"`
+	Confirmed      bool                       `json:"confirmed"`
 	// Password goes to the server. Keeping it on this device is the caller's business.
 	Password string `json:"password"`
 }
@@ -218,7 +218,7 @@ func (s *Publications) publish(ctx context.Context, request PublishRequest) (dom
 		return domain.Publication{}, passwordFits(request.Password)
 	}
 	snapshot, _, err := s.build(ctx, request.Workspace, owner.Collection,
-		request.EnvironmentID, request.Locale, request.Options)
+		request.EnvironmentIDs, request.Locale, request.Options)
 	if err != nil {
 		return domain.Publication{}, err
 	}
@@ -306,7 +306,7 @@ func (s *Publications) notePublished(
 		return err
 	}
 	return s.store.SavePublished(ctx, collectionID, outline,
-		storedChanges(snapshot.Changes), optionsOf(snapshot))
+		storedChanges(snapshot.Changes), optionsOf(snapshot), environmentNames(snapshot))
 }
 
 func (s *Publications) Unpublish(ctx context.Context, collectionID string) error {
@@ -416,7 +416,7 @@ func (s *Publications) Restore(ctx context.Context, workspace, collectionID stri
 		return domain.Publication{}, err
 	}
 	options := domain.PublicationOptions{Docs: snapshot.Options.Docs, Examples: snapshot.Options.Examples}
-	if err := s.store.SavePublished(ctx, page.CollectionID, outline, storedChanges(snapshot.Changes), options); err != nil {
+	if err := s.store.SavePublished(ctx, page.CollectionID, outline, storedChanges(snapshot.Changes), options, environmentNames(snapshot)); err != nil {
 		return domain.Publication{}, err
 	}
 	return page, nil
@@ -467,8 +467,7 @@ const (
 	maxNameRunes    = 300
 	maxTextRunes    = 8000
 	maxExampleRunes = 32 << 10
-	// What a page may be called from and what it may say has moved at it. The server holds a document
-	// to the same three, and a page refused here is one that would have been refused there.
+	// Publication bounds match the server.
 	maxEnvironments = 20
 	maxReleases     = 200
 	maxReleaseItems = 200

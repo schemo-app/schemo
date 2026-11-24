@@ -14,7 +14,7 @@ const boxedUi = /\/ui\/(PopoverContent|TabsList|TabsTrigger|DropdownMenuContent|
 const emptyTabs = /\/collections\/(CollectionAuth|DescriptionEditor|CollectionOverview|CollectionRuns|CollectionScripts|CollectionVariables)\.vue$/
 
 const load = await vite({
-  'reka-ui': box + 'export const DialogTitle = Box, PopoverRoot = Box, PopoverTrigger = Box, TabsRoot = Box, DropdownMenuRoot = Box, DropdownMenuTrigger = Box;',
+  'reka-ui': box + 'export const DialogTitle = Box, PopoverRoot = Box, PopoverTrigger = Box, TabsRoot = Box, DropdownMenuRoot = Box, DropdownMenuTrigger = Box, DropdownMenuCheckboxItem = Box;',
   '/src/stores/publications.ts': 'export const usePublicationsStore = () => globalThis.publicationUi; export const hostOf = () => "share.example.com"',
   '/src/stores/workspaces.ts': 'export const useWorkspacesStore = () => ({activeId: "workspace", canWrite: true})',
   '/bindings/schemo/internal/cloud/index.ts': 'export const Publications = {Details: () => Promise.resolve(globalThis.publicationDetails)}',
@@ -49,7 +49,7 @@ function setup(page = null, changes = []) {
   Object.assign(globalThis.publicationUi, {
     open: true, collection: 'collection', publication: page, asking: '', pages: [],
     preview: {collectionId: 'collection'}, markOf: () => mark,
-    options: {docs: true, examples: true}, environments: [], environment: '',
+    options: {docs: true, examples: true}, environments: [], environmentIds: [],
     report: {hidden: [], problems: []}, visibility: page?.visibility ?? 'unlisted',
     password: '', busy: false, reading: false, behind: changes.length > 0, changes,
     edit() {}, closeShare() {}, mark() {},

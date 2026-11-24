@@ -64,7 +64,7 @@ func (f *fixture) put(pages ...domain.Publication) {
 				options = *page.Options
 			}
 			if err := f.db.SavePublished(ctx, page.CollectionID, page.Outline, page.Changes,
-				options); err != nil {
+				options, page.EnvironmentNames); err != nil {
 				f.t.Fatal(err)
 			}
 		}
@@ -306,12 +306,12 @@ func newPublications(store *fixture, server PublicationServer, session publicati
 // the first workspace and environment. A test about anything else says what differs.
 func publishing(collection string) PublishRequest {
 	return PublishRequest{
-		Workspace:     "space-1",
-		Collection:    collection,
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityUnlisted,
-		Locale:        "en",
-		Confirmed:     true,
+		Workspace:      "space-1",
+		Collection:     collection,
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityUnlisted,
+		Locale:         "en",
+		Confirmed:      true,
 	}
 }
 
@@ -322,13 +322,13 @@ func TestPublicationPasswordStaysOutOfDocumentsAndDatabaseRows(t *testing.T) {
 	publications := newPublications(store, server, publicationCaller{})
 
 	if _, err := publications.publish(context.Background(), PublishRequest{
-		Workspace:     "space-1",
-		Collection:    "collection-1",
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityPassword,
-		Locale:        "en",
-		Password:      "open-sesame",
-		Confirmed:     true,
+		Workspace:      "space-1",
+		Collection:     "collection-1",
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityPassword,
+		Locale:         "en",
+		Password:       "open-sesame",
+		Confirmed:      true,
 	}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -357,13 +357,13 @@ func TestAPasswordTooShortIsRefusedBeforeAnythingLeaves(t *testing.T) {
 	publications := newPublications(store, server, publicationCaller{})
 
 	_, err := publications.publish(context.Background(), PublishRequest{
-		Workspace:     "space-1",
-		Collection:    "collection-1",
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityPassword,
-		Locale:        "en",
-		Password:      strings.Repeat("p", domain.PasswordLeast-1),
-		Confirmed:     true,
+		Workspace:      "space-1",
+		Collection:     "collection-1",
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityPassword,
+		Locale:         "en",
+		Password:       strings.Repeat("p", domain.PasswordLeast-1),
+		Confirmed:      true,
 	})
 
 	if domain.CodeOf(err) != domain.CodePasswordInvalid {
@@ -637,12 +637,12 @@ func TestAPageThatWasJustPublishedIsNotBehind(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := publications.publish(ctx, PublishRequest{
-		Workspace:     "space-1",
-		Collection:    "collection-1",
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityUnlisted,
-		Locale:        "ru",
-		Confirmed:     true,
+		Workspace:      "space-1",
+		Collection:     "collection-1",
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityUnlisted,
+		Locale:         "ru",
+		Confirmed:      true,
 	}); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
@@ -714,7 +714,7 @@ func TestThePopoverOpensOnThePagesOwnEnvironment(t *testing.T) {
 	both.ActiveID = "env-2"
 	publications.environments = fakeEnvironments{state: both}
 
-	preview, err := publications.Preview(ctx, "space-1", "collection-1", "", nil)
+	preview, err := publications.Preview(ctx, "space-1", "collection-1", nil, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -755,7 +755,7 @@ func TestThePopoverOpensWithoutAskingTheServer(t *testing.T) {
 	server := &fakePublicationServer{err: errors.New("the network is not here")}
 	publications := newPublications(store, server, publicationCaller{})
 
-	preview, err := publications.Preview(context.Background(), "space-1", "collection-1", "env-1", nil)
+	preview, err := publications.Preview(context.Background(), "space-1", "collection-1", []string{"env-1"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -788,7 +788,7 @@ func TestThePopoverOpensOnWhatAPublishWouldRecord(t *testing.T) {
 	moved.Items[0].Name = "List all products"
 	publications.collections = fakeCollections{tree: moved}
 
-	preview, err := publications.Preview(ctx, "space-1", "collection-1", "env-1", nil)
+	preview, err := publications.Preview(ctx, "space-1", "collection-1", []string{"env-1"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -945,17 +945,17 @@ func TestPublicationOptionsFilterTheDocumentAndPersistAfterRefresh(t *testing.T)
 	publications.collections = fakeCollections{tree: tree}
 	options := domain.PublicationOptions{Docs: false, Examples: false}
 	if _, err := publications.publish(context.Background(), PublishRequest{
-		Workspace:     "space-1",
-		Collection:    "collection-1",
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityUnlisted,
-		Locale:        "en",
-		Confirmed:     true,
-		Options:       &options,
+		Workspace:      "space-1",
+		Collection:     "collection-1",
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityUnlisted,
+		Locale:         "en",
+		Confirmed:      true,
+		Options:        &options,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	preview, err := publications.Preview(context.Background(), "space-1", "collection-1", "env-1", nil)
+	preview, err := publications.Preview(context.Background(), "space-1", "collection-1", []string{"env-1"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1122,13 +1122,13 @@ func TestHiddenFolderDescriptionsDoNotChangeThePublication(t *testing.T) {
 	publications.collections = fakeCollections{tree: tree}
 	options := domain.PublicationOptions{Docs: false, Examples: true}
 	if _, err := publications.publish(context.Background(), PublishRequest{
-		Workspace:     "space-1",
-		Collection:    tree.ID,
-		EnvironmentID: "env-1",
-		Visibility:    domain.VisibilityUnlisted,
-		Locale:        "en",
-		Confirmed:     true,
-		Options:       &options,
+		Workspace:      "space-1",
+		Collection:     tree.ID,
+		EnvironmentIDs: []string{"env-1"},
+		Visibility:     domain.VisibilityUnlisted,
+		Locale:         "en",
+		Confirmed:      true,
+		Options:        &options,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -1343,7 +1343,7 @@ func TestAFoldersPopoverIsThePagesWithTheFoldersChanges(t *testing.T) {
 	moved.Children[0].Items[0].Name = "List every order"
 	publications.collections = fakeCollections{tree: moved}
 
-	folder, err := publications.Preview(ctx, "space-1", "folder-1", "env-1", nil)
+	folder, err := publications.Preview(ctx, "space-1", "folder-1", []string{"env-1"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}
@@ -1358,7 +1358,7 @@ func TestAFoldersPopoverIsThePagesWithTheFoldersChanges(t *testing.T) {
 		t.Errorf("changes = %+v, want the folder's own request", folder.Changes)
 	}
 
-	page, err := publications.Preview(ctx, "space-1", "collection-1", "env-1", nil)
+	page, err := publications.Preview(ctx, "space-1", "collection-1", []string{"env-1"}, nil)
 	if err != nil {
 		t.Fatalf("Preview: %v", err)
 	}

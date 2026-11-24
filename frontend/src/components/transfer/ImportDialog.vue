@@ -153,40 +153,28 @@ const primaryLabel = computed(() => {
     : t('transfer.doImport')
 })
 
-// Every open starts over; the workspaces are read as well, because the list counts them before the
-// workspace screen asks.
+// Reset before consuming a link, so opening the dialog cannot discard its preview.
 watch(
-  () => transfer.importOpen,
-  (open) => {
-    pause.stop()
-    forgetPreview()
-    if (!open) return
-    source.value = null
-    via.value = 'file'
-    url.value = ''
-    curl.value = ''
-    // The target may be a collection deleted since the tab opened.
-    target.value = places.value.some((place) => place.id === transfer.importParent)
-      ? transfer.importParent
-      : ''
-    workspaceId.value = ''
-    picked.value = {}
-    void transfer.loadWorkspaces()
-
-    // A link from outside opened this dialog about one page: it is read at once, because the
-    // person who followed the link has already said which collection they want.
-    if (transfer.linkedPage) openLinked(transfer.linkedPage)
+  [() => transfer.importOpen, () => transfer.linkedPage],
+  ([open, page], previous) => {
+    if (!open || !previous?.[0]) {
+      pause.stop()
+      forgetPreview()
+      if (!open) return
+      source.value = null
+      via.value = 'file'
+      url.value = ''
+      curl.value = ''
+      target.value = places.value.some((place) => place.id === transfer.importParent)
+        ? transfer.importParent
+        : ''
+      workspaceId.value = ''
+      picked.value = {}
+      void transfer.loadWorkspaces()
+    }
+    if (page) openLinked(page)
   },
   { immediate: true }
-)
-
-// A link that arrives while the dialog is already open is the same request arriving late, and the
-// dialog is still where it is read.
-watch(
-  () => transfer.linkedPage,
-  (page) => {
-    if (page) openLinked(page)
-  }
 )
 
 function forgetPreview() {

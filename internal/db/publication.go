@@ -101,6 +101,7 @@ func (s *Store) SavePublished(
 	outline []domain.OutlineItem,
 	changes []domain.PageRelease,
 	options domain.PublicationOptions,
+	environmentNames []string,
 ) error {
 	encodedOutline, err := json.Marshal(outline)
 	if err != nil {
@@ -111,7 +112,7 @@ func (s *Store) SavePublished(
 		return fmt.Errorf("writing the changes at publication %s: %w", collectionID, err)
 	}
 
-	encodedOptions, err := json.Marshal(options)
+	encodedOptions, err := json.Marshal(publicationSettings{PublicationOptions: options, EnvironmentNames: environmentNames})
 	if err != nil {
 		return fmt.Errorf("writing publication options: %w", err)
 	}
@@ -134,12 +135,18 @@ func (s *Store) ForgetPublication(ctx context.Context, collectionID string) erro
 	return nil
 }
 
+type publicationSettings struct {
+	domain.PublicationOptions
+	EnvironmentNames []string `json:"environmentNames"`
+}
+
 // scannedPublication reads one row of publicationColumns. The workspace is read back with the rest
 // because a row read here is written again: a takedown is the same row with two fields changed.
 func scannedPublication(row rowScanner) (domain.Publication, error) {
 	var (
 		held                      domain.Publication
 		outline, changes, options string
+		settings                  publicationSettings
 	)
 	err := row.Scan(&held.CollectionID, &held.WorkspaceID, &held.ID, &held.Slug, &held.URL,
 		&held.Visibility, &held.Status, &held.Revision, &held.ContentHash, &held.EnvironmentName,
@@ -157,7 +164,7 @@ func scannedPublication(row rowScanner) (domain.Publication, error) {
 	}{
 		{outline, &held.Outline, "the outline"},
 		{changes, &held.Changes, "the changes"},
-		{options, &held.Options, "the display options"},
+		{options, &settings, "the publication settings"},
 	} {
 		if part.raw == "" {
 			continue
@@ -166,6 +173,10 @@ func scannedPublication(row rowScanner) (domain.Publication, error) {
 			return domain.Publication{}, fmt.Errorf("reading %s of publication %s: %w",
 				part.what, held.CollectionID, err)
 		}
+	}
+	if options != "" {
+		held.Options = &settings.PublicationOptions
+		held.EnvironmentNames = settings.EnvironmentNames
 	}
 	return held, nil
 }

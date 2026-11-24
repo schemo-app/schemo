@@ -12,7 +12,6 @@ import { t } from '../i18n'
 import { isVisibility } from '../lib/publicationText'
 import { findCollection } from '../lib/collectionTree'
 import { callOrToast, runOrToast } from '../lib/calls'
-import { useEnvironmentsStore } from './environments'
 import { useWorkspacesStore } from './workspaces'
 import { useCollectionsStore } from './collections'
 import { useWorkspaceSnapshot } from '../composables/useWorkspaceSnapshot'
@@ -56,7 +55,7 @@ export const usePublicationsStore = defineStore('publications', () => {
   // The popover: one at a time, on the collection it was opened from, holding what Preview said.
   const open = ref(false)
   const collection = ref('')
-  const environment = ref('')
+  const environmentIds = ref<string[] | null>(null)
   const visibility = ref<Visibility>('unlisted')
   const options = ref<PublicationOptions | null>(null)
 
@@ -155,7 +154,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     if (!collection.value) return
     const signal = previewSnapshot.signal()
     const answer = await callOrToast(
-      previewSnapshot.take(Publications.Preview(workspace(), collection.value, environment.value, adopt ? null : options.value)),
+      previewSnapshot.take(Publications.Preview(workspace(), collection.value, environmentIds.value, adopt ? null : options.value)),
       'publications.readFailed'
     )
     if (!answer || signal.aborted || preview.value !== answer) return
@@ -175,21 +174,14 @@ export const usePublicationsStore = defineStore('publications', () => {
       }
     }
     if (signal.aborted || preview.value !== answer) return
-    // The page's own environment comes first; one this device no longer has cannot be named.
-    const known = answer.environments ?? []
-    if (known.length > 0 && !known.some((choice) => choice.id === environment.value)) {
-      const carried = known.find((choice) => choice.name === answer.publication?.environmentName)
-      environment.value =
-        carried?.id ?? known.find((choice) => choice.id === useEnvironmentsStore().activeId)?.id ?? known[0].id
-    }
+    environmentIds.value = answer.environmentIds
   }
 
   function edit(collectionID: string) {
     closeShare()
     collection.value = collectionID
-    // The empty id means the environment the page went out with, or the one the app works in when
-    // nobody has published it: Go answers which, so the popover opens on the page's own changes.
-    environment.value = ''
+    // Go restores the saved selection, or the active environment for a new publication.
+    environmentIds.value = null
     // The access the mark holds is the one the page has, and reading it here is what keeps the
     // popover from offering "By link" for a moment to a page that is public.
     const known = marks.value[collectionID]?.page?.visibility ?? pages.value.find(page => page.collectionId === collectionID)?.visibility
@@ -219,8 +211,8 @@ export const usePublicationsStore = defineStore('publications', () => {
     options.value = null
   }
 
-  async function choose(environmentID: string): Promise<void> {
-    environment.value = environmentID
+  async function choose(ids: string[]): Promise<void> {
+    environmentIds.value = ids
     await readPreview()
   }
 
@@ -242,7 +234,7 @@ export const usePublicationsStore = defineStore('publications', () => {
         Publications.Publish({
           workspace: workspace(),
           collection: collection.value,
-          environmentId: environment.value,
+          environmentIds: environmentIds.value,
           visibility: visibility.value,
           locale: locale.value,
           confirmed,
@@ -280,11 +272,9 @@ export const usePublicationsStore = defineStore('publications', () => {
     const signal = AbortSignal.any([pageSnapshot.signal(), previewSnapshot.signal()])
     collection.value = collectionID
     visibility.value = isVisibility(held.visibility) ? held.visibility : 'unlisted'
-    environment.value = ''
+    environmentIds.value = null
     await readPreview()
     if (signal.aborted) return false
-    const choices = preview.value?.environments ?? []
-    environment.value = choices.find((choice) => choice.name === held.environmentName)?.id ?? ''
     return publish(true)
   }
 
@@ -334,7 +324,7 @@ export const usePublicationsStore = defineStore('publications', () => {
     selectedCollection,
     open,
     collection,
-    environment,
+    environmentIds,
     visibility,
     options,
     password,

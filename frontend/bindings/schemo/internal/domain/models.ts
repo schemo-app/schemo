@@ -1180,6 +1180,7 @@ export interface Publication {
      */
     "contentHash"?: string;
     "environmentName"?: string;
+    "environmentNames"?: string[] | null;
     "updatedAt"?: number;
 
     /**

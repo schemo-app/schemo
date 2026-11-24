@@ -83,6 +83,7 @@ export interface Problem {
 }
 
 export interface PublishPreview {
+    "environmentIds": string[] | null;
     "options": domain$0.PublicationOptions;
     "collectionId": string;
     "publication"?: domain$0.Publication | null;
@@ -105,7 +106,7 @@ export interface PublishRequest {
     "options": domain$0.PublicationOptions | null;
     "workspace": string;
     "collection": string;
-    "environmentId": string;
+    "environmentIds": string[] | null;
     "visibility": string;
     "locale": string;
     "confirmed": boolean;

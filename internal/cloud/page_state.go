@@ -71,13 +71,14 @@ type Choice struct {
 }
 
 type PublishPreview struct {
-	Options      domain.PublicationOptions `json:"options"`
-	Collection   string                    `json:"collectionId"`
-	Publication  *domain.Publication       `json:"publication,omitempty"`
-	Behind       bool                      `json:"behind"`
-	Changes      []domain.PageItem         `json:"changes,omitempty"`
-	Environments []Choice                  `json:"environments"`
-	Report       Report                    `json:"report"`
+	EnvironmentIDs []string                  `json:"environmentIds"`
+	Options        domain.PublicationOptions `json:"options"`
+	Collection     string                    `json:"collectionId"`
+	Publication    *domain.Publication       `json:"publication,omitempty"`
+	Behind         bool                      `json:"behind"`
+	Changes        []domain.PageItem         `json:"changes,omitempty"`
+	Environments   []Choice                  `json:"environments"`
+	Report         Report                    `json:"report"`
 	// InheritedFrom names the folder whose page contains this collection, and is empty for a
 	// collection that holds a page of its own.
 	InheritedFrom string `json:"inheritedFrom,omitempty"`
@@ -94,7 +95,8 @@ type Change struct {
 
 func (s *Publications) Preview(
 	ctx context.Context,
-	workspace, collectionID, environmentID string,
+	workspace, collectionID string,
+	environmentIDs []string,
 	options *domain.PublicationOptions,
 ) (PublishPreview, error) {
 	owner, err := s.owningPageOf(ctx, workspace, collectionID)
@@ -105,12 +107,7 @@ func (s *Publications) Preview(
 	if err != nil {
 		return PublishPreview{}, err
 	}
-	// Saying nothing about the environment means the one the page went out with: the popover opens
-	// on the page it is about, and a person who has not touched the field is asking for no change.
-	if environmentID == "" {
-		environmentID = environmentNamed(state, owner.Page.EnvironmentName)
-	}
-	snapshot, report, err := s.build(ctx, workspace, owner.Collection, environmentID, "", options)
+	snapshot, report, err := s.build(ctx, workspace, owner.Collection, environmentIDs, "", options)
 	if err != nil {
 		return PublishPreview{}, err
 	}
@@ -119,11 +116,17 @@ func (s *Publications) Preview(
 		return PublishPreview{}, err
 	}
 
+	selected := selectedEnvironments(state, owner.Page, environmentIDs)
+	ids := make([]string, 0, len(selected))
+	for _, environment := range selected {
+		ids = append(ids, environment.ID)
+	}
 	out := PublishPreview{
-		Options:      optionsOf(snapshot),
-		Collection:   owner.Collection,
-		Environments: environmentChoices(state, owner.Collection),
-		Report:       report,
+		EnvironmentIDs: ids,
+		Options:        optionsOf(snapshot),
+		Collection:     owner.Collection,
+		Environments:   environmentChoices(state, owner.Collection),
+		Report:         report,
 	}
 	if owner.Held {
 		out.Publication = &owner.Page
@@ -151,12 +154,9 @@ func (s *Publications) Changes(
 	if !owner.Held {
 		return Change{}, nil
 	}
-	state, err := s.environments.State(ctx)
-	if err != nil {
-		return Change{}, err
-	}
+
 	snapshot, _, err := s.Build(ctx, workspace, owner.Collection,
-		environmentNamed(state, owner.Page.EnvironmentName), "")
+		"", "")
 	if err != nil {
 		return Change{}, err
 	}
