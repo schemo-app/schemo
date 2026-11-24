@@ -51,7 +51,7 @@ jobs:
         include:
           - os: windows-2025
             platform: windows
-          - os: macos-15
+          - os: macos-15-intel
             platform: darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
