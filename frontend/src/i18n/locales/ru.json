@@ -1843,7 +1843,9 @@
       "cloud": "Облако",
       "custom": "Свой сервер",
       "addressHint": "https://schemo.company.com",
-      "check": "Проверить"
+      "check": "Проверить",
+      "checking": "Проверяю…",
+      "checkOk": "Сервер доступен"
     },
     "panel": "Личный кабинет",
     "otherDevices": "Другие устройства",

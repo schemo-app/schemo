@@ -1843,7 +1843,9 @@
       "cloud": "Schemo Cloud",
       "custom": "Custom server",
       "addressHint": "https://schemo.company.com",
-      "check": "Check"
+      "check": "Check",
+      "checking": "Checking…",
+      "checkOk": "Server available"
     },
     "panel": "Account panel",
     "otherDevices": "Other devices",

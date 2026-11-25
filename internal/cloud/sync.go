@@ -215,14 +215,21 @@ func (s *Sync) Status(ctx context.Context) (SyncStatus, error) {
 	if err != nil {
 		return SyncStatus{}, err
 	}
-	counts, err := s.store.QueueCounts(ctx)
+	queued, err := s.store.QueueCounts(ctx)
 	if err != nil {
 		return SyncStatus{}, err
 	}
 
+	// Another account's hidden workspaces keep their queue for its next sign-in; this one cannot send it.
+	counts := make(map[string]domain.SyncCounts, len(workspaces))
 	waiting := map[string][]domain.QueuedChange{}
 	for _, workspace := range workspaces {
-		if counts[workspace.ID].Pending+counts[workspace.ID].Failed+counts[workspace.ID].Parked == 0 {
+		held, ok := queued[workspace.ID]
+		if !ok {
+			continue
+		}
+		counts[workspace.ID] = held
+		if held.Pending+held.Failed+held.Parked == 0 {
 			continue
 		}
 		entries, err := s.store.Waiting(ctx, workspace.ID)

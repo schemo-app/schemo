@@ -161,10 +161,15 @@ async function setServer(server: string): Promise<boolean> {
   return true
 }
 
-/** Checks that the address is a server this app can sign in to; nothing is stored. */
-async function checkAddress(server: string): Promise<void> {
+/** Checks the address is a server this app can sign in to, storing nothing; answers the refusal or ''. */
+async function checkAddress(server: string): Promise<string> {
   failure.value = ''
-  await attempt(Account.CheckServer(server))
+  try {
+    await Account.CheckServer(server)
+    return ''
+  } catch (error) {
+    return describeFailure(error)
+  }
 }
 
 /** Opens the account panel in the browser. Go resolves the address: the stored row keeps "" for the default server. */

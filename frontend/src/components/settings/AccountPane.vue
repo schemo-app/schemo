@@ -85,12 +85,20 @@ function pickServer(value: string): void {
 // The check is the discovery document's answer, worded by the catalogue when it is not there; the
 // address itself is kept by the sign-in, not by the check.
 const probing = ref(false)
+// The answer is about the address it was asked for, so editing the address clears it.
+const checked = ref<{ ok: boolean; text: string } | null>(null)
+
+watch(chosen, () => {
+  checked.value = null
+})
 
 async function probe(): Promise<void> {
-  if (probing.value) return
+  if (probing.value || signingIn.value || !chosen.value.trim()) return
   probing.value = true
+  checked.value = null
   try {
-    await checkAddress(chosen.value)
+    const refusal = await checkAddress(chosen.value)
+    checked.value = { ok: refusal === '', text: refusal || t('account.out.checkOk') }
   } finally {
     probing.value = false
   }
@@ -197,15 +205,27 @@ watch(signOutOpen, (leaving) => {
           />
         </SettingsRow>
         <div v-if="custom" class="card-block addr">
-          <input
-            v-model="chosen"
-            class="addr-field"
-            spellcheck="false"
-            :placeholder="t('account.out.addressHint')"
-          />
-          <Button variant="outline" size="field" :disabled="probing || signingIn" @click="probe()">
-            {{ t('account.out.check') }}
-          </Button>
+          <div class="addr-row">
+            <input
+              v-model="chosen"
+              class="addr-field"
+              spellcheck="false"
+              :placeholder="t('account.out.addressHint')"
+              @keydown.enter="probe()"
+            />
+            <Button
+              variant="outline"
+              size="field"
+              :disabled="probing || signingIn || !chosen.trim()"
+              @click="probe()"
+            >
+              {{ probing ? t('account.out.checking') : t('account.out.check') }}
+            </Button>
+          </div>
+          <span v-if="checked" class="answer" :class="checked.ok ? 'ok' : 'bad'">
+            <span class="answer-dot"></span>
+            <span class="answer-text">{{ checked.text }}</span>
+          </span>
         </div>
       </SettingsSection>
     </template>
@@ -364,8 +384,36 @@ watch(signOutOpen, (leaving) => {
 }
 
 .addr {
-  @apply flex items-center gap-2;
+  @apply flex flex-col;
+  gap: 0.5rem;
   padding: 0.625rem 1rem 0.75rem;
+}
+
+.addr-row {
+  @apply flex items-center gap-2;
+}
+
+.answer {
+  @apply inline-flex items-center gap-2 text-13 min-w-0;
+}
+
+.answer.ok {
+  color: var(--green-text);
+}
+
+.answer.bad {
+  color: var(--red-text);
+}
+
+.answer-dot {
+  @apply flex-none rounded-full;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: currentColor;
+}
+
+.answer-text {
+  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
 }
 
 .addr-field {

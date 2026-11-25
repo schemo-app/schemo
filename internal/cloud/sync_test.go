@@ -58,6 +58,7 @@ type fakeStore struct {
 	historyPages []appliedHistory
 	snapshots    []appliedSnapshot
 	retry        time.Duration
+	queued       map[string]domain.SyncCounts
 	released     int
 	ensured      bool
 	claimed      bool
@@ -373,7 +374,10 @@ func (f *fakeStore) RecordRound(
 }
 
 func (f *fakeStore) QueueCounts(context.Context) (map[string]domain.SyncCounts, error) {
-	return map[string]domain.SyncCounts{}, nil
+	if f.queued == nil {
+		return map[string]domain.SyncCounts{}, nil
+	}
+	return f.queued, nil
 }
 
 func (f *fakeStore) Waiting(context.Context, string) ([]domain.QueuedChange, error) {
@@ -1670,6 +1674,26 @@ func TestAWorkspaceOfAnotherAccountIsNotDeleted(t *testing.T) {
 		if workspace.ID == workspaceA && workspace.Gone {
 			t.Errorf("workspaces = %+v, want another account's workspace not marked gone", status.Workspaces)
 		}
+	}
+}
+
+// What another account's hidden workspace owes is not counted as waiting: no round of this account
+// sends it, so a status line saying it waits would never change.
+func TestAnotherAccountsQueueIsNotCountedAsWaiting(t *testing.T) {
+	engine, store, _, _ := newEngine()
+	store.work = accountOf()
+	store.workspaces = append(store.workspaces, domain.SyncWorkspace{
+		ID: "space-before", Name: "Before", RemoteID: "remote-before", State: domain.SyncSynced,
+		RemoteAccount: domain.AccountKey("http://localhost:8080", "me@acme.com"),
+	})
+	store.queued = map[string]domain.SyncCounts{workspaceA: {Pending: 2}, "space-before": {Pending: 7, Failed: 1}}
+
+	status, err := engine.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if _, counted := status.Counts["space-before"]; counted || status.Counts[workspaceA].Pending != 2 {
+		t.Errorf("counts = %+v, want only this account's workspace", status.Counts)
 	}
 }
 
