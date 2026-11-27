@@ -43,7 +43,12 @@ func (t *netTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func (p transportPolicy) RoundTrip(req *http.Request) (*http.Response, error) {
-	return p.forHost(req.URL.Hostname()).RoundTrip(req)
+	transport := p.forHost(req.URL.Hostname())
+	res, err := transport.RoundTrip(req)
+	if err != nil {
+		return nil, explained(err, transport, req)
+	}
+	return res, nil
 }
 
 func (p transportPolicy) forHost(host string) *http.Transport {

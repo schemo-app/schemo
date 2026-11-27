@@ -94,7 +94,7 @@ func probeTargetOf(proxy domain.ProxySettings) probeTarget {
 	}
 	return probeTarget{
 		protocol: proxy.Protocol,
-		address:  proxyProbeAddress(proxy.Host, strconv.Itoa(proxy.Port), proxy.Protocol),
+		address:  proxy.Address(),
 		user:     proxy.User,
 		password: proxy.Password,
 	}
@@ -113,7 +113,7 @@ func parseProbeTarget(raw string) probeTarget {
 		return probeTarget{}
 	}
 	protocol := protocolOf(parsed.Scheme)
-	out := probeTarget{protocol: protocol, address: proxyProbeAddress(parsed.Hostname(), parsed.Port(), protocol)}
+	out := probeTarget{protocol: protocol, address: environmentAddress(parsed.Hostname(), parsed.Port(), protocol)}
 	if parsed.User != nil {
 		out.user = parsed.User.Username()
 		out.password, _ = parsed.User.Password()
@@ -121,7 +121,9 @@ func parseProbeTarget(raw string) probeTarget {
 	return out
 }
 
-func proxyProbeAddress(host, port string, protocol domain.ProxyProtocol) string {
+// environmentAddress is where net/http dials a proxy the environment names, so a missing port is
+// net/http's and not the manual proxy's.
+func environmentAddress(host, port string, protocol domain.ProxyProtocol) string {
 	if host == "" {
 		return ""
 	}
@@ -182,6 +184,9 @@ func probeTunnel(
 	}
 	response, err := http.ReadResponse(bufio.NewReader(io.LimitReader(conn, http.DefaultMaxHeaderBytes)), request)
 	if err != nil {
+		if target.protocol == domain.ProxyHTTP && answeredInTLS(err) {
+			return domain.ProxyProbe{Millis: elapsed(start), NeedsTLS: true}
+		}
 		return domain.ProxyProbe{Millis: elapsed(start), Error: err.Error()}
 	}
 	// The raw connection is closed on return. Draining the body could block on the open tunnel.

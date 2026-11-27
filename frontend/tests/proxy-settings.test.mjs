@@ -13,7 +13,8 @@ const load = await vite({
   '/bindings/schemo/internal/domain/index.ts': `
     export const ProxyMode = {ProxyManual:'manual', ProxySystem:'system', ProxyOff:'off'};
     export const ProxyProtocol = {ProxyHTTP:'http', ProxyHTTPS:'https', ProxySOCKS5:'socks5'};`,
-  '/bindings/schemo/internal/workspace/index.ts': 'export const Settings = {ProxyEnvironment:async()=>[]}',
+  '/bindings/schemo/internal/workspace/index.ts':
+    'export const Settings = {ProxyEnvironment:async()=>[], TestProxy:()=>globalThis.testProxy()}',
   '/src/composables/useSettings.ts': `
     export const useSetting = () => globalThis.proxySettings.proxy;
     export const useSettings = () => globalThis.proxySettings;`,
@@ -28,6 +29,9 @@ const load = await vite({
       export default {props:['modelValue'], emits:['update:modelValue'], setup(props,{attrs,emit}) {
         return () => h('input', {...attrs,value:props.modelValue,onInput:event=>emit('update:modelValue',event.target.value)})
       }};`
+    if (path.endsWith('/ui/Button.vue')) return `
+      import {h} from 'vue';
+      export default {setup(props,{slots}) { return () => h('button', slots.default?.()) }};`
     if (path.endsWith('.vue')) return 'export default {render(){return null}}'
   },
 })
@@ -67,10 +71,14 @@ function mount(context, credentials = {}) {
   app.mount(root)
   context.after(()=>app.unmount())
   const all = node => [node,...node.children.flatMap(all)]
+  const says = (node, text) => all(node).some(child=>child.text === text)
   return {
     proxy, writes,
     toggle:()=>all(root).find(node=>node.props.role === 'switch'),
     credentials:()=>all(root).find(node=>node.props.class === 'pair'),
+    runTest:()=>all(root).find(node=>node.type === 'button' && says(node, 'settings.proxy.probeRun')).props.onClick(),
+    pickProtocol:value=>all(root).find(node=>node.type === 'select').props.onChange({target:{value}}),
+    answer:()=>all(root).find(node=>node.props.class === 'answer-text')?.text,
   }
 }
 
@@ -89,6 +97,31 @@ test('proxy authentication can be enabled to show credentials and disabled again
   assert.equal(view.toggle().props['aria-checked'], false)
   assert.equal(view.credentials(), undefined)
   assert.deepEqual(view.writes, [{proxy:{user:'',password:''}}])
+})
+
+test('the answer of a proxy test goes when the settings it was asked with change', async context => {
+  globalThis.testProxy = async () => ({ok:false, needsTls:true})
+  const view = mount(context)
+  await settle()
+  view.runTest()
+  await settle()
+  assert.equal(view.answer(), 'settings.proxy.probeTls')
+  view.pickProtocol('https')
+  await settle()
+  assert.equal(view.answer(), undefined)
+})
+
+test('an answer that arrives after the settings changed is not shown', async context => {
+  let arrive
+  globalThis.testProxy = () => new Promise(resolve => { arrive = resolve })
+  const view = mount(context)
+  await settle()
+  view.runTest()
+  view.pickProtocol('https')
+  await settle()
+  arrive({ok:false, needsTls:true})
+  await settle()
+  assert.equal(view.answer(), undefined)
 })
 
 test('disabling saved proxy authentication clears the username and password', async context => {

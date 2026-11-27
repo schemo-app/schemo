@@ -896,6 +896,77 @@ func TestProbeSaysWhenNothingAnswers(t *testing.T) {
 	}
 }
 
+func TestAManualProxyWithoutAPortUsesTheDefaultOfItsProtocol(t *testing.T) {
+	for protocol, want := range map[domain.ProxyProtocol]string{
+		domain.ProxyHTTP:   "proxy.test:3128",
+		domain.ProxyHTTPS:  "proxy.test:3128",
+		domain.ProxySOCKS5: "proxy.test:1080",
+	} {
+		held := domain.ProxySettings{Mode: domain.ProxyManual, Protocol: protocol, Host: "proxy.test"}
+		if got := probeTargetOf(held).address; got != want {
+			t.Errorf("the %s probe dials %q, want %q", protocol, got, want)
+		}
+		// SOCKS5 is a dialer and not a proxy URL: it is given the address as it is.
+		if protocol == domain.ProxySOCKS5 {
+			if got := held.Address(); got != want {
+				t.Errorf("%s requests dial %q, want %q", protocol, got, want)
+			}
+			continue
+		}
+		through, err := proxyOf(held)(httptest.NewRequest(http.MethodGet, "https://example.com/", nil))
+		if err != nil || through == nil || through.Host != want {
+			t.Errorf("%s requests go to %v (%v), want %q", protocol, through, err, want)
+		}
+	}
+}
+
+// tlsOnlyServer answers a client that skips the handshake with the alert a TLS port of Squid sends.
+func tlsOnlyServer(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listening: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				// The request is read first: closing over unread bytes would reset the connection.
+				if _, err := http.ReadRequest(bufio.NewReader(conn)); err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte{0x15, 0x03, 0x03, 0x00, 0x02, 0x02, 0x16})
+			}()
+		}
+	}()
+	return listener.Addr().String()
+}
+
+func TestAPlainHTTPProxyThatTakesTLSIsNamedAsTheCause(t *testing.T) {
+	address := tlsOnlyServer(t)
+	engine := newTestEngine(t, EngineConfig{Proxy: manualProxy(t, "http://"+address)})
+
+	if probe := engine.Probe(t.Context(), ""); !probe.NeedsTLS || probe.OK || probe.Error != "" {
+		t.Errorf("probe = %+v, want the proxy asking for TLS", probe)
+	}
+	proxied := send(engine, http.MethodGet, "https://api.example.com/", nil, "")
+	if !strings.Contains(proxied.Error, "proxy "+address+" expects TLS") {
+		t.Errorf("error = %q, want the proxy named as the cause", proxied.Error)
+	}
+
+	// The same bytes from a server reached directly are not a proxy's doing.
+	direct := send(newTestEngine(t, EngineConfig{Proxy: domain.ProxySettings{Mode: domain.ProxyOff}}),
+		http.MethodGet, "http://"+address+"/", nil, "")
+	if !strings.Contains(direct.Error, "malformed HTTP response") || strings.Contains(direct.Error, "expects TLS") {
+		t.Errorf("direct error = %q, want it left as it was", direct.Error)
+	}
+}
+
 func TestProxyEnvironmentNamesTheVariables(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://proxy.corp:3128")
 

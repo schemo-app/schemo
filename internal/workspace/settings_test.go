@@ -245,6 +245,18 @@ func TestTheProxyPasswordIsKeptButNeverShown(t *testing.T) {
 	}
 }
 
+func TestTheDefaultProxyPortFollowsTheProtocol(t *testing.T) {
+	f := newFixture(t)
+	got := f.mustSave(t, `{"proxy": {"mode": "manual", "host": "proxy.test", "protocol": "socks5"}}`)
+	if got.Proxy.DefaultPort != 1080 || got.Proxy.Port != 0 {
+		t.Errorf("socks5 = %+v, want 1080 offered and no port typed", got.Proxy)
+	}
+	got = f.mustSave(t, `{"proxy": {"protocol": "https", "defaultPort": 1}}`)
+	if got.Proxy.DefaultPort != 3128 {
+		t.Errorf("https offers %d, want 3128 whatever a patch says", got.Proxy.DefaultPort)
+	}
+}
+
 func TestTurningTheMCPOnMintsATokenOnlyGoKnows(t *testing.T) {
 	f := newFixture(t)
 	got := f.mustSave(t, `{"mcp": {"enabled": true, "token": "chosen-by-the-window"}}`)

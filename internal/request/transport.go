@@ -185,6 +185,25 @@ func proxyURL(proxy domain.ProxySettings) string {
 	return held.String()
 }
 
+// answeredInTLS says an HTTP answer was in fact a TLS alert, which a server that takes only TLS
+// sends to a client that skipped the handshake. net/http has no error type for it, only the bytes
+// its message quotes.
+func answeredInTLS(err error) bool {
+	return strings.Contains(err.Error(), `malformed HTTP response "\x15\x03`)
+}
+
+// explained names the cause where net/http's own words do not: a plain HTTP proxy that takes TLS.
+func explained(err error, transport *http.Transport, req *http.Request) error {
+	if transport.Proxy == nil || !answeredInTLS(err) {
+		return err
+	}
+	via, failed := transport.Proxy(req)
+	if failed != nil || via == nil || via.Scheme != "http" {
+		return err
+	}
+	return fmt.Errorf("proxy %s expects TLS, use https for it: %w", via.Host, err)
+}
+
 func tlsConfigFor(cfg EngineConfig) *tls.Config {
 	if !cfg.SkipTLSVerify && len(cfg.Roots) == 0 {
 		return nil

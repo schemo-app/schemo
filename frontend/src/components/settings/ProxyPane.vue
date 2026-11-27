@@ -141,11 +141,19 @@ const probing = ref(false)
 const probe = ref<ProxyProbe | null>(null)
 const destination = ref('')
 
+// An answer belongs to the settings it was asked with: it goes when they change, and one that
+// arrives after that is dropped.
+watch(proxy, () => {
+  probe.value = null
+})
+
 async function test() {
   probing.value = true
   probe.value = null
+  const asked = proxy.value
   await withNotice(async () => {
-    probe.value = await Settings.TestProxy(destination.value.trim())
+    const answer = await Settings.TestProxy(destination.value.trim())
+    if (proxy.value === asked) probe.value = answer
   })
   probing.value = false
 }
@@ -155,6 +163,7 @@ const probeLine = computed(() => {
   if (!held) return ''
   if (held.ok) return t('settings.proxy.probeOk', { ms: String(held.millis) })
   if (held.needsAuth) return t('settings.proxy.probeAuth')
+  if (held.needsTls) return t('settings.proxy.probeTls')
   if (held.error) return held.error
   return t('settings.proxy.probeRefused', {
     destination: destination.value.trim() || 'example.com:443',
@@ -234,7 +243,7 @@ onMounted(async () => {
             v-model="port"
             class="port"
             spellcheck="false"
-            placeholder="3128"
+            :placeholder="String(proxy.defaultPort)"
             @keydown.enter="commitPort"
             @blur="commitPort"
           />

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"cmp"
 	"encoding/json"
 	"net"
 	"slices"
@@ -342,6 +343,7 @@ func (s *Settings) Normalize() {
 
 	orDefault(&s.Proxy.Mode, ProxySystem)
 	orDefault(&s.Proxy.Protocol, ProxyHTTP)
+	s.Proxy.DefaultPort = s.Proxy.Protocol.DefaultPort()
 	s.Proxy.Host = strings.TrimSpace(s.Proxy.Host)
 	s.Proxy.User = strings.TrimSpace(s.Proxy.User)
 	s.Proxy.Bypass = cleanList(s.Proxy.Bypass, false)
@@ -620,30 +622,41 @@ func (p ProxyProtocol) Valid() bool {
 	return p == ProxyHTTP || p == ProxyHTTPS || p == ProxySOCKS5
 }
 
+// DefaultPort is where a manual proxy is reached when no port is typed. HTTP and HTTPS share one,
+// so choosing the other changes the handshake and not the port.
+func (p ProxyProtocol) DefaultPort() int {
+	if p == ProxySOCKS5 {
+		return 1080
+	}
+	return 3128
+}
+
 type ProxySettings struct {
-	Mode        ProxyMode     `json:"mode"`
-	Protocol    ProxyProtocol `json:"protocol"`
-	Host        string        `json:"host"`
-	Port        int           `json:"port"`
-	User        string        `json:"user"`
-	Password    string        `json:"password,omitempty"`
-	HasPassword bool          `json:"hasPassword"`
-	Bypass      []string      `json:"bypass"`
+	Mode     ProxyMode     `json:"mode"`
+	Protocol ProxyProtocol `json:"protocol"`
+	Host     string        `json:"host"`
+	Port     int           `json:"port"`
+	// DefaultPort follows the protocol; the window shows it where no port is typed.
+	DefaultPort int      `json:"defaultPort"`
+	User        string   `json:"user"`
+	Password    string   `json:"password,omitempty"`
+	HasPassword bool     `json:"hasPassword"`
+	Bypass      []string `json:"bypass"`
 }
 
 // DefaultProxy is what a fresh installation does: follow the environment, as it always has.
 func DefaultProxy() ProxySettings {
-	return ProxySettings{Mode: ProxySystem, Protocol: ProxyHTTP, Bypass: []string{}}
+	return ProxySettings{
+		Mode: ProxySystem, Protocol: ProxyHTTP, DefaultPort: ProxyHTTP.DefaultPort(), Bypass: []string{},
+	}
 }
 
+// Address is the host and port a manual proxy is dialled on, empty while there is no host.
 func (p ProxySettings) Address() string {
 	if p.Host == "" {
 		return ""
 	}
-	if p.Port <= 0 {
-		return p.Host
-	}
-	return net.JoinHostPort(p.Host, strconv.Itoa(p.Port))
+	return net.JoinHostPort(p.Host, strconv.Itoa(cmp.Or(p.Port, p.Protocol.DefaultPort())))
 }
 
 func (p ProxySettings) Valid() error {
@@ -681,6 +694,8 @@ type ProxyProbe struct {
 	Status    int    `json:"status"`
 	OK        bool   `json:"ok"`
 	NeedsAuth bool   `json:"needsAuth"`
+	// NeedsTLS says a proxy asked in plain HTTP answered in TLS.
+	NeedsTLS bool `json:"needsTls"`
 }
 
 type EnvEntry struct {

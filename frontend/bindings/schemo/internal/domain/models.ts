@@ -1123,6 +1123,11 @@ export interface ProxyProbe {
     "status": number;
     "ok": boolean;
     "needsAuth": boolean;
+
+    /**
+     * NeedsTLS says a proxy asked in plain HTTP answered in TLS.
+     */
+    "needsTls": boolean;
 }
 
 export enum ProxyProtocol {
@@ -1141,6 +1146,11 @@ export interface ProxySettings {
     "protocol": ProxyProtocol;
     "host": string;
     "port": number;
+
+    /**
+     * DefaultPort follows the protocol; the window shows it where no port is typed.
+     */
+    "defaultPort": number;
     "user": string;
     "password"?: string;
     "hasPassword": boolean;

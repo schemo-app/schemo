@@ -2059,6 +2059,7 @@
       "probeAgain": "Test again",
       "probeOk": "Works · {ms} ms",
       "probeAuth": "The proxy wants a username and a password",
+      "probeTls": "The proxy only takes TLS — choose the https protocol",
       "probeRefused": "The proxy refused the tunnel to {destination} ({status})",
       "offNote": "Requests are sent directly. Environment variables are not used."
     },

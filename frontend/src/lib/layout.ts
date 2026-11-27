@@ -56,6 +56,7 @@ export const DEFAULTS = {
     "protocol": "http",
     "host": "",
     "port": 0,
+    "defaultPort": 3128,
     "user": "",
     "hasPassword": false,
     "bypass": []
