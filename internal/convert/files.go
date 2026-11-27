@@ -19,7 +19,7 @@ func (s *Transfer) previewFile(ctx context.Context, format Format, path string) 
 	if err != nil {
 		return Preview{}, err
 	}
-	preview := s.stage(document, size)
+	preview := s.stage(document, size, specSource(format, domain.SpecFile, path))
 	preview.File = filepath.Base(path)
 	return preview, nil
 }

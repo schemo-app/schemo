@@ -47,6 +47,7 @@ func setup(
 		application.NewService(in.Plan),
 		application.NewService(in.MCP),
 		application.NewService(in.Transfer),
+		application.NewService(in.Specs),
 		application.NewService(in.Publications),
 	)
 

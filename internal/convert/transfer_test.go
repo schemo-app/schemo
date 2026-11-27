@@ -208,7 +208,7 @@ func newHarness() *harness {
 		commands:     &fakeCommands{},
 	}
 	all.transfer = NewTransfer(all.collections, all.environments, all.workspaces, all.files, all.remote,
-		all.commands, platform.NewIDGen(), nil)
+		all.commands, platform.NewIDGen(), nil, nil)
 	return all
 }
 

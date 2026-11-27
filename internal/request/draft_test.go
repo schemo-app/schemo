@@ -454,6 +454,18 @@ func TestANodeAndItsDraftAreTheSameRequest(t *testing.T) {
 	}
 }
 
+// "None" is a choice, not the absence of one: a request that lost it would start sending what it
+// inherits.
+func TestNoneSurvivesSavingARequest(t *testing.T) {
+	node := domain.CollectionNode{ID: "n", Method: "POST", URL: "/a", Auth: &domain.Auth{Type: domain.AuthNone}}
+
+	back := nodeFromDraft(node, FromNode(node))
+
+	if again := FromNode(back); again.Auth.Type != domain.AuthNone {
+		t.Errorf("draft = %+v, want None kept", again.Auth)
+	}
+}
+
 // line is a rig with one draft in hand, edited in place the way the window edits it.
 type line struct {
 	*rig

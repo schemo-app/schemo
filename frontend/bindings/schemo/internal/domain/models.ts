@@ -198,6 +198,7 @@ export enum Code {
     CodeURLUnreachable = "urlUnreachable",
     CodeNothingToImport = "nothingToImport",
     CodeImportExpired = "importExpired",
+    CodeSpecNotLinked = "specNotLinked",
     CodeSkippedCookieJar = "skippedCookieJar",
     CodeSkippedExternalRef = "skippedExternalRef",
     CodeSkippedBase64Body = "skippedBase64Body",
@@ -497,14 +498,7 @@ export interface EnvEntry {
  * globals that always apply.
  */
 export interface EnvScope {
-    /**
-     * Environment is the environment's id; empty means the globals scope.
-     */
     "environment"?: string;
-
-    /**
-     * Collection narrows an environment to its block for one collection; it means nothing without one.
-     */
     "collection"?: string;
 }
 
@@ -515,10 +509,6 @@ export interface EnvScope {
 export interface EnvState {
     "environments": Environment[] | null;
     "globals": Variable[] | null;
-
-    /**
-     * ActiveID is empty when no environment is selected.
-     */
     "activeId"?: string;
 }
 
@@ -1544,23 +1534,13 @@ export enum ScriptScope {
 };
 
 /**
- * Scripts run around a request. Nil means not set here; levels do not override each other, every
- * level's script runs, outermost first.
+ * Scripts run around a request. Nil means not set here; levels do not override each other.
  */
 export interface Scripts {
     "pre"?: string;
     "post"?: string;
-
-    /**
-     * A half can be switched off without losing its code. An off half is still an answer about its
-     * level, so it keeps the level in the chain.
-     */
     "preOff"?: boolean;
     "postOff"?: boolean;
-
-    /**
-     * Captures run before the level's own code, so the code can read what they store.
-     */
     "captures"?: Capture[] | null;
 }
 
@@ -1772,6 +1752,28 @@ export interface Span {
     "head": number;
     "start": number;
     "end": number;
+}
+
+/**
+ * SpecKind is where a linked API description is read from.
+ */
+export enum SpecKind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    SpecFile = "file",
+    SpecURL = "url",
+};
+
+/**
+ * SpecSource is the description a collection is updated from; ReadAt is the last update, in ms.
+ */
+export interface SpecSource {
+    "kind": SpecKind;
+    "location": string;
+    "readAt": number;
 }
 
 export interface StreamMessage {

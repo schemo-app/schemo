@@ -4,6 +4,7 @@ import { Browser } from '@wailsio/runtime'
 import Icon from '../ui/Icon.vue'
 import Spinner from '../ui/Spinner.vue'
 import PageIntro from '../ui/PageIntro.vue'
+import ChangeSign from '../ui/ChangeSign.vue'
 import PublicationFields from './PublicationFields.vue'
 import PublicationOptions from './PublicationOptions.vue'
 import PublicationPassword from './PublicationPassword.vue'
@@ -262,7 +263,7 @@ async function update() {
               <span>{{ t('publications.changesPending') }}</span>
             </div>
             <div v-for="(row, at) in notes" :key="at" class="chg-row">
-              <span class="chg-sign" :class="row.tone">{{ row.sign }}</span>
+              <ChangeSign :sign="row.sign" :tone="row.tone" />
               <span v-if="row.method" class="chg-method" :class="methodInkClass(row.method)">
                 {{ row.method }}
               </span>
@@ -549,32 +550,6 @@ async function update() {
   gap: 0.625rem;
   border-top: 1px solid var(--line2);
   font-size: var(--text-13);
-}
-
-.chg-sign {
-  @apply flex items-center justify-center flex-none;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 0.25rem;
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.chg-sign.add {
-  background: var(--green-soft);
-  color: var(--green);
-}
-
-.chg-sign.edit {
-  background: var(--orange-soft);
-  color: var(--orange);
-}
-
-.chg-sign.gone {
-  background: var(--red-soft);
-  color: var(--red);
 }
 
 .chg-method {

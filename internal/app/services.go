@@ -31,5 +31,6 @@ type ServicesIn struct {
 	Plan         *cloud.Plan
 	MCP          *agent.MCP
 	Transfer     *convert.Transfer
+	Specs        *convert.Specs
 	Publications *cloud.Publications
 }

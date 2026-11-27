@@ -116,8 +116,10 @@ func Assemble(cfg Config) (*Services, error) {
 	publications := cloud.NewPublications(store, collections, environments, client, account, keyring)
 	workspaces := workspace.NewWorkspaces(store, ids, notifier, workspaceRemote{client: client, account: account},
 		sync, inviteSender{members: members})
+	fetcher := convert.NewFetcher(engine.Client())
+	specs := convert.NewSpecs(collections, environments, reader, fetcher, ids, host)
 	transfer := convert.NewTransfer(collections, environments, workspaces, reader,
-		convert.NewFetcher(engine.Client()), commandCopies{drafts}, ids, host)
+		fetcher, commandCopies{drafts}, ids, host, specs)
 
 	extension := agent.NewExtension(agent.NewCapture(host, history, settings), dir, info)
 	mcp := agent.NewMCP(agent.NewTools(workspaces, collections, runs, history, environments), notifier, info)
@@ -146,6 +148,7 @@ func Assemble(cfg Config) (*Services, error) {
 			Plan:         plan,
 			MCP:          mcp,
 			Transfer:     transfer,
+			Specs:        specs,
 			Publications: publications,
 		},
 		Store:    store,

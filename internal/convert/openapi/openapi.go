@@ -38,7 +38,7 @@ func Import(data []byte) (domain.Document, error) {
 	}
 
 	var out domain.Document
-	out.LeftOut(domain.CodeSkippedExternalRef, resolve(tree, tree))
+	out.LeftOut(domain.CodeSkippedExternalRef, resolveDocument(tree))
 	// The references are spliced in, so the walk below reads one document with no pointers left.
 	if err := remarshal(tree, &doc); err != nil {
 		return domain.Document{}, domain.Refuse(domain.CodeNotOpenAPI, domain.ErrNotAllowed, nil)

@@ -34,6 +34,7 @@ import McpConfirmSheet from './components/settings/McpConfirmSheet.vue'
 import UnpublishDialog from './components/cloud/UnpublishDialog.vue'
 import ImportDialog from './components/transfer/ImportDialog.vue'
 import ExportDialog from './components/transfer/ExportDialog.vue'
+import SpecDialog from './components/transfer/SpecDialog.vue'
 import { useAccount } from './composables/useAccount'
 import Toast from './components/ui/Toast.vue'
 import Button from './components/ui/Button.vue'
@@ -289,6 +290,7 @@ function useNativeMenu() {
   <UnpublishDialog v-if="startup?.ready" />
   <ImportDialog v-if="startup?.ready" />
   <ExportDialog v-if="startup?.ready" />
+  <SpecDialog v-if="startup?.ready" />
   <UnsavedDialog
     v-if="startup?.ready"
     :open="leavePending !== null"

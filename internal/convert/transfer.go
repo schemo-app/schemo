@@ -3,6 +3,7 @@ package convert
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ type Transfer struct {
 	commands     Commands
 	ids          platform.IDGen
 	host         *desktop.Host
+	specs        *Specs
 	mu           sync.Mutex
 	staged       *stagedRead
 }
@@ -35,6 +37,7 @@ type Transfer struct {
 type stagedRead struct {
 	token    string
 	document domain.Document
+	source   *domain.SpecSource
 	at       time.Time
 }
 
@@ -47,6 +50,7 @@ func NewTransfer(
 	commands Commands,
 	ids platform.IDGen,
 	host *desktop.Host,
+	specs *Specs,
 ) *Transfer {
 	return &Transfer{
 		collections:  collections,
@@ -57,12 +61,13 @@ func NewTransfer(
 		commands:     commands,
 		ids:          ids,
 		host:         host,
+		specs:        specs,
 	}
 }
 
 // previewText reads a pasted text — a collection somebody sent, or commands copied from a terminal.
 func (s *Transfer) previewText(ctx context.Context, format Format, text string) (Preview, error) {
-	return s.stagePreview(format, []byte(text))
+	return s.stagePreview(format, []byte(text), specSource(format, "", ""))
 }
 
 // previewUrl reads a document from a URL; a published page is read at its document path.
@@ -79,23 +84,32 @@ func (s *Transfer) previewUrl(ctx context.Context, format Format, url string) (P
 	if err != nil {
 		return Preview{}, err
 	}
-	return s.stagePreview(format, data)
+	return s.stagePreview(format, data, specSource(format, domain.SpecURL, strings.TrimSpace(url)))
 }
 
 // stagePreview puts what was read where Apply will find it and answers the counters the dialog
 // shows.
-func (s *Transfer) stagePreview(format Format, data []byte) (Preview, error) {
+func (s *Transfer) stagePreview(format Format, data []byte, source *domain.SpecSource) (Preview, error) {
 	document, err := s.read(format, data)
 	if err != nil {
 		return Preview{}, err
 	}
-	return s.stage(document, len(data)), nil
+	return s.stage(document, len(data), source), nil
 }
 
-func (s *Transfer) stage(document domain.Document, size int) Preview {
+// specSource is where an OpenAPI description can be read again, with no location when it was
+// pasted; nil for any other format.
+func specSource(format Format, kind domain.SpecKind, location string) *domain.SpecSource {
+	if format != FormatOpenAPI {
+		return nil
+	}
+	return &domain.SpecSource{Kind: kind, Location: location}
+}
+
+func (s *Transfer) stage(document domain.Document, size int, source *domain.SpecSource) Preview {
 	token := s.ids()
 	s.mu.Lock()
-	s.staged = &stagedRead{token: token, document: document, at: time.Now()}
+	s.staged = &stagedRead{token: token, document: document, source: source, at: time.Now()}
 	s.mu.Unlock()
 
 	requests, folders := countDocument(document)
@@ -121,10 +135,11 @@ func (s *Transfer) Apply(
 	name string,
 	readonlySuffix string,
 ) (Summary, error) {
-	document, err := s.claimStaged(token)
+	read, err := s.claimStaged(token)
 	if err != nil {
 		return Summary{}, err
 	}
+	document := read.document
 
 	for index := range document.Collections {
 		if strings.TrimSpace(document.Collections[index].Name) == "" {
@@ -133,13 +148,13 @@ func (s *Transfer) Apply(
 	}
 
 	summary := Summary{Collections: len(document.Collections), CreatedEnvironments: []string{}}
-	targets := []string{}
+	targets, created := []string{}, []string{}
 	if len(document.Collections) > 0 {
 		imported, err := s.collections.ImportCollections(ctx, document.Collections, parentID)
 		if err != nil {
 			return Summary{}, err
 		}
-		summary.Tree, targets = imported.Tree, imported.Targets
+		summary.Tree, targets, created = imported.Tree, imported.Targets, imported.Created
 		requests, _ := countDocument(domain.Document{Collections: document.Collections})
 		summary.Requests = requests
 	}
@@ -169,21 +184,27 @@ func (s *Transfer) Apply(
 	if summary.Collections == 0 && summary.Environments == 0 && summary.Globals == 0 {
 		return Summary{}, domain.Refuse(domain.CodeNothingToImport, domain.ErrNotAllowed, nil)
 	}
+	if read.source != nil && s.specs != nil && len(created) == 1 {
+		// The import stands without it: a first update then has no history to compare with.
+		if err := s.specs.remember(ctx, created[0], *read.source, document); err != nil {
+			slog.Warn("Could not keep what the imported description said", "err", err)
+		}
+	}
 	return summary, nil
 }
 
 // claimStaged is the document a token names, once: a second Apply with the same token is a window
 // that lost track, and answering it twice would write the file twice.
-func (s *Transfer) claimStaged(token string) (domain.Document, error) {
+func (s *Transfer) claimStaged(token string) (stagedRead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	read := s.staged
 	if read == nil || read.token != token || time.Since(read.at) > pendingTTL {
-		return domain.Document{}, domain.Refuse(domain.CodeImportExpired, domain.ErrNotFound, nil)
+		return stagedRead{}, domain.Refuse(domain.CodeImportExpired, domain.ErrNotFound, nil)
 	}
 	s.staged = nil
-	return read.document, nil
+	return *read, nil
 }
 
 // nameOfFirst is what the document calls its first collection, or its first environment where it

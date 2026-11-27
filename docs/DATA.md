@@ -26,7 +26,13 @@ collection runs). The client owns local storage and the engine; the server owns 
 versions and conflicts.
 
 What syncs: collections and requests, environments and variables, cookies, workspace metadata,
-history and runs. What stays: settings, drafts, window session, local retention.
+history and runs. What stays: settings, drafts, window session, local retention, and where a
+collection's OpenAPI description is read from (a path or an address).
+
+What that description said at the last update travels in the collection's row, gzipped, so every
+device and member updates the collection from the same history. It holds the description's own
+content and the ids of what it made, never what a person typed, and is not part of exports,
+published pages or MCP.
 
 History records reference the sender by account ID. Team history resolves the current member name,
 falling back to email; names and emails are not copied into records. Older records without an ID

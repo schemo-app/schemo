@@ -406,8 +406,7 @@ func FromNode(node domain.CollectionNode) domain.Draft {
 	}
 }
 
-// nodeFromDraft is the other direction. "Inherit" and "None" are stored as the absence of an
-// answer, which domain.Auth.Stored decides.
+// nodeFromDraft is the other direction.
 func nodeFromDraft(node domain.CollectionNode, d domain.Draft) domain.CollectionNode {
 	node.Protocol, node.Options = d.Protocol, d.Options
 	node.Method = strings.TrimSpace(d.Method)
@@ -419,7 +418,7 @@ func nodeFromDraft(node domain.CollectionNode, d domain.Draft) domain.Collection
 	node.BodyKind = domain.KindOf(d.BodyKind)
 	node.Form = d.Form
 	node.BodyFile = d.BodyFile
-	node.Auth = d.Auth.Stored()
+	node.Auth = d.Auth.OnRequest()
 	return node
 }
 

@@ -7,7 +7,9 @@ import { t } from '../../i18n'
 const { open, title, variant = 'panel' } = defineProps<{
   open: boolean
   title: string
-  variant?: 'panel' | 'ask'
+  /** wide is a panel for a list of changes with their two-column diffs. It hangs from the top, so
+   *  opening one moves nothing above it. */
+  variant?: 'panel' | 'ask' | 'wide'
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -18,14 +20,22 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   <Dialog
     :open
     tone="cover"
-    :class="['max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden', variant === 'ask' ? 'w-130' : 'w-115']"
+    :placement="variant === 'wide' ? 'top' : undefined"
+    :class="[
+      'flex flex-col overflow-hidden',
+      {
+        ask: 'w-130 max-h-[calc(100vh-3rem)]',
+        panel: 'w-115 max-h-[calc(100vh-3rem)]',
+        wide: 'w-190 max-h-[calc(100vh-7.25rem)]',
+      }[variant],
+    ]"
     @update:open="(value) => !value && emit('close')"
   >
     <div class="head" :class="variant">
       <slot name="lead" />
       <DialogTitle class="title" :class="variant">{{ title }}</DialogTitle>
       <button
-        v-if="variant === 'panel'"
+        v-if="variant !== 'ask'"
         type="button"
         class="close"
         :title="t('common.close')"
@@ -63,7 +73,8 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   font-size: var(--text-14);
 }
 
-.title.panel {
+.title.panel,
+.title.wide {
   @apply truncate;
 }
 
@@ -105,5 +116,18 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 .foot.ask {
   padding: 1.125rem 1.5rem 1.375rem;
+}
+
+/* A long list scrolls under the buttons, so they keep their distance from it. The scrollbar's room
+   is always taken, or the content would step sideways as the list grows; the padding makes up the
+   rest of the usual margin. */
+.body.wide {
+  overflow-y: scroll;
+  padding-right: 0.625rem;
+  padding-bottom: 0.5rem;
+}
+
+.foot.wide {
+  padding-top: 0.75rem;
 }
 </style>

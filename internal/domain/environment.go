@@ -57,8 +57,7 @@ func (e Environment) Block(collection string) []Variable {
 type EnvState struct {
 	Environments []Environment `json:"environments"`
 	Globals      []Variable    `json:"globals"`
-	// ActiveID is empty when no environment is selected.
-	ActiveID string `json:"activeId,omitempty"`
+	ActiveID     string        `json:"activeId,omitempty"`
 }
 
 // Find is the environment with the id; false when there is none.
@@ -74,10 +73,8 @@ func (s EnvState) Find(id string) (Environment, bool) {
 // EnvScope names where a variable lives: one environment, one collection's block in it, or the
 // globals that always apply.
 type EnvScope struct {
-	// Environment is the environment's id; empty means the globals scope.
 	Environment string `json:"environment,omitempty"`
-	// Collection narrows an environment to its block for one collection; it means nothing without one.
-	Collection string `json:"collection,omitempty"`
+	Collection  string `json:"collection,omitempty"`
 }
 
 // Variables returns the values in one scope; the zero scope is the workspace globals.
@@ -97,9 +94,7 @@ func (s EnvState) Variables(scope EnvScope) []Variable {
 type VarLevels struct {
 	Collection string     `json:"collection,omitempty"`
 	Variables  []Variable `json:"variables,omitempty"`
-	// Run is what the run's scripts kept so far (`pm.variables`): it stands over every stored scope,
-	// the block included, and lives only as long as the run.
-	Run []Variable `json:"-"`
+	Run        []Variable `json:"-"`
 }
 
 // VarImport is what bringing variables into a set did: names added, and names it already held,
@@ -123,27 +118,23 @@ type EnvImport struct {
 type Imported struct {
 	Tree    []Collection
 	Targets []string
+	Created []string
 }
 
 // Resolution is what a `{{token}}` resolves to, with where it came from so the tooltip can say it.
 type Resolution struct {
-	Value  string       `json:"value,omitempty"`
-	Source string       `json:"source"` // "global" | "collection" | "env" | "block" | "run"
-	Kind   VariableKind `json:"kind"`
-	// HasValue is false when the value was withheld from the answer (a secret) or is empty.
-	HasValue bool `json:"hasValue"`
+	Value    string       `json:"value,omitempty"`
+	Source   string       `json:"source"`
+	Kind     VariableKind `json:"kind"`
+	HasValue bool         `json:"hasValue"`
 }
 
-// Scripts run around a request. Nil means not set here; levels do not override each other, every
-// level's script runs, outermost first.
+// Scripts run around a request. Nil means not set here; levels do not override each other.
 type Scripts struct {
-	Pre  string `json:"pre,omitempty"`
-	Post string `json:"post,omitempty"`
-	// A half can be switched off without losing its code. An off half is still an answer about its
-	// level, so it keeps the level in the chain.
-	PreOff  bool `json:"preOff,omitempty"`
-	PostOff bool `json:"postOff,omitempty"`
-	// Captures run before the level's own code, so the code can read what they store.
+	Pre      string    `json:"pre,omitempty"`
+	Post     string    `json:"post,omitempty"`
+	PreOff   bool      `json:"preOff,omitempty"`
+	PostOff  bool      `json:"postOff,omitempty"`
 	Captures []Capture `json:"captures,omitempty"`
 }
 
@@ -177,30 +168,21 @@ const (
 // ScriptInput is one script about to run: the code, when it runs and what it sees, which is the
 // request and, once answered, the response.
 type ScriptInput struct {
-	Scope  ScriptScope
-	Source string
-
-	// Request is what a script may change: a pre-request script edits the request that is about to go
-	// out, and what it leaves here is what is sent.
-	Request *ScriptRequest
-	// Response is nil before the request has been sent, which is what a pre-request script finds when
-	// it looks at pm.response.
-	Response *Response
-
-	// Variables is where the script reads and writes. The engine keeps no storage of its own: a value
-	// a script writes goes back through here, so whether it outlives the run is decided in one place.
+	Scope     ScriptScope
+	Source    string
+	Request   *ScriptRequest
+	Response  *Response
 	Variables VarStore
 }
 
 // ScriptRequest is a request as a script sees it: the address it goes to, the headers as sent and
 // the body as written. Not the draft, which still holds `{{tokens}}`.
 type ScriptRequest struct {
-	Method  string       `json:"method"`
-	URL     string       `json:"url"`
-	Headers []HeaderPair `json:"headers"`
-	Body    string       `json:"body"`
-	// BodyKind lets re-masking rebuild form and file bodies; scripts cannot change it.
-	BodyKind BodyKind `json:"bodyKind,omitempty"`
+	Method   string       `json:"method"`
+	URL      string       `json:"url"`
+	Headers  []HeaderPair `json:"headers"`
+	Body     string       `json:"body"`
+	BodyKind BodyKind     `json:"bodyKind,omitempty"`
 }
 
 // ScriptPass is one attempt as its scripts see it; internal only, hence no tags.
@@ -210,9 +192,7 @@ type ScriptPass struct {
 	NodeID   string
 	Request  *ScriptRequest
 	Response *Response
-
-	// Ran carries pre-request reports to the post-request half, since the record is written after the answer.
-	Ran []ScriptRun
+	Ran      []ScriptRun
 }
 
 // VarScope names one of the three places a script's variables live, by the name the script uses. It

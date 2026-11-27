@@ -192,6 +192,7 @@ func (r *reader) request(
 		Name:        nameOf(op),
 		Method:      strings.ToUpper(method),
 		Description: strings.TrimSpace(op.Description),
+		Operation:   domain.OperationKey(method, path),
 	}
 
 	address := r.server + path

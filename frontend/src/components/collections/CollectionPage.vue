@@ -167,6 +167,10 @@ function importCollection() {
   transfer.askImport(level.value?.id ?? '')
 }
 
+function updateFromSpec() {
+  transfer.askSpec(level.value?.id ?? '')
+}
+
 function exportLevel() {
   transfer.askExport(level.value?.id ?? '')
 }
@@ -219,6 +223,10 @@ function addRequest() {
           <DropdownMenuItem :disabled="collections.running !== null" @select="exportLevel">
             <span class="menu-mark"><Icon name="Upload" :size="15" :stroke-width="1.8" /></span>
             <span class="menu-label-text">{{ t('collections.export') }}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem :disabled="collections.running !== null || !workspaces.canWrite" @select="updateFromSpec">
+            <span class="menu-mark"><Icon name="RefreshCw" :size="15" :stroke-width="1.8" /></span>
+            <span class="menu-label-text">{{ t('collections.updateFromSpec') }}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

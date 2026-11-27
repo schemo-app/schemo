@@ -83,6 +83,17 @@ export function draftById(id: DraftID): Draft | null {
   return null
 }
 
+/** The open tabs editing one of these saved requests. */
+export function editorsOf(ids: ReadonlySet<string>): RequestInstance[] {
+  const out: RequestInstance[] = []
+  for (const instance of instances.values()) {
+    if (instance.kind !== TabKind.TabKindRequest) continue
+    const id = instance.node.value?.node.id
+    if (id && ids.has(id)) out.push(instance)
+  }
+  return out
+}
+
 /** The instance that owns a send — the one that claimed it, and the one the answer belongs to. */
 export function ownerOf(sendId: string): RequestInstance | null {
   for (const instance of instances.values()) {

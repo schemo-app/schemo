@@ -31,6 +31,7 @@ const emit = defineEmits<{
   export: []
   share: []
   import: []
+  updateSpec: []
   remove: []
   send: []
   moveTo: [string]
@@ -189,6 +190,10 @@ const head = computed(() =>
       <ContextMenuItem :disabled="!writable" @select="emit('import')">
         <span class="menu-mark"><Icon name="Download" :size="14" :stroke-width="1.8" /></span>
         <span class="menu-label-text cap-line">{{ t('collections.importInto') }}</span>
+      </ContextMenuItem>
+      <ContextMenuItem :disabled="!writable" @select="emit('updateSpec')">
+        <span class="menu-mark"><Icon name="RefreshCw" :size="14" :stroke-width="1.8" /></span>
+        <span class="menu-label-text cap-line">{{ t('collections.updateFromSpec') }}</span>
       </ContextMenuItem>
     </template>
 

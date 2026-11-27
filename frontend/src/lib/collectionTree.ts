@@ -84,6 +84,19 @@ export function trailOf(tree: Collection[], id: string | null): Trail | null {
 }
 
 /** Returns total number of request nodes within a collection and all its sub-collections. */
+/** Every saved request inside a collection, folders included. */
+export function requestIds(collections: Collection[]): Set<string> {
+  const ids = new Set<string>()
+  const walk = (list: Collection[]) => {
+    for (const collection of list) {
+      for (const item of collection.items ?? []) ids.add(item.id)
+      walk(collection.children ?? [])
+    }
+  }
+  walk(collections)
+  return ids
+}
+
 export function requestCount(collection: Collection): number {
   return childrenOf(collection).reduce(
       (total, child) => total + (child.kind === 'request' ? 1 : requestCount(child.collection)),

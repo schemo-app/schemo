@@ -5,11 +5,17 @@ import { useToast } from '../composables/useToast'
 import { markStep } from '../composables/useGettingStarted'
 import { copyToClipboard } from '../lib/clipboard'
 import {
+  Specs,
   Transfer,
   type Preview,
+  type SpecReview,
   type Workspace,
 } from '../../bindings/schemo/internal/convert'
+import type { Choices } from '../../bindings/schemo/internal/convert/merge'
+import type { SpecSource } from '../../bindings/schemo/internal/domain'
 import { callOrToast } from '../lib/calls'
+import { requestIds } from '../lib/collectionTree'
+import type { RequestInstance } from './content'
 import { useCollectionsStore } from './collections'
 import { useEnvironmentsStore } from './environments'
 import { useWorkspacesStore } from './workspaces'
@@ -31,6 +37,8 @@ export const useTransferStore = defineStore('transfer', () => {
   // cleared: the address belongs to the link that was followed, not to the dialog.
   const linkedPage = ref('')
   const exportOpen = ref(false)
+  // The collection being updated from its description; '' while that dialog is closed.
+  const specCollection = ref('')
   // The collection the export is fixed to; '' lets the dialog pick one.
   const exportTarget = ref('')
   const sources = ref<Workspace[]>([])
@@ -57,7 +65,17 @@ export const useTransferStore = defineStore('transfer', () => {
     }
     importParent.value = parentId
     exportOpen.value = false
+    specCollection.value = ''
     importOpen.value = true
+  }
+
+  function askSpec(id: string) {
+    if (!workspaces.canWrite) {
+      toast.show(t('errors.codes.workspaceReadOnly'))
+      return
+    }
+    closeTransfer()
+    specCollection.value = id
   }
 
   // The dialog reads the link at once, so following it and importing is one step.
@@ -81,6 +99,7 @@ export const useTransferStore = defineStore('transfer', () => {
   function closeTransfer() {
     importOpen.value = false
     exportOpen.value = false
+    specCollection.value = ''
     linkedPage.value = ''
   }
 
@@ -149,6 +168,37 @@ export const useTransferStore = defineStore('transfer', () => {
         said += ' · ' + t('transfer.createdEnvironments', { names: created.join(', '), count: created.length })
       }
       toast.show(said)
+      return true
+    })
+  }
+
+  async function specSource(id: string): Promise<SpecSource | null> {
+    return (await callOrToast(Specs.Linked(id), 'spec.readFailed')) ?? null
+  }
+
+  // A review is null when reading failed or the file dialog was closed.
+  function specReview(read: () => Promise<SpecReview | null>): Promise<SpecReview | null> {
+    return whileBusy(async () => (await callOrToast(read(), 'spec.readFailed')) ?? null)
+  }
+
+  // Open tabs of the collection are read again, so that saving one cannot bring back what the
+  // update replaced. The dialog does not apply while one of them has unsaved changes.
+  function specApply(token: string, choices: Choices, editors: RequestInstance[]): Promise<boolean> {
+    return whileBusy(async () => {
+      await Promise.all(editors.map((editor) => editor.flushExamples()))
+      const summary = await callOrToast(
+        collections.applyTree(Specs.Apply(token, choices)),
+        'spec.applyFailed'
+      )
+      if (!summary) return false
+      if (summary.envState) await environments.applyState(summary.envState)
+      const left = requestIds(summary.tree ?? [])
+      await Promise.all(
+        editors
+          .filter((editor) => !editor.unsaved.value && left.has(editor.node.value?.node.id ?? ''))
+          .map((editor) => editor.discardNode())
+      )
+      if (summary.added + summary.updated + summary.removed) toast.show(t('spec.updated'))
       return true
     })
   }
@@ -225,9 +275,14 @@ export const useTransferStore = defineStore('transfer', () => {
     linkedPage,
     exportOpen,
     exportTarget,
+    specCollection,
     sources,
     busy,
     askImport,
+    askSpec,
+    specSource,
+    specReview,
+    specApply,
     askImportPage,
     askExport,
     closeTransfer,

@@ -1,51 +1,97 @@
 package openapi
 
 import (
+	"maps"
+	"slices"
 	"strings"
 
 	"schemo/pkg/jsonpointer"
 )
 
-// resolve splices local `$ref`s and returns how many it could not follow; other files are not read.
-func resolve(node any, root map[string]any) int {
-	return resolveAt(node, root, 0)
+// These bound schemas that lead back into each other. A body skeleton reads six levels, so nothing
+// it would show is lost.
+const (
+	maxHops    = 8
+	maxSplices = 4000
+)
+
+// resolveDocument resolves what the reader reads. Reusable definitions are only reached through a
+// reference, so they are not expanded where they are declared; security schemes are read in place.
+func resolveDocument(tree map[string]any) int {
+	source := clone(tree).(map[string]any)
+	skipped := 0
+	for _, key := range slices.Sorted(maps.Keys(tree)) {
+		switch key {
+		case "components":
+			if components, ok := tree[key].(map[string]any); ok {
+				skipped += resolve(components["securitySchemes"], source)
+			}
+		case "definitions":
+		default:
+			skipped += resolve(tree[key], source)
+		}
+	}
+	return skipped
 }
 
-func resolveAt(node any, root map[string]any, depth int) int {
-	// A document that references itself in a circle would otherwise walk forever.
-	if depth > 32 {
-		return 0
-	}
+// resolve splices local `$ref`s into node, reading targets from root, which it never changes, and
+// returns how many it could not follow; other files are not read.
+func resolve(node any, root map[string]any) int {
+	r := resolver{root: root, open: map[string]bool{}}
+	return r.walk(node)
+}
+
+type resolver struct {
+	root    map[string]any
+	open    map[string]bool // references being expanded
+	splices int
+}
+
+// walk goes in key order, so a document reads the same way every time the bounds apply.
+func (r *resolver) walk(node any) int {
+	skipped := 0
 	switch typed := node.(type) {
 	case map[string]any:
-		skipped := 0
 		if ref, isRef := typed["$ref"].(string); isRef {
-			target, ok := pointer(root, ref, depth)
-			if !ok {
-				return 1
-			}
-			delete(typed, "$ref")
-			for key, value := range target {
-				typed[key] = value
-			}
+			return r.splice(typed, ref)
 		}
-		for _, value := range typed {
-			skipped += resolveAt(value, root, depth+1)
+		for _, key := range slices.Sorted(maps.Keys(typed)) {
+			skipped += r.walk(typed[key])
 		}
-		return skipped
 	case []any:
-		skipped := 0
 		for _, value := range typed {
-			skipped += resolveAt(value, root, depth+1)
+			skipped += r.walk(value)
 		}
-		return skipped
-	default:
-		return 0
 	}
+	return skipped
 }
 
-// pointer follows a local JSON pointer (RFC 6901 §6) and returns a spliced copy, which keeps cycles out.
-func pointer(root map[string]any, ref string, depth int) (map[string]any, bool) {
+// splice puts a reference's target where the reference stands. One that leads back to itself is
+// left empty.
+func (r *resolver) splice(into map[string]any, ref string) int {
+	if len(r.open) == 0 {
+		r.splices = 0
+	}
+	if r.open[ref] || len(r.open) >= maxHops || r.splices >= maxSplices {
+		delete(into, "$ref")
+		return r.walk(into)
+	}
+	target, ok := pointer(r.root, ref)
+	if !ok {
+		return 1
+	}
+	r.splices++
+	delete(into, "$ref")
+	for key, value := range target {
+		into[key] = clone(value)
+	}
+	r.open[ref] = true
+	defer delete(r.open, ref)
+	return r.walk(into)
+}
+
+// pointer follows a local JSON pointer (RFC 6901 §6) to the object it names.
+func pointer(root map[string]any, ref string) (map[string]any, bool) {
 	if !strings.HasPrefix(ref, "#/") {
 		return nil, false
 	}
@@ -69,13 +115,24 @@ func pointer(root map[string]any, ref string, depth int) (map[string]any, bool) 
 		}
 	}
 	target, ok := node.(map[string]any)
-	if !ok {
-		return nil, false
+	return target, ok
+}
+
+// clone copies a JSON value.
+func clone(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, one := range typed {
+			out[key] = clone(one)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for index, one := range typed {
+			out[index] = clone(one)
+		}
+		return out
 	}
-	copied := map[string]any{}
-	for key, value := range target {
-		copied[key] = value
-	}
-	resolveAt(copied, root, depth+1)
-	return copied, true
+	return value
 }

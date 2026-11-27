@@ -188,11 +188,7 @@ func (s *Store) SaveScopes(ctx context.Context, workspaceID string, changes Scop
 			}
 		}
 		if changes.Collection != nil {
-			row, err := collectionRow(workspaceID, *changes.Collection)
-			if err != nil {
-				return err
-			}
-			if err := putEntity(ctx, tx, row); err != nil {
+			if err := putCollection(ctx, tx, workspaceID, *changes.Collection); err != nil {
 				return err
 			}
 		}

@@ -74,6 +74,7 @@ type CollectionNode struct {
 	Responses    []ResponseExample `json:"responses,omitempty"`
 	CreatedAt    int64             `json:"createdAt"`
 	UpdatedAt    int64             `json:"updatedAt"`
+	Operation    string            `json:"-"`
 }
 
 // ResponseExample is one saved answer: what it is called, the status it carried, its headers and

@@ -320,6 +320,7 @@ defineExpose({ cancelTop })
             @export="exportNode(row)"
             @share="share(row)"
             @import="importInto(row)"
+            @update-spec="transfer.askSpec(row.id)"
             @remove="askRemove(row)"
           />
         </ContextMenu>

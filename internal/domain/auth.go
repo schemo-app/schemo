@@ -66,6 +66,14 @@ func (a Auth) Stored() *Auth {
 	return &a
 }
 
+// OnRequest is how a request keeps its choice: nothing stored there inherits, so "None" is written.
+func (a Auth) OnRequest() *Auth {
+	if a.Type == AuthNone {
+		return &a
+	}
+	return a.Stored()
+}
+
 func (a Auth) Normalized() Auth {
 	scheme, ok := SchemeFor(a.Type)
 	if !ok {

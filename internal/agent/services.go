@@ -491,7 +491,7 @@ func (t appTools) patchRequest(ctx context.Context, workspace string, node *doma
 		return err
 	}
 	if patch.Auth != nil {
-		node.Auth = patch.Auth.Normalized().Stored()
+		node.Auth = patch.Auth.Normalized().OnRequest()
 	}
 	for field, value := range map[string]*string{
 		"name": patch.Name, "method": patch.Method, "url": patch.URL, "description": patch.Description,

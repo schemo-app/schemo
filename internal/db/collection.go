@@ -4,22 +4,46 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"schemo/internal/domain"
 )
 
-func collectionRow(workspace string, c domain.Collection) (entity, error) {
+// collectionRecord is what a collection's row holds: the collection, and what its API description
+// said at the last update, packed. The latter syncs with the collection, so that every device and
+// member updates it from the same history; nothing outside this package sees it.
+type collectionRecord struct {
+	domain.Collection
+	SpecSnapshot []byte `json:"specSnapshot,omitempty"`
+}
+
+func collectionRow(workspace string, c domain.Collection, snapshot []byte) (entity, error) {
 	c.Items, c.Children = nil, nil
 	c.Variables = append([]domain.Variable(nil), c.Variables...)
 	for i := range c.Variables {
 		c.Variables[i].HasValue = false
 	}
-	data, err := encodeData(c)
+	data, err := encodeData(collectionRecord{Collection: c, SpecSnapshot: snapshot})
 	if err != nil {
 		return entity{}, err
 	}
 	return entity{Kind: domain.EntityCollection, ID: c.ID, Workspace: workspace, Parent: c.ParentID,
 		Position: c.Position, Name: c.Name, Data: data}, nil
+}
+
+// putCollection saves a collection. The caller knows nothing of the description's snapshot, so the
+// one the row holds stays.
+func putCollection(ctx context.Context, tx *writeTx, workspace string, c domain.Collection) error {
+	snapshot, err := packedSnapshot(ctx, tx, c.ID)
+	if err != nil {
+		return err
+	}
+	row, err := collectionRow(workspace, c, snapshot)
+	if err != nil {
+		return err
+	}
+	return putEntity(ctx, tx, row)
 }
 
 func collectionFrom(e entity) (domain.Collection, error) {
@@ -209,12 +233,8 @@ func (s *Store) ContentRows(ctx context.Context, collectionID string) ([]domain.
 }
 
 func (s *Store) SaveCollection(ctx context.Context, workspaceID string, c domain.Collection) error {
-	row, err := collectionRow(workspaceID, c)
-	if err != nil {
-		return err
-	}
 	return s.inTx(ctx, "saving collection "+c.ID, func(tx *writeTx) error {
-		return putEntity(ctx, tx, row)
+		return putCollection(ctx, tx, workspaceID, c)
 	})
 }
 
@@ -260,6 +280,9 @@ func (s *Store) DeleteCollection(ctx context.Context, workspaceID, id string) er
 		}
 		blocks, err := blockRows(ctx, tx, workspaceID, gone)
 		if err != nil {
+			return err
+		}
+		if err := dropSpecLinks(ctx, tx, workspaceID, slices.Collect(maps.Keys(gone))); err != nil {
 			return err
 		}
 		return deleteEntities(ctx, tx, workspaceID, append(append(folders, requests...), blocks...))

@@ -51,6 +51,7 @@ const (
 	CodeURLUnreachable       Code = "urlUnreachable"
 	CodeNothingToImport      Code = "nothingToImport"
 	CodeImportExpired        Code = "importExpired"
+	CodeSpecNotLinked        Code = "specNotLinked"
 	CodeSkippedCookieJar     Code = "skippedCookieJar"
 	CodeSkippedExternalRef   Code = "skippedExternalRef"
 	CodeSkippedBase64Body    Code = "skippedBase64Body"

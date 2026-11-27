@@ -39,7 +39,9 @@ var keepsParent = map[domain.EntityType]bool{
 	domain.EntityRequest:    true,
 }
 
-func synced(kind domain.EntityType) bool { return kind != kindDraft && kind != kindStrip }
+func synced(kind domain.EntityType) bool {
+	return kind != kindDraft && kind != kindStrip && kind != kindSpec
+}
 
 // naturalKey joins the parts of a key that must be unique among live rows of one kind.
 func naturalKey(parts ...string) string { return strings.Join(parts, "\x1f") }

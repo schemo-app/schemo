@@ -312,10 +312,10 @@ func (s *Collections) Update(ctx context.Context, id string, patch CollectionPat
 			return err
 		}
 	}
-	var auth *domain.Auth
+	var auth, requestAuth *domain.Auth
 	if patch.Auth != nil {
 		// "None" over a filled-in scheme is an answer; Stored keeps that apart from "inherit".
-		auth = patch.Auth.Normalized().Stored()
+		auth, requestAuth = patch.Auth.Normalized().Stored(), patch.Auth.Normalized().OnRequest()
 	}
 	return s.editRow(ctx, id,
 		func(collection *domain.Collection) {
@@ -343,7 +343,7 @@ func (s *Collections) Update(ctx context.Context, id string, patch CollectionPat
 				node.Description = description
 			}
 			if patch.Auth != nil {
-				node.Auth = auth
+				node.Auth = requestAuth
 			}
 			return nil
 		})

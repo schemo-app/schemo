@@ -3,6 +3,9 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as merge$0 from "./merge/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as domain$0 from "../domain/models.js";
 
 /**
@@ -32,6 +35,27 @@ export interface Preview {
     "environments": number;
     "globals": number;
     "skipped"?: domain$0.Skip[] | null;
+}
+
+/**
+ * SpecReview is what an update would change, under the token that applies it.
+ */
+export interface SpecReview {
+    "token": string;
+    "source": domain$0.SpecSource;
+    "review": merge$0.Review;
+    "skipped"?: domain$0.Skip[] | null;
+}
+
+/**
+ * SpecSummary is what an update wrote.
+ */
+export interface SpecSummary {
+    "tree": domain$0.Collection[] | null;
+    "envState"?: domain$0.EnvState | null;
+    "added": number;
+    "updated": number;
+    "removed": number;
 }
 
 /**

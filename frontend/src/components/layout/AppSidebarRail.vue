@@ -179,6 +179,7 @@ watch(() => collections.tree, (tree) => {
           @export="exportNode(collection)"
           @share="share(collection.id)"
           @import="transfer.askImport(collection.id)"
+          @update-spec="transfer.askSpec(collection.id)"
           @remove="askRemove(collection)"
         />
       </ContextMenu>
